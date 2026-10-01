@@ -1,0 +1,709 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { BanIcon, ChevronLeftIcon, ChevronRightIcon, HomeIcon, LoginIcon, LogoutIcon, MoonIcon } from "@/components/icons";
+import { StatusPill } from "@/components/status-pill";
+import { ACTIVE_STATUSES, nightlyRate } from "@/lib/booking";
+import { MONTHS, MS, WD, WD_FULL, WD_MIN, addDays, cop, countdown, fmtDate, fmtFullDate, isISO, monthStart, nightsBetween, parseISO, plural, statusOf } from "@/lib/format";
+import { pendingOf } from "@/lib/admin-metrics";
+import { fmtTime } from "@/lib/site";
+import type { Block, CabinType, Reservation } from "@/lib/types";
+import { Combobox } from "@/components/ui/combobox";
+import { useAdmin, useParam } from "./context";
+import { DatePicker } from "./date-picker";
+import { Popover, useTip } from "@/components/ui/floating";
+import { PREF, usePref } from "./prefs";
+import { paths } from "./routes";
+import { Button, EmptyState, IconButton, Segmented, Skeleton, buttonClass } from "./ui";
+
+export type CalView = "dia" | "3dias" | "semana" | "mes";
+
+export const CALENDAR_VIEWS: { value: CalView; label: string }[] = [
+  { value: "dia", label: "Día" },
+  { value: "3dias", label: "3 días" },
+  { value: "semana", label: "Semana" },
+  { value: "mes", label: "Mes" },
+];
+
+// Vista inicial según el ancho disponible del calendario (no el de la ventana): pocos días en el celular, semana en tableta, mes en escritorio.
+const autoView = (w: number): CalView => (w < 560 ? "3dias" : w < 900 ? "semana" : "mes");
+// Por debajo de este ancho el mes se muestra como cuadrícula mensual: 60 medias jornadas no caben legibles.
+const MONTH_TIMELINE_MIN = 900;
+
+const lastOfMonth = (m: string) => {
+  const d = parseISO(m);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
+};
+const mondayOf = (d: string) => addDays(d, -((parseISO(d).getUTCDay() + 6) % 7));
+const BLOCK_BG = "repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-status-block) 32%, white) 0 5px, color-mix(in srgb, var(--color-status-block) 14%, white) 5px 10px)";
+
+// Estilo de cada estado: relleno suave del color del estado + borde de acento. Pendiente = borde punteado (aún no asegurada).
+function barStyle(r: Pick<Reservation, "status">): CSSProperties {
+  const c = statusOf(r.status).bg;
+  return r.status === "pending_deposit"
+    ? { background: `color-mix(in srgb, ${c} 26%, white)`, border: `1.5px dashed color-mix(in srgb, ${c} 100%, black 22%)` }
+    : { background: `color-mix(in srgb, ${c} 42%, white)`, borderLeft: `3px solid color-mix(in srgb, ${c} 100%, black 28%)` };
+}
+
+// Nombre del día según el ancho de su columna: «Lunes», «Lun» o «L» (container queries: decide el espacio real, no la pantalla).
+function DayName({ wd, className = "" }: { wd: number; className?: string }) {
+  return (
+    <span className={className}>
+      <span aria-hidden="true" className="@min-[38px]:hidden">
+        {WD_MIN[wd]}
+      </span>
+      <span aria-hidden="true" className="hidden @min-[38px]:inline @min-[92px]:hidden">
+        {WD[wd]}
+      </span>
+      <span className="sr-only @min-[92px]:not-sr-only">{WD_FULL[wd]}</span>
+    </span>
+  );
+}
+
+// Ancho real del contenedor (ResizeObserver): con él se eligen vista, columnas y etiquetas.
+// Arranca con una estimación según la ventana (menú lateral desde 1024 px, márgenes del panel, máximo 1400 px):
+// el observador avisa en el siguiente pintado, y una pestaña en segundo plano puede tardar en pintar.
+function useWidth() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [w, setW] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    const desk = innerWidth >= 1024;
+    return Math.min(1400, desk ? innerWidth - 248 : innerWidth) - (desk ? 64 : 32);
+  });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, w] as const;
+}
+
+type Unit = { key: string; cabin: CabinType; unit: number; label: string; short: string };
+
+function units(cabins: CabinType[], filter: string): Unit[] {
+  return cabins
+    .filter((c) => c.units > 0 && (!filter || c.id === filter))
+    .flatMap((c) =>
+      Array.from({ length: c.units }, (_, i) => ({
+        key: `${c.id}:${i + 1}`,
+        cabin: c,
+        unit: i + 1,
+        label: `${c.nombre.replace(/^Cabaña\s+/i, "")} ${i + 1}`,
+        short: `${c.nombre.replace(/^Cabaña\s+/i, "").split(" ")[0]} ${i + 1}`,
+      })),
+    );
+}
+
+const occupies = (r: Reservation, u: Unit) => r.cabinTypeId === u.cabin.id && r.unit === u.unit && !["cancelled", "expired"].includes(r.status);
+const blocks = (b: Block, u: Unit) => b.cabinTypeId === u.cabin.id && b.unit === u.unit;
+
+/* ───────────── Contenido de los tooltips ───────────── */
+
+function ReservationTip({ r, cabin }: { r: Reservation; cabin: string }) {
+  const p = pendingOf(r);
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <strong className="text-[13px]">{r.guest.fullName}</strong>
+        <span className="text-white/70">{r.code}</span>
+      </div>
+      <span className="text-white/85">{cabin}</span>
+      <span>
+        {fmtDate(r.checkIn)} → {fmtDate(r.checkOut)} · {plural(nightsBetween(r.checkIn, r.checkOut), "noche", "noches")} · {plural(r.adults + r.children, "huésped", "huéspedes")}
+      </span>
+      <span className="flex flex-wrap gap-x-3">
+        <span>Total {cop(r.quote.total)}</span>
+        {p.total > 0 && <span className="text-highlight">Pendiente {cop(p.total)}</span>}
+      </span>
+      {r.status === "pending_deposit" && <span className="text-highlight">Retención vence en {countdown(r.depositDueAt)}</span>}
+      <span className="mt-0.5 flex items-center justify-between gap-2 border-t border-white/15 pt-1.5">
+        <span className="rounded-full px-2 py-px text-[11px] font-bold text-on-light" style={{ background: statusOf(r.status).bg }}>
+          {statusOf(r.status).label}
+        </span>
+        <span className="text-white/60">Clic para ver el detalle</span>
+      </span>
+    </div>
+  );
+}
+
+function BlockTip({ b, cabin }: { b: Block; cabin: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <strong className="text-[13px]">Bloqueado · {b.reason}</strong>
+      <span className="text-white/85">{cabin}</span>
+      <span>
+        {fmtDate(b.from)} → {fmtDate(b.to)} · {plural(nightsBetween(b.from, b.to) + 1, "día", "días")}
+      </span>
+      {b.notes && <span className="text-white/85">{b.notes}</span>}
+      <span className="mt-0.5 border-t border-white/15 pt-1.5 text-white/60">Clic para editar el bloqueo</span>
+    </div>
+  );
+}
+
+/* ───────────── Vista ───────────── */
+
+export function CalendarView() {
+  const { data, today } = useAdmin();
+  const [wrap, width] = useWidth();
+  const pref = usePref(PREF.calendarView, "auto");
+  const [viewParam, setViewParam] = useParam<CalView | "">("vista", "");
+  const [dateParam, setDateParam] = useParam("fecha", "");
+  const [filter, setFilter] = useParam("cabana", "");
+  const rows = useMemo(() => units(data.cabinTypes, filter), [data.cabinTypes, filter]);
+
+  const valid = (v: string): v is CalView => CALENDAR_VIEWS.some((x) => x.value === v);
+  const view: CalView = valid(viewParam) ? viewParam : valid(pref) ? pref : autoView(width);
+  const anchor = isISO(dateParam) ? dateParam : today;
+  const setAnchor = (d: string) => setDateParam(d === today ? "" : d);
+  const narrow = width < 560;
+  const monthGrid = view === "mes" && width < MONTH_TIMELINE_MIN;
+
+  const from = view === "mes" ? monthStart(anchor) : view === "semana" ? mondayOf(anchor) : anchor;
+  const to = view === "mes" ? lastOfMonth(from) : view === "semana" ? addDays(from, 6) : view === "3dias" ? addDays(anchor, 2) : anchor;
+  const days = useMemo(() => {
+    const out: string[] = [];
+    for (let d = from; d <= to; d = addDays(d, 1)) out.push(d);
+    return out;
+  }, [from, to]);
+
+  const stepDays = { dia: 1, "3dias": 3, semana: 7, mes: 0 }[view];
+  const step = (dir: number) => setAnchor(view === "mes" ? monthStart(addDays(monthStart(anchor), dir > 0 ? 32 : -1)) : addDays(anchor, dir * stepDays));
+  const unitName = { dia: "Día", "3dias": "Días", semana: "Semana", mes: "Mes" }[view];
+  const range = (a: string, b: string) => {
+    const x = parseISO(a);
+    const y = parseISO(b);
+    return `${x.getUTCDate()} ${MS[x.getUTCMonth()]} – ${y.getUTCDate()} ${MS[y.getUTCMonth()]} ${y.getUTCFullYear()}`;
+  };
+  const title = view === "mes" ? `${MONTHS[parseISO(from).getUTCMonth()]} ${parseISO(from).getUTCFullYear()}` : view === "dia" ? (narrow ? fmtDate(anchor, true) : fmtFullDate(anchor)) : range(from, to);
+
+  // Resumen del periodo visible.
+  const inView = data.reservations.filter((r) => rows.some((u) => occupies(r, u)) && r.checkIn <= to && r.checkOut > from);
+  const arrivals = inView.filter((r) => r.checkIn >= from && r.checkIn <= to).length;
+  const departures = inView.filter((r) => r.checkOut >= from && r.checkOut <= to).length;
+  let busyNights = 0;
+  let blockedNights = 0;
+  for (const d of days)
+    for (const u of rows) {
+      if (data.reservations.some((r) => occupies(r, u) && ACTIVE_STATUSES.concat(["completed"]).includes(r.status) && r.checkIn <= d && d < r.checkOut)) busyNights++;
+      else if (data.blocks.some((b) => blocks(b, u) && b.from <= d && d <= b.to)) blockedNights++;
+    }
+  const capacity = rows.length * days.length - blockedNights;
+  const occupancy = capacity ? Math.round((busyNights / capacity) * 100) : 0;
+
+  const cabinOptions = [{ value: "", label: "Todas las cabañas" }, ...data.cabinTypes.filter((c) => c.units > 0).map((c) => ({ value: c.id, label: c.nombre, description: plural(c.units, "unidad", "unidades") }))];
+  const showDay = (d: string) => {
+    setAnchor(d);
+    setViewParam("dia");
+  };
+
+  return (
+    <div ref={wrap} className="flex min-h-0 flex-1 flex-col gap-3">
+      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+          <h1 id="ad-title" tabIndex={-1} className="sr-only">
+            Calendario
+          </h1>
+          <div className="flex items-center gap-1">
+            <Button size="sm" onClick={() => setAnchor(today)} disabled={today >= from && today <= to}>
+              Hoy
+            </Button>
+            <IconButton label={`${unitName} anterior`} size="sm" onClick={() => step(-1)}>
+              <ChevronLeftIcon size={17} />
+            </IconButton>
+            <IconButton label={`${unitName} siguiente`} size="sm" onClick={() => step(1)}>
+              <ChevronRightIcon size={17} />
+            </IconButton>
+          </div>
+          <p aria-live="polite" className="text-[clamp(1.1rem,1.8vw,1.4rem)] leading-tight font-extrabold tracking-[-0.01em] text-ink first-letter:uppercase">
+            {title}
+          </p>
+        </div>
+        {/* En móvil: fecha y cabaña lado a lado y la vista debajo a todo el ancho; así la cuadrícula empieza más arriba. */}
+        <div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto sm:flex-wrap">
+          <div className="min-w-0 sm:w-[176px]">
+            <DatePicker value={anchor} onChange={(d) => d && setAnchor(d)} clearable={false} placeholder="Ir a fecha" className="h-8 min-h-8 text-[13px]" />
+          </div>
+          <div className="min-w-0 sm:w-[200px]">
+            <Combobox value={filter} onChange={setFilter} options={cabinOptions} icon={<HomeIcon size={15} className="text-ink-muted" />} className="h-8 min-h-8 text-[13px]" />
+          </div>
+          <Segmented className="col-span-2 w-full justify-self-stretch sm:w-auto [&>*]:flex-1 [&>*]:justify-center sm:[&>*]:flex-none" label="Vista del calendario" value={view} onChange={(v) => setViewParam(v)} options={CALENDAR_VIEWS} />
+        </div>
+      </header>
+
+      {!rows.length ? (
+        <div className="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+          <EmptyState
+            icon={<HomeIcon size={18} />}
+            title="No hay cabañas para mostrar"
+            text="Crea una cabaña (o asígnale unidades) para ver su ocupación aquí."
+            action={
+              <Link href={paths.cabanas} className={buttonClass()}>
+                Ir a Cabañas
+              </Link>
+            }
+          />
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-6">
+            <ul aria-label="Resumen del periodo" className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 text-[12.5px] whitespace-nowrap sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+              <Chip label="Ocupación" value={`${occupancy} %`} />
+              <Chip label={view === "dia" ? "Llegan" : "Llegadas"} value={arrivals} icon={<LoginIcon size={13} />} />
+              <Chip label={view === "dia" ? "Salen" : "Salidas"} value={departures} icon={<LogoutIcon size={13} />} />
+              <Chip label="Noches libres" value={Math.max(0, capacity - busyNights)} icon={<MoonIcon size={13} />} />
+              {blockedNights > 0 && <Chip label="Bloqueadas" value={blockedNights} icon={<BanIcon size={13} />} />}
+            </ul>
+            <Legend />
+          </div>
+          <div key={`${view}-${from}-${filter}-${monthGrid}`} className="flex min-h-0 flex-1 flex-col motion-safe:animate-fade-in">
+            {!width ? (
+              <Skeleton className="min-h-[360px] flex-1" />
+            ) : view === "dia" ? (
+              <DayAgenda day={anchor} rows={rows} />
+            ) : monthGrid ? (
+              <MonthGrid month={from} rows={rows} today={today} onPick={showDay} />
+            ) : (
+              <Timeline days={days} rows={rows} view={view} today={today} width={width} onDay={showDay} />
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Chip({ label, value, icon }: { label: string; value: ReactNode; icon?: ReactNode }) {
+  return (
+    <li className="inline-flex flex-none items-center gap-1.5 rounded-full border border-line bg-panel px-2.5 py-1 text-ink-muted">
+      {icon && <span aria-hidden="true">{icon}</span>}
+      {label}
+      <strong className="font-bold text-ink tabular-nums">{value}</strong>
+    </li>
+  );
+}
+
+const LEGEND: { label: string; style: CSSProperties }[] = [
+  { label: "Confirmada", style: barStyle({ status: "confirmed" }) },
+  { label: "Pendiente de abono", style: barStyle({ status: "pending_deposit" }) },
+  { label: "Reprogramada", style: barStyle({ status: "rescheduled" }) },
+  { label: "En estadía", style: barStyle({ status: "checked_in" }) },
+  { label: "Finalizada", style: barStyle({ status: "completed" }) },
+  { label: "Bloqueo", style: { background: BLOCK_BG } },
+];
+
+function Legend() {
+  return (
+    <ul aria-label="Leyenda" className="no-scrollbar -mx-4 flex gap-x-3 gap-y-1 overflow-x-auto px-4 text-[12px] text-ink-muted sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+      {LEGEND.map((l) => (
+        <li key={l.label} className="inline-flex flex-none items-center gap-1.5 whitespace-nowrap">
+          <span aria-hidden="true" className="h-3 w-4 rounded-[4px]" style={l.style} />
+          {l.label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/* ───────────── Línea de tiempo (3 días, semana y mes en pantallas anchas) ───────────── */
+
+type TimelineProps = { days: string[]; rows: Unit[]; view: CalView; today: string; width: number; onDay: (d: string) => void };
+
+function Timeline({ days, rows, view, today, width, onDay }: TimelineProps) {
+  const { data, cabinLabel } = useAdmin();
+  const tip = useTip();
+  const scroller = useRef<HTMLDivElement>(null);
+  const cellAnchor = useRef<HTMLElement | null>(null);
+  const [cell, setCell] = useState<{ u: Unit; d: string } | null>(null);
+  const n = days.length;
+  const from = days[0];
+  const to = days[n - 1];
+  const idx = (d: string) => nightsBetween(from, d);
+  const compact = width < 640;
+  // Columna de nombres y ancho mínimo de media jornada según el espacio: sin desplazamiento horizontal salvo que no haya otra opción.
+  const label = compact ? 94 : 140;
+  const half = view === "mes" ? 10 : view === "semana" ? (compact ? 14 : 34) : compact ? 22 : 48;
+
+  // Abre desplazado hasta hoy si el periodo no cabe en pantalla.
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || today < from || today > to) return;
+    el.scrollLeft = Math.max(0, idx(today) * half * 2 - el.clientWidth / 3);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [from]);
+
+  const free = (u: Unit, d: string) => !data.reservations.some((r) => occupies(r, u) && r.checkIn <= d && d < r.checkOut) && !data.blocks.some((b) => blocks(b, u) && b.from <= d && d <= b.to);
+  const visible = data.reservations.filter((r) => r.checkIn <= to && r.checkOut > from && rows.some((u) => occupies(r, u)));
+
+  const gridStyle: CSSProperties = {
+    gridTemplateColumns: `${label}px repeat(${n * 2}, minmax(${half}px, 1fr))`,
+    gridTemplateRows: `auto 40px repeat(${rows.length}, minmax(${compact ? 64 : 68}px, 1fr))`,
+    minWidth: label + n * 2 * half,
+  };
+  const rate = cell ? nightlyRate(cell.u.cabin, data.seasons, cell.d) : null;
+
+  return (
+    <div className="flex min-h-[340px] flex-1 flex-col overflow-hidden rounded-2xl border border-line bg-panel shadow-panel">
+      <div ref={scroller} className="relative min-h-0 flex-1 overflow-auto overscroll-x-contain">
+        <div role="grid" aria-label="Ocupación por cabaña" aria-rowcount={rows.length + 2} className="grid min-h-full" style={gridStyle}>
+          {/* Encabezado de días */}
+          <div role="row" className="contents">
+            <div role="columnheader" className="sticky top-0 left-0 z-30 flex items-end border-r border-b border-line bg-panel px-3 pb-2 text-[12px] font-semibold text-ink-muted">
+              Cabaña
+            </div>
+            {days.map((d, i) => {
+              const dt = parseISO(d);
+              const wd = dt.getUTCDay();
+              const isToday = d === today;
+              return (
+                <div
+                  key={d}
+                  role="columnheader"
+                  aria-label={fmtDate(d, true)}
+                  className={`@container sticky top-0 z-20 flex flex-col items-center justify-end gap-0.5 border-b border-line px-0.5 pt-2 pb-1.5 ${wd === 0 || wd === 6 ? "bg-canvas" : "bg-panel"} ${i ? "border-l border-l-line/70" : ""}`}
+                  style={{ gridColumn: `${2 + i * 2} / span 2` }}
+                >
+                  <DayName wd={wd} className={`max-w-full truncate text-[10.5px] font-semibold tracking-[.04em] uppercase ${isToday ? "text-ink" : "text-ink-subtle"}`} />
+                  <span className={`grid h-6 min-w-6 place-items-center rounded-full px-1 text-[12.5px] font-bold tabular-nums ${isToday ? "bg-ink text-white" : "text-ink"}`}>{dt.getUTCDate()}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Disponibilidad por día */}
+          <div role="row" className="contents">
+            <div role="rowheader" className="sticky left-0 z-10 flex items-center border-r border-b border-line bg-panel px-3 text-[12px] font-semibold text-ink-muted">
+              Libres
+            </div>
+            {days.map((d, i) => {
+              const f = rows.filter((u) => free(u, d)).length;
+              const tone = f === 0 ? "bg-error-soft text-error" : f === 1 && rows.length > 1 ? "bg-warning-soft text-warning" : "bg-success-soft text-success";
+              const text = `${fmtDate(d)}: ${f === 0 ? "sin cabañas libres" : `${f} de ${rows.length} libres`}`;
+              return (
+                <div key={d} role="gridcell" className={`@container flex items-center justify-center border-b border-line px-0.5 ${i ? "border-l border-l-line/70" : ""}`} style={{ gridColumn: `${2 + i * 2} / span 2` }}>
+                  <span aria-label={text} {...tip(() => text)} className={`grid h-6 w-full max-w-11 place-items-center rounded-md text-[12px] font-bold tabular-nums ${tone}`}>
+                    {f === 0 ? (
+                      <>
+                        <span className="@min-[56px]:hidden">0</span>
+                        <span className="hidden @min-[56px]:inline">Lleno</span>
+                      </>
+                    ) : (
+                      f
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Filas por unidad */}
+          {rows.map((u, ri) => {
+            const gridRow = 3 + ri;
+            return (
+              <div key={u.key} role="row" className="contents">
+                <div role="rowheader" className="sticky left-0 z-10 flex min-w-0 flex-col justify-center gap-0.5 border-r border-b border-line bg-panel px-2.5 sm:px-3" style={{ gridRow }}>
+                  <span className="truncate text-[12.5px] font-semibold text-ink sm:text-[13px]">{compact ? u.short : u.label}</span>
+                  {!u.cabin.activa && <span className="text-[11px] text-ink-subtle">Inactiva</span>}
+                </div>
+                {days.map((d, i) => {
+                  const wd = parseISO(d).getUTCDay();
+                  const isFree = free(u, d);
+                  return (
+                    <div
+                      key={d}
+                      role="gridcell"
+                      aria-label={isFree ? `${fmtDate(d)} libre` : undefined}
+                      className={`group relative border-b border-line ${i ? "border-l border-l-line/70" : ""} ${d === today ? "bg-highlight/10" : wd === 0 || wd === 6 ? "bg-canvas/70" : ""}`}
+                      style={{ gridRow, gridColumn: `${2 + i * 2} / span 2` }}
+                    >
+                      {isFree && d >= today && (
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          aria-label={`${u.label}, ${fmtDate(d)}: libre. Ver opciones`}
+                          aria-haspopup="dialog"
+                          onClick={(e) => {
+                            cellAnchor.current = e.currentTarget;
+                            setCell({ u, d });
+                          }}
+                          {...tip(() => `${fmtDate(d)} · ${cabinLabel(u.cabin.id, u.unit)} libre. Clic para bloquear o ver el día.`)}
+                          className="absolute inset-1 grid place-items-center rounded-lg text-ink-subtle opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:bg-ink/5 focus-visible:opacity-100 pointer-coarse:active:bg-ink/6 pointer-coarse:active:opacity-100"
+                        >
+                          <BanIcon size={13} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Bloqueos */}
+                {data.blocks
+                  .filter((b) => blocks(b, u) && b.from <= to && b.to >= from)
+                  .map((b) => {
+                    const start = b.from < from ? 2 : 2 + idx(b.from) * 2;
+                    const end = b.to > to ? 2 + n * 2 : 2 + (idx(b.to) + 1) * 2;
+                    // Si sigue antes o después del periodo visible, ese lado queda recto y sin margen (como las reservas).
+                    const cut = { l: b.from < from, r: b.to > to };
+                    return (
+                      <Link
+                        key={b.id}
+                        href={paths.bloqueos({ editar: b.id })}
+                        aria-label={`Bloqueo ${b.reason}, ${fmtDate(b.from)} a ${fmtDate(b.to)}`}
+                        {...tip(() => <BlockTip b={b} cabin={cabinLabel(b.cabinTypeId, b.unit)} />)}
+                        className={`@container relative z-1 my-auto flex h-[calc(100%-14px)] max-h-[84px] min-w-0 items-center gap-1.5 overflow-hidden px-2 text-left text-[12px] font-semibold text-ink-muted transition-[filter,box-shadow] duration-150 hover:shadow-panel hover:brightness-95 ${
+                          cut.l ? "rounded-l-none" : "ml-0.5 rounded-l-lg"
+                        } ${cut.r ? "rounded-r-none" : "mr-0.5 rounded-r-lg"}`}
+                        style={{ gridRow, gridColumn: `${start} / ${end}`, background: BLOCK_BG }}
+                      >
+                        <BanIcon size={13} className="hidden flex-none @min-[48px]:block" />
+                        <span className="truncate">{b.reason}</span>
+                      </Link>
+                    );
+                  })}
+
+                {/* Reservas: de la tarde de llegada a la mañana de salida */}
+                {visible
+                  .filter((r) => occupies(r, u))
+                  .map((r) => {
+                    const start = r.checkIn < from ? 2 : 3 + idx(r.checkIn) * 2;
+                    const end = r.checkOut > to ? 2 + n * 2 : 3 + idx(r.checkOut) * 2;
+                    const cut = { l: r.checkIn < from, r: r.checkOut > to };
+                    const first = r.guest.fullName.split(" ")[0];
+                    const pending = pendingOf(r).total;
+                    // Media jornada al borde del periodo: el padding normal + el borde no caben en la columna.
+                    const narrowBar = end - start <= 1;
+                    return (
+                      <Link
+                        key={r.code}
+                        href={paths.reserva(r.code)}
+                        aria-label={`${r.guest.fullName}, ${r.code}, ${statusOf(r.status).label}, ${fmtDate(r.checkIn)} a ${fmtDate(r.checkOut)}`}
+                        {...tip(() => <ReservationTip r={r} cabin={cabinLabel(r.cabinTypeId, r.unit)} />)}
+                        className={`@container relative z-2 my-auto flex h-[calc(100%-14px)] max-h-[84px] min-w-0 flex-col justify-center overflow-hidden text-left text-ink shadow-[0_1px_1px_rgb(22_58_42/0.06)] transition-[filter,box-shadow,transform] duration-150 hover:z-3 hover:shadow-panel hover:brightness-[.97] motion-safe:hover:-translate-y-px ${narrowBar ? "px-1" : "px-2"} ${
+                          cut.l ? "rounded-l-none" : "rounded-l-lg"
+                        } ${cut.r ? "rounded-r-none" : "rounded-r-lg"}`}
+                        style={{ gridRow, gridColumn: `${start} / ${end}`, ...barStyle(r) }}
+                      >
+                        {/* El contenido crece con el ancho de la barra: nombre → código y noches → pendiente o estado. */}
+                        <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] leading-tight font-bold">
+                          {r.status === "checked_in" && <span aria-hidden="true" className="size-1.5 flex-none rounded-full bg-success" />}
+                          <span className="truncate @min-[120px]:hidden">{first}</span>
+                          <span className="hidden truncate @min-[120px]:inline">{r.guest.fullName}</span>
+                        </span>
+                        <span className="hidden truncate text-[11.5px] leading-tight text-ink-muted @min-[84px]:block">
+                          {r.code} · {plural(nightsBetween(r.checkIn, r.checkOut), "noche", "noches")}
+                        </span>
+                        <span className="mt-0.5 hidden truncate text-[11px] leading-tight font-semibold @min-[160px]:block">{pending > 0 ? `Pendiente ${cop(pending)}` : statusOf(r.status).label}</span>
+                      </Link>
+                    );
+                  })}
+              </div>
+            );
+          })}
+        </div>
+        {!visible.length && !data.blocks.some((b) => b.from <= to && b.to >= from) && (
+          <p className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 translate-y-2 rounded-full bg-panel/95 px-4 py-2 text-[13px] font-medium whitespace-nowrap text-ink-muted shadow-panel">Sin reservas en este periodo</p>
+        )}
+      </div>
+
+      {/* Fecha libre: acciones al tocar o hacer clic (en móvil, hoja inferior) */}
+      <Popover open={!!cell} onClose={() => setCell(null)} anchor={cellAnchor} label="Fecha libre">
+        {cell && (
+          <div className="flex w-[280px] flex-col gap-3 p-4 max-sm:w-full">
+            <div>
+              <p className="text-[12px] font-bold tracking-[.04em] text-success uppercase">Libre</p>
+              <p className="mt-0.5 text-[15px] font-bold text-ink">{cabinLabel(cell.u.cabin.id, cell.u.unit)}</p>
+              <p className="text-[13px] text-ink-muted">{fmtFullDate(cell.d)}</p>
+              {rate && <p className="mt-1 text-[13px] text-ink">{`Noche en pareja: ${cop(rate.couple)}${rate.season ? ` · ${rate.season.nombre}` : ""}`}</p>}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Link href={paths.bloqueos({ nuevo: 1, cabana: cell.u.cabin.id, unidad: cell.u.unit, fecha: cell.d })} className={buttonClass("secondary", "md", "justify-start")}>
+                <BanIcon size={15} />
+                Bloquear desde este día
+              </Link>
+              <Button
+                variant="ghost"
+                className="justify-start"
+                onClick={() => {
+                  setCell(null);
+                  onDay(cell.d);
+                }}
+              >
+                Ver la agenda del día
+              </Button>
+            </div>
+          </div>
+        )}
+      </Popover>
+    </div>
+  );
+}
+
+/* ───────────── Mes en pantallas angostas: cuadrícula mensual ───────────── */
+
+// Cada día muestra una franja por unidad (reserva, bloqueo o libre) y cuántas quedan libres. Tocar un día abre su agenda.
+function MonthGrid({ month, rows, today, onPick }: { month: string; rows: Unit[]; today: string; onPick: (d: string) => void }) {
+  const { data } = useAdmin();
+  const tip = useTip();
+  const start = mondayOf(month);
+  const end = addDays(mondayOf(lastOfMonth(month)), 6);
+  const days: string[] = [];
+  for (let d = start; d <= end; d = addDays(d, 1)) days.push(d);
+  const many = rows.length > 6;
+
+  const stateOf = (u: Unit, d: string) => {
+    const r = data.reservations.find((x) => occupies(x, u) && x.checkIn <= d && d < x.checkOut);
+    if (r) return { kind: "res" as const, r };
+    const b = data.blocks.find((x) => blocks(x, u) && x.from <= d && d <= x.to);
+    return b ? { kind: "block" as const, b } : { kind: "free" as const };
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-line bg-panel shadow-panel">
+      <div role="row" className="grid grid-cols-7 border-b border-line bg-canvas/70">
+        {[1, 2, 3, 4, 5, 6, 0].map((wd) => (
+          <div key={wd} role="columnheader" className="@container py-2 text-center">
+            <DayName wd={wd} className="text-[11px] font-semibold tracking-[.04em] text-ink-muted uppercase" />
+          </div>
+        ))}
+      </div>
+      <div role="grid" aria-label="Ocupación del mes" className="grid min-h-0 flex-1 auto-rows-[minmax(64px,1fr)] grid-cols-7 overflow-y-auto">
+        {days.map((d, i) => {
+          const inMonth = d.slice(0, 7) === month.slice(0, 7);
+          const states = rows.map((u) => ({ u, s: stateOf(u, d) }));
+          const freeCount = states.filter((x) => x.s.kind === "free").length;
+          const arrivals = data.reservations.filter((r) => r.checkIn === d && rows.some((u) => occupies(r, u))).length;
+          const summary = `${fmtDate(d, true)}: ${freeCount === 0 ? "sin cabañas libres" : `${freeCount} de ${rows.length} libres`}${arrivals ? `, ${plural(arrivals, "llegada", "llegadas")}` : ""}`;
+          return (
+            <button
+              key={d}
+              type="button"
+              aria-label={`${summary}. Ver la agenda del día`}
+              onClick={() => onPick(d)}
+              {...tip(() => (
+                <span className="flex flex-col gap-1">
+                  <strong>{fmtDate(d, true)}</strong>
+                  {states.map(({ u, s }) => (
+                    <span key={u.key}>
+                      {u.label}: {s.kind === "res" ? `${s.r.guest.fullName} (${statusOf(s.r.status).label})` : s.kind === "block" ? `Bloqueada · ${s.b.reason}` : "Libre"}
+                    </span>
+                  ))}
+                </span>
+              ))}
+              className={`@container flex min-w-0 flex-col gap-1.5 border-line p-1.5 text-left transition-colors hover:bg-canvas sm:p-2 ${i % 7 ? "border-l" : ""} ${i >= 7 ? "border-t" : ""} ${inMonth ? "" : "bg-canvas/50 text-ink-subtle"}`}
+            >
+              <span className="flex items-center justify-between gap-1">
+                <span className={`grid h-6 min-w-6 place-items-center rounded-full px-1 text-[12.5px] font-bold tabular-nums ${d === today ? "bg-ink text-white" : inMonth ? "text-ink" : "text-ink-subtle"}`}>{parseISO(d).getUTCDate()}</span>
+                {arrivals > 0 && (
+                  <span aria-hidden="true" className="hidden items-center gap-0.5 text-[10.5px] font-bold text-success @min-[64px]:flex">
+                    <LoginIcon size={11} />
+                    {arrivals}
+                  </span>
+                )}
+              </span>
+              {/* Una franja por unidad con el color de acento del estado (el mismo borde de las barras de la línea de tiempo); libre = casi transparente. */}
+              {many ? (
+                <span aria-hidden="true" className="h-1.5 w-full overflow-hidden rounded-full bg-ink/6">
+                  <span className="block h-full rounded-full bg-ink/55" style={{ width: `${((rows.length - freeCount) / rows.length) * 100}%` }} />
+                </span>
+              ) : (
+                <span aria-hidden="true" className="flex flex-col gap-[3px]">
+                  {states.map(({ u, s }) => (
+                    <span
+                      key={u.key}
+                      className="h-[5px] w-full rounded-full"
+                      style={
+                        s.kind === "res"
+                          ? { background: `color-mix(in srgb, ${statusOf(s.r.status).bg} 100%, black ${s.r.status === "completed" ? 30 : 12}%)` }
+                          : s.kind === "block"
+                            ? { background: "repeating-linear-gradient(135deg, var(--color-status-block) 0 3px, transparent 3px 5px)" }
+                            : { background: "color-mix(in srgb, var(--color-ink) 7%, transparent)" }
+                      }
+                    />
+                  ))}
+                </span>
+              )}
+              <span aria-hidden="true" className={`mt-auto text-[11px] font-bold tabular-nums ${freeCount === 0 ? "text-error" : "text-success"}`}>
+                <span className="@min-[60px]:hidden">{freeCount === 0 ? "0" : freeCount}</span>
+                <span className="hidden @min-[60px]:inline">{freeCount === 0 ? "Lleno" : `${freeCount} libre${freeCount > 1 ? "s" : ""}`}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ───────────── Día: agenda por cabaña ───────────── */
+
+function DayAgenda({ day, rows }: { day: string; rows: Unit[] }) {
+  const { data, cabinLabel } = useAdmin();
+  return (
+    <div className="grid min-h-0 flex-1 grid-cols-1 content-start gap-3 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
+      {rows.map((u) => {
+        const stay = data.reservations.find((r) => occupies(r, u) && r.checkIn <= day && day < r.checkOut);
+        const leaving = data.reservations.find((r) => occupies(r, u) && r.checkOut === day);
+        const block = data.blocks.find((b) => blocks(b, u) && b.from <= day && day <= b.to);
+        const arriving = stay && stay.checkIn === day;
+        const state = block ? { label: "Bloqueada", tone: "bg-ink/8 text-ink-muted" } : arriving ? { label: "Llega hoy", tone: "bg-success-soft text-success" } : stay ? { label: "Ocupada", tone: "bg-info-soft text-info" } : { label: "Libre", tone: "bg-success-soft text-success" };
+        const night = stay ? nightsBetween(stay.checkIn, day) + 1 : 0;
+        const total = stay ? nightsBetween(stay.checkIn, stay.checkOut) : 0;
+        return (
+          <article key={u.key} className="flex flex-col gap-3 rounded-2xl border border-line bg-panel p-4 shadow-panel">
+            <header className="flex items-center justify-between gap-2">
+              <h2 className="text-[15px] font-bold text-ink">{cabinLabel(u.cabin.id, u.unit)}</h2>
+              <span className={`rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${state.tone}`}>{state.label}</span>
+            </header>
+            {leaving && (
+              <Link href={paths.reserva(leaving.code)} className="flex items-center gap-2.5 rounded-xl bg-canvas px-3 py-2 text-left text-[13px] transition-colors hover:bg-ink/6">
+                <LogoutIcon size={15} className="text-ink-muted" />
+                <span className="min-w-0 flex-1 truncate">
+                  Sale <strong>{leaving.guest.fullName}</strong> · check-out {fmtTime(data.site.settings.checkOutTime)}
+                </span>
+              </Link>
+            )}
+            {stay ? (
+              <Link href={paths.reserva(stay.code)} className="flex flex-col gap-2 rounded-xl p-3 text-left transition-[filter] hover:brightness-[.97]" style={barStyle(stay)}>
+                <span className="flex items-center justify-between gap-2">
+                  <strong className="truncate text-[14px] text-ink">{stay.guest.fullName}</strong>
+                  <StatusPill status={stay.status} size="sm" />
+                </span>
+                <span className="text-[12.5px] text-ink-muted">
+                  {stay.code} · {plural(stay.adults + stay.children, "huésped", "huéspedes")}
+                  {arriving && stay.estimatedArrival ? ` · llega ${stay.estimatedArrival}` : ""}
+                </span>
+                <span className="flex items-center gap-2">
+                  <span aria-hidden="true" className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/70">
+                    <span className="block h-full rounded-full bg-ink/60" style={{ width: `${(night / total) * 100}%` }} />
+                  </span>
+                  <span className="text-[12px] font-semibold text-ink tabular-nums">
+                    Noche {night} de {total}
+                  </span>
+                </span>
+                {pendingOf(stay).total > 0 && <span className="text-[12.5px] font-semibold text-warning">Pendiente por cobrar {cop(pendingOf(stay).total)}</span>}
+              </Link>
+            ) : block ? (
+              <Link href={paths.bloqueos({ editar: block.id })} className="flex flex-col gap-1 rounded-xl p-3 text-left" style={{ background: BLOCK_BG }}>
+                <strong className="text-[14px] text-ink">{block.reason}</strong>
+                <span className="text-[12.5px] text-ink-muted">
+                  {fmtDate(block.from)} → {fmtDate(block.to)}
+                  {block.notes ? ` · ${block.notes}` : ""}
+                </span>
+              </Link>
+            ) : (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-line-strong px-3 py-3 text-[13px] text-ink-muted">
+                Disponible esta noche
+                <Link href={paths.bloqueos({ nuevo: 1, cabana: u.cabin.id, unidad: u.unit, fecha: day })} className={buttonClass("ghost", "sm")}>
+                  <BanIcon size={14} />
+                  Bloquear
+                </Link>
+              </div>
+            )}
+          </article>
+        );
+      })}
+    </div>
+  );
+}

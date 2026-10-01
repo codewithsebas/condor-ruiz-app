@@ -1,26 +1,405 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* Paleta "Bosque" del diseño. `static` porque varios colores (estados) se usan desde JS. */
+@theme static {
+  --color-bg: #163a2a;
+  --color-surface: #1d4633;
+  --color-card: #f2ebd3;
+  --color-card-muted: #e6dcbe;
+  --color-on-dark: #f2ebd3;
+  --color-on-dark-muted: color-mix(in srgb, #f2ebd3 85%, #163a2a);
+  --color-on-light: #163a2a;
+  --color-on-light-muted: color-mix(in srgb, #163a2a 75%, #e6dcbe);
+  --color-accent: #7fae84;
+  --color-highlight: #d9a441;
+  --color-cta: #163a2a;
+  --color-cta-text: #f2ebd3;
+  --color-error: #9b2c1a;
+  --color-footer: color-mix(in srgb, #163a2a 72%, #000);
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-status-pending: #d9a441;
+  --color-status-confirmed: #7fae84;
+  --color-status-cancelled: #d9937f;
+  --color-status-expired: #bdb6a2;
+  --color-status-rescheduled: #9fb8c4;
+  --color-status-checked-in: #c8d98a;
+  --color-status-completed: #e6dcbe;
+  --color-status-block: #8a8f86;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  --radius-sm: 10px;
+  --radius-md: 18px;
+  --radius-lg: 28px;
+
+  --shadow-card: 0 22px 44px -20px rgb(0 0 0 / 0.55);
+  --shadow-pop: 0 30px 60px -24px rgb(0 0 0 / 0.6), 0 0 0 1px #e6dcbe;
+
+  /* Panel de administración: superficie clara para trabajar con datos; la marca queda en la barra lateral. */
+  --color-canvas: #f5f3ec;
+  --color-panel: #ffffff;
+  --color-line: #e5e0d3;
+  --color-line-strong: #cdc6b4;
+  --color-ink: #163a2a;
+  --color-ink-muted: #5d6b63;
+  --color-ink-subtle: #8b968f;
+  --color-focus: #2f7d52;
+  --color-chart: #3b8c5e;
+  /* Dos series validadas (contraste ≥ 3:1, separación para daltonismo ΔE ≥ 8): abonos y saldos. */
+  --color-series-1: #2f7d52;
+  --color-series-2: #bf7d22;
+  --color-success: #2f7d52;
+  --color-success-soft: #e5f1e8;
+  --color-warning: #8a5a00;
+  --color-warning-soft: #fbf1dc;
+  --color-error-soft: #fbeae6;
+  --color-info: #2c5566;
+  --color-info-soft: #e6eef2;
+
+  --shadow-panel: 0 1px 2px rgb(22 58 42 / 0.05), 0 1px 1px rgb(22 58 42 / 0.03);
+  --shadow-overlay: 0 24px 48px -12px rgb(22 58 42 / 0.3), 0 0 0 1px rgb(22 58 42 / 0.06);
+
+  --animate-pulse-soft: ec-pulse 1.2s ease-in-out infinite;
+  --animate-spin-fast: ec-spin 0.8s linear infinite;
+  --animate-fade-in: ec-fade-in 0.18s ease-out;
+  --animate-pop-in: ec-pop-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-slide-in-right: ec-slide-in-right 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-slide-up: ec-slide-up 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-slide-in-left: ec-slide-in-left 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-glide: ec-glide 3.6s ease-in-out infinite;
+  --animate-loader-bar: ec-loader-bar 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+
+  /* Pantalla de carga del panel: el cóndor planea y una barra recorre el riel. */
+  @keyframes ec-glide {
+    0%,
+    100% {
+      transform: translate(0, 0) rotate(-4deg);
+    }
+    50% {
+      transform: translate(10px, -9px) rotate(2deg);
+    }
+  }
+  @keyframes ec-loader-bar {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(300%);
+    }
+  }
+  @keyframes ec-slide-in-left {
+    from {
+      transform: translateX(-32px);
+      opacity: 0;
+    }
+  }
+
+  @keyframes ec-pulse {
+    50% {
+      opacity: 0.45;
+    }
+  }
+  @keyframes ec-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes ec-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes ec-pop-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.98);
+    }
+  }
+  @keyframes ec-slide-in-right {
+    from {
+      transform: translateX(32px);
+      opacity: 0;
+    }
+  }
+  @keyframes ec-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme inline {
+  --font-display: var(--font-bebas), Impact, sans-serif;
+  --font-body: var(--font-manrope), system-ui, sans-serif;
+  --font-script: var(--font-caveat), cursive;
+}
+
+/* Márgenes laterales: el contenido se centra en `n` px con un mínimo de 16 px. */
+@utility gutter-* {
+  padding-inline: max(16px, calc((100% - --value(integer) * 1px) / 2));
+}
+
+/* Pantallas con alto suficiente para que una vista ocupe exactamente el alto disponible (calendario del panel). */
+@custom-variant tall (@media (min-height: 600px));
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+  body {
+    background: var(--color-bg);
+    color: var(--color-on-dark);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  /* El color y el grosor del anillo se ajustan por zona (--ring*); en el sitio, dorado sobre verde. */
+  :focus-visible {
+    outline: var(--ring-width, 3px) solid var(--ring, var(--color-highlight)) !important;
+    outline-offset: var(--ring-offset, 3px);
+  }
+  /* Títulos y secciones que reciben el foco por código (cambio de página, resultado de una consulta) para los lectores
+     de pantalla: no son controles, sin anillo. */
+  :is(h1, h2, section)[tabindex="-1"]:focus-visible {
+    outline: none !important;
+  }
+  /* Ventanas modales: la página de fondo no se desplaza. */
+  html:has(dialog:modal) {
+    overflow: hidden;
+  }
+  /* En el panel la barra de desplazamiento reserva su espacio: abrir un modal no desplaza el contenido. */
+  html:has(.admin-root) {
+    scrollbar-gutter: stable;
+    background: var(--color-canvas);
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  }
+  svg {
+    flex-shrink: 0;
+  }
+  button:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  /* Titulares en Bebas Neue */
+  .display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    text-transform: uppercase;
+  }
+  .display-xl {
+    font-family: var(--font-display);
+    font-weight: 400;
+    text-transform: uppercase;
+    font-size: clamp(2.6rem, 5.6cqi, 5.6rem);
+    line-height: 0.92;
+  }
+  .page-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    text-transform: uppercase;
+    font-size: clamp(2.6rem, 6vw, 4.4rem);
+    line-height: 0.92;
+  }
+
+  /* Letra manuscrita con destello */
+  .kicker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-family: var(--font-script);
+    font-size: 1.6rem;
+    line-height: 1.1;
+    transform: rotate(-3deg);
+  }
+
+  .eyebrow {
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* Botones: siempre pill, el color lo da la variante */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 0;
+    border-radius: 999px;
+    font: inherit;
+    font-weight: 800;
+    text-decoration: none;
+    transition: background-color 0.15s ease;
+  }
+  .btn-cta {
+    background: var(--color-cta);
+    color: var(--color-cta-text);
+  }
+  .btn-cta:not(:disabled):hover {
+    background: color-mix(in srgb, var(--color-cta) 80%, var(--color-accent));
+  }
+  .btn-card {
+    background: var(--color-card);
+    color: var(--color-on-light);
+  }
+  .btn-card:not(:disabled):hover {
+    background: var(--color-card-muted);
+  }
+  .btn-surface {
+    background: var(--color-surface);
+    color: var(--color-on-dark);
+  }
+  .btn-surface:hover {
+    background: color-mix(in srgb, var(--color-surface) 80%, var(--color-on-dark));
+  }
+  .btn-highlight {
+    background: var(--color-highlight);
+    color: var(--color-on-light);
+  }
+  .btn-outline-dark {
+    border: 2px solid var(--color-on-dark);
+    background: transparent;
+    color: var(--color-on-dark);
+  }
+  .btn-outline-light {
+    border: 2px solid var(--color-on-light);
+    background: transparent;
+    color: var(--color-on-light);
+  }
+  .btn-icon {
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    flex: none;
+  }
+
+  /* Campos de formulario sobre tarjeta clara */
+  .field-label {
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .field-input {
+    width: 100%;
+    min-height: 52px;
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--color-card-muted);
+    background: color-mix(in srgb, var(--color-card) 55%, #fff);
+    color: var(--color-on-light);
+    font: inherit;
+  }
+  .field-input[aria-invalid="true"],
+  .field-input[data-invalid="true"] {
+    border-color: var(--color-error);
+  }
+  .field-input::placeholder {
+    color: var(--color-on-light-muted);
+    opacity: 1;
+  }
+  .field-error {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-error);
+  }
+
+  /* Variante compacta del mismo campo, para el panel (densidad de herramienta, fondo blanco). */
+  .field-input.field-compact {
+    min-height: 40px;
+    padding: 7px 12px;
+    border-width: 1px;
+    border-color: var(--color-line-strong);
+    border-radius: 12px;
+    background-color: var(--color-panel);
+    color: var(--color-ink);
+    font-size: 15px;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+  .field-input.field-compact::placeholder {
+    color: var(--color-ink-subtle);
+  }
+  .field-input.field-compact:hover:not(:disabled) {
+    border-color: var(--color-ink-subtle);
+  }
+  .field-input.field-compact:focus-visible {
+    border-color: var(--color-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 20%, transparent);
+    outline: none !important;
+  }
+  .field-input.field-compact[aria-invalid="true"],
+  .field-input.field-compact[data-invalid="true"] {
+    border-color: var(--color-error);
+  }
+  .field-input.field-compact[aria-invalid="true"]:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error) 18%, transparent);
+  }
+  .field-input.field-compact:disabled {
+    background-color: var(--color-canvas);
+    color: var(--color-ink-muted);
+    cursor: not-allowed;
+  }
+  .field-input.field-compact[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+  .field-input.field-compact[type="number"]::-webkit-inner-spin-button,
+  .field-input.field-compact[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  select.field-input.field-compact {
+    appearance: none;
+    padding-right: 36px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235d6b63' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+  @media (pointer: coarse) {
+    .field-input.field-compact {
+      min-height: 44px;
+      font-size: 16px; /* evita el zoom automático de iOS */
+    }
+  }
+
+  /* Zona clara del panel: anillo de foco verde, más fino que en el sitio. */
+  .admin-surface {
+    --ring: var(--color-focus);
+    --ring-width: 2px;
+    --ring-offset: 2px;
+  }
+  .admin-dark {
+    --ring: var(--color-highlight);
+    --ring-width: 2px;
+    --ring-offset: 2px;
+  }
+
+  .skeleton {
+    background: var(--color-card-muted);
+    animation: var(--animate-pulse-soft);
+  }
+  .dotted-top {
+    border-top: 2px dotted var(--color-card-muted);
+  }
 }

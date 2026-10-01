@@ -1,0 +1,107 @@
+// Mapa del panel: cada módulo es una página con su ruta. Lo usan el menú, las migas de pan, los títulos y los enlaces.
+// Sin "use client": las páginas del servidor también lo leen (validación de segmentos dinámicos).
+import type { ComponentType } from "react";
+import { BanIcon, BellIcon, CalendarIcon, FileTextIcon, GridIcon, HomeIcon, ListIcon, ReceiptIcon, SlidersIcon, TagIcon, TrendIcon, UsersIcon } from "@/components/icons";
+
+export type ModuleId = "dashboard" | "calendario" | "reservas" | "pagos" | "clientes" | "bloqueos" | "finanzas" | "cabanas" | "tarifas" | "contenido" | "notificaciones" | "configuracion";
+
+type Module = { label: string; href: string; icon: ComponentType<{ size?: number; className?: string }>; group: string; description: string };
+
+export const MODULES: Record<ModuleId, Module> = {
+  dashboard: { label: "Dashboard", href: "/admin", icon: GridIcon, group: "General", description: "Lo que pasa hoy: llegadas, salidas, abonos pendientes y ocupación." },
+  calendario: { label: "Calendario", href: "/admin/calendario", icon: CalendarIcon, group: "Operación", description: "Ocupación por cabaña y por día." },
+  reservas: { label: "Reservas", href: "/admin/reservas", icon: ListIcon, group: "Operación", description: "Busca, filtra y gestiona cualquier reserva." },
+  pagos: { label: "Pagos", href: "/admin/pagos", icon: ReceiptIcon, group: "Operación", description: "Transacciones en línea, pagos recibidos y lo que falta por cobrar." },
+  clientes: { label: "Clientes", href: "/admin/clientes", icon: UsersIcon, group: "Operación", description: "Historial, valor y valoración interna de cada huésped." },
+  bloqueos: { label: "Bloqueos", href: "/admin/bloqueos", icon: BanIcon, group: "Operación", description: "Fechas cerradas por mantenimiento, uso propio u otros motivos." },
+  finanzas: { label: "Finanzas", href: "/admin/finanzas", icon: TrendIcon, group: "Negocio", description: "Ingresos, ocupación y su evolución por periodo." },
+  cabanas: { label: "Cabañas", href: "/admin/cabanas", icon: HomeIcon, group: "Sitio web", description: "Cabañas que se ofrecen en el sitio: información, capacidad y fotos." },
+  tarifas: { label: "Tarifas", href: "/admin/tarifas", icon: TagIcon, group: "Sitio web", description: "Precio base por cabaña y temporadas con precio especial." },
+  contenido: { label: "Contenido del sitio", href: "/admin/contenido/portada", icon: FileTextIcon, group: "Sitio web", description: "Textos, imágenes y datos que ven los huéspedes en el sitio." },
+  notificaciones: { label: "Notificaciones", href: "/admin/notificaciones", icon: BellIcon, group: "Sistema", description: "Historial de avisos del panel." },
+  configuracion: { label: "Configuración", href: "/admin/configuracion", icon: SlidersIcon, group: "Sistema", description: "Sonido, tiempo real, preferencias del panel y sesión." },
+};
+
+export const MODULE_IDS = Object.keys(MODULES) as ModuleId[];
+export const NAV_GROUPS = [...new Set(MODULE_IDS.map((id) => MODULES[id].group))];
+
+// Módulo al que pertenece una ruta del panel ("/admin/reservas/ECR-1" → "reservas").
+export function moduleOf(pathname: string): ModuleId | null {
+  const seg = pathname.replace(/^\/admin\/?/, "").split("/")[0];
+  if (!seg) return "dashboard";
+  return seg !== "dashboard" && (MODULE_IDS as string[]).includes(seg) ? (seg as ModuleId) : null;
+}
+
+/* ───────────── Contenido del sitio: una ruta por zona ───────────── */
+
+export type ContentSectionId = "portada" | "experiencias" | "horarios" | "politicas" | "contacto" | "pagos" | "redes";
+
+export const CONTENT_SECTIONS: { id: ContentSectionId; label: string; where: string; href: string }[] = [
+  { id: "portada", label: "Portada", where: "Lo primero que ven los visitantes: título, descripción y fotos principales.", href: "/#top" },
+  { id: "experiencias", label: "Experiencias", where: "Sección «Alta montaña frente al nevado», con una foto por experiencia.", href: "/#experiencias" },
+  { id: "horarios", label: "Horarios", where: "Sección «Horarios», el pie de página y las horas de llegada del formulario de reserva.", href: "/#servicios" },
+  { id: "politicas", label: "Políticas y preguntas", where: "Sección «Reservas y políticas», la página de políticas y el resumen antes de enviar una reserva.", href: "/politicas" },
+  { id: "contacto", label: "Contacto y ubicación", where: "Botones de WhatsApp, teléfonos del pie de página y secciones «Ubicación» y «Contacto».", href: "/#contacto" },
+  { id: "pagos", label: "Pagos", where: "Página de confirmación de la reserva: cómo pagar el abono.", href: "/reservar" },
+  { id: "redes", label: "Redes y datos legales", where: "Pie de página: redes sociales y número de RNT.", href: "/#contacto" },
+];
+
+export const isContentSection = (s: string): s is ContentSectionId => CONTENT_SECTIONS.some((x) => x.id === s);
+
+/* ───────────── Rutas ───────────── */
+
+// Clave de cliente ("CC:12345678") ↔ segmento legible de la URL ("cc-12345678").
+const DOC_SLUG: Record<string, string> = { CC: "cc", CE: "ce", Pasaporte: "pasaporte", PPT: "ppt" };
+
+function clientSlug(key: string) {
+  const i = key.indexOf(":");
+  return `${DOC_SLUG[key.slice(0, i)] ?? key.slice(0, i).toLowerCase()}-${key.slice(i + 1)}`;
+}
+
+export function clientKeyOf(slug: string) {
+  const i = slug.indexOf("-");
+  const type = Object.keys(DOC_SLUG).find((k) => DOC_SLUG[k] === slug.slice(0, i).toLowerCase());
+  return type && i > 0 ? `${type}:${slug.slice(i + 1).toUpperCase()}` : null;
+}
+
+type Query = Record<string, string | number | null | undefined>;
+
+const withQuery = (path: string, q?: Query) => {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(q ?? {})) if (v !== null && v !== undefined && v !== "") p.set(k, String(v));
+  const s = p.toString();
+  return s ? `${path}?${s}` : path;
+};
+
+export const paths = {
+  dashboard: "/admin",
+  calendario: (q?: Query) => withQuery("/admin/calendario", q),
+  reservas: (q?: Query) => withQuery("/admin/reservas", q),
+  reserva: (code: string) => `/admin/reservas/${encodeURIComponent(code)}`,
+  pagos: (q?: Query) => withQuery("/admin/pagos", q),
+  clientes: (q?: Query) => withQuery("/admin/clientes", q),
+  cliente: (key: string) => `/admin/clientes/${clientSlug(key)}`,
+  bloqueos: (q?: Query) => withQuery("/admin/bloqueos", q),
+  finanzas: (q?: Query) => withQuery("/admin/finanzas", q),
+  cabanas: "/admin/cabanas",
+  nuevaCabana: "/admin/cabanas/nueva",
+  cabana: (id: string) => `/admin/cabanas/${encodeURIComponent(id)}`,
+  tarifas: (q?: Query) => withQuery("/admin/tarifas", q),
+  contenido: (section?: ContentSectionId) => (section ? `/admin/contenido/${section}` : "/admin/contenido"),
+  notificaciones: (q?: Query) => withQuery("/admin/notificaciones", q),
+  configuracion: "/admin/configuracion",
+};
+
+// Enlaces del panel anterior (/admin?s=reservas&r=CODIGO) → rutas actuales.
+export function legacyPath(search: URLSearchParams): string | null {
+  const r = search.get("r");
+  if (r) return paths.reserva(r);
+  const s = search.get("s");
+  const id = search.get("id");
+  if (!s) return null;
+  if (s === "resumen") return paths.dashboard;
+  if (s === "clientes" && id) return paths.cliente(id);
+  if (s === "cabanas" && id) return id === "nueva" ? paths.nuevaCabana : paths.cabana(id);
+  if (s === "contenido" && id && isContentSection(id)) return paths.contenido(id);
+  return (MODULE_IDS as string[]).includes(s) ? MODULES[s as ModuleId].href : null;
+}

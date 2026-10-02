@@ -2,6 +2,7 @@ import { after, type NextRequest } from "next/server";
 import { publicView, runDeadlines, toPublicPayment } from "@/lib/server/db";
 import { fail, json, route } from "@/lib/server/http";
 import { processOutbox } from "@/lib/server/mailer";
+import { dispatchPush } from "@/lib/server/push";
 import { fetchWompiTransaction, settleTransaction, siteUrl } from "@/lib/server/payments";
 import { createServiceClient } from "@/lib/supabase/server";
 import type { PaymentState } from "@/lib/types";
@@ -32,7 +33,7 @@ export const GET = route(async (req: NextRequest) => {
       const tx = await fetchWompiTransaction(id);
       if (tx && tx.reference === p.reference) changed = (await settleTransaction(sb, p, tx)).changed || changed;
     }
-    if (changed) after(() => processOutbox(siteUrl(req.nextUrl.origin)));
+    if (changed) after(() => processOutbox(siteUrl(req.nextUrl.origin)).then(() => dispatchPush()));
   }
 
   await runDeadlines();

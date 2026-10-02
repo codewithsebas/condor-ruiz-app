@@ -6,7 +6,8 @@ import type {
   AdminAction, AdminData, AdminNotification, ApiResult, Availability, Block, BlockInput, CabinInput, CabinType, ClientProfile, ClientProfileInput, EmailRecord, FieldErrors, PaymentKind, PaymentProof, PaymentStart,
   PaymentState, ProofReview, PublicReservation, RateSeason, Rates, Reservation, ReservationInput, SeasonInput, SiteInput,
 } from "./types";
-import type { SiteContent } from "./site";
+import type { NotificationGroup } from "./notification-groups";
+import type { SiteContent, SiteService } from "./site";
 
 type RequestOpts = {
   query?: Record<string, string | number | undefined>;
@@ -89,6 +90,8 @@ export const resetIdem = () => sessionStorage.removeItem("ec-idem");
 
 export type ValidationError = { error: "VALIDATION_ERROR"; fields: FieldErrors };
 export type ApiError = { error: string; fields?: FieldErrors };
+// Un dispositivo registrado para notificaciones push: qué grupos recibe y cómo se reconoce ("Chrome en Android").
+export type PushDevice = { groups: NotificationGroup[]; device: string; lastSuccessAt: string | null };
 
 export const api = {
   cabinTypes: () => request<CabinType[]>("GET", "/cabin-types"),
@@ -135,5 +138,20 @@ export const api = {
     saveSite: (b: SiteInput) => request<SiteContent>("PUT", "/admin/site", { body: b }),
     uploadPhoto: (slot: string, file: Blob, name: string) => upload<Record<string, string>>("/admin/photos", formOf({ slot, file }, name)),
     deletePhoto: (slot: string) => request<Record<string, string>>("DELETE", "/admin/photos", { query: { slot } }),
+    // Servicios del sitio: cada operación responde con la lista completa en orden.
+    services: {
+      create: (b: Omit<SiteService, "id">) => request<SiteService[] | ValidationError>("POST", "/admin/services", { body: b }),
+      update: (b: SiteService) => request<SiteService[] | ValidationError>("PUT", "/admin/services", { body: b }),
+      reorder: (order: string[]) => request<SiteService[]>("PATCH", "/admin/services", { body: { order } }),
+      remove: (id: string) => request<SiteService[]>("DELETE", "/admin/services", { query: { id } }),
+    },
+    // Notificaciones push de este dispositivo (la suscripción la crea el navegador; aquí se registra en el servidor).
+    push: {
+      status: (endpoint?: string) => request<{ configured: boolean; subscription: PushDevice | null }>("GET", "/admin/push", { query: { endpoint } }),
+      subscribe: (b: { subscription: PushSubscriptionJSON; groups?: NotificationGroup[] }) => request<PushDevice | ApiError>("POST", "/admin/push", { body: { action: "subscribe", ...b } }),
+      setGroups: (endpoint: string, groups: NotificationGroup[]) => request<PushDevice | ApiError>("POST", "/admin/push", { body: { action: "groups", endpoint, groups } }),
+      test: (endpoint: string) => request<{ ok: true } | ApiError>("POST", "/admin/push", { body: { action: "test", endpoint } }),
+      unsubscribe: (endpoint: string) => request<{ ok: true } | ApiError>("DELETE", "/admin/push", { query: { endpoint } }),
+    },
   },
 };

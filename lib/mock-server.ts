@@ -4,7 +4,7 @@ import { availability, clashingReservations, computeQuote, depositDueAt, findUni
 import { config } from "./config";
 import { addDays, sleep, todayISO } from "./format";
 import { BALANCE_MINUTES } from "./payments";
-import { defaultContent, defaultTexts, mergeTexts, type SiteContent } from "./site";
+import { defaultContent, defaultTexts, mergeTexts, type SiteContent, type SiteService } from "./site";
 import type {
   AdminNotification, ApiResult, Block, BlockInput, CabinInput, CabinType, ClientProfile, EmailRecord, NotificationKind, PaymentKind, PaymentRecord, PaymentStatus, PublicReservation, RateSeason, Rates, Reservation,
   ReservationInput, SeasonInput, SiteInput,
@@ -148,6 +148,9 @@ function applyPayment(db: Db, p: PaymentRecord): "confirmed" | "balance_paid" | 
   db.payments.forEach((x) => x !== p && x.reservationCode === r.code && sameStage(x.kind) && x.status === "initiated" && Object.assign(x, { status: "expired", detail: "Ya no es necesario: el pago se completó con otro intento" }));
   return p.kind === "balance" ? "balance_paid" : "confirmed";
 }
+
+// Contenido del sitio simulado; los datos guardados antes de existir los servicios toman los de por defecto.
+const siteOf = (d: Db): SiteContent => ({ ...defaultContent, ...d.site, services: d.site?.services ?? defaultContent.services });
 
 function save(d: Db) {
   try {
@@ -321,16 +324,30 @@ export async function mockRequest(method: string, path: string, opts: MockReques
   if (method === "GET" && path === "/admin/data")
     return ok({
       reservations: db.reservations, blocks: db.blocks, cabinTypes: [...db.cabins].sort((a, b) => a.sort - b.sort), seasons: db.seasons, unidades: unitsOf(db),
-      site: db.site ?? defaultContent, proofs: [], payments: [...db.payments].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)), emails: db.emails, clients: db.clients, notifications: db.notifications,
+      site: siteOf(db), proofs: [], payments: [...db.payments].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)), emails: db.emails, clients: db.clients, notifications: db.notifications,
     });
   // En modo simulado el contenido se guarda solo en este navegador y no cambia las páginas públicas.
   if (method === "PUT" && path === "/admin/site") {
     const b = opts.body as SiteInput;
-    db.site = { settings: b.settings, policies: b.policies, photos: {}, texts: mergeTexts(b.content ?? defaultTexts) };
+    db.site = { settings: b.settings, policies: b.policies, photos: {}, texts: mergeTexts(b.content ?? defaultTexts), services: siteOf(db).services };
     save(db);
     return ok(db.site);
   }
-  if (path === "/admin/photos" || path === "/admin/cabins/photos" || path === "/admin/proofs") return { status: 501, data: { error: "NOT_AVAILABLE_IN_MOCK" } };
+  // Servicios del sitio (en modo simulado, solo en este navegador).
+  if (path === "/admin/services") {
+    const site = siteOf(db);
+    const b = (opts.body ?? {}) as Partial<SiteService> & { order?: string[] };
+    const clean = (s: Partial<SiteService>) => ({ title: String(s.title ?? "").trim(), description: String(s.description ?? "").trim(), icon: String(s.icon ?? "check"), note: String(s.note ?? "").trim(), visible: s.visible !== false });
+    if ((method === "POST" || method === "PUT") && !clean(b).title) return invalid({ title: "Escribe el nombre del servicio." });
+    if (method === "POST") site.services = [...site.services, { id: crypto.randomUUID(), ...clean(b) }];
+    else if (method === "PUT") site.services = site.services.map((s) => (s.id === b.id ? { id: s.id, ...clean(b) } : s));
+    else if (method === "PATCH") site.services = (b.order ?? []).map((id) => site.services.find((s) => s.id === id)).filter((s): s is SiteService => !!s);
+    else if (method === "DELETE") site.services = site.services.filter((s) => s.id !== q.id);
+    db.site = site;
+    save(db);
+    return ok(site.services);
+  }
+  if (path === "/admin/photos" || path === "/admin/cabins/photos" || path === "/admin/proofs" || path === "/admin/push") return { status: 501, data: { error: "NOT_AVAILABLE_IN_MOCK" } };
 
   if (method === "POST" && path === "/admin/action") {
     const r = db.reservations.find((x) => x.code === body.code);

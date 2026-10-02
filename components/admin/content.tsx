@@ -14,6 +14,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { useAdmin } from "./context";
 import { CONTENT_SECTIONS, MODULES, isContentSection, paths, type ContentSectionId } from "./routes";
 import { PhotoCropper } from "./photo-cropper";
+import { ServicesManager } from "./services";
 import { adminInput } from "./shared";
 import { Button, Callout, Card, CardHeader, Field, FieldError, IconButton, NavTabs, PageHeader, SaveBar, Spinner } from "./ui";
 
@@ -22,6 +23,7 @@ import { Button, Callout, Card, CardHeader, Field, FieldError, IconButton, NavTa
 const ICONS: Record<ContentSectionId, ReactNode> = {
   portada: <HomeIcon size={15} />,
   experiencias: <ImageIcon size={15} />,
+  servicios: <CheckIcon size={15} />,
   horarios: <ClockIcon size={15} />,
   politicas: <FileTextIcon size={15} />,
   contacto: <PhoneIcon size={15} />,
@@ -29,7 +31,8 @@ const ICONS: Record<ContentSectionId, ReactNode> = {
   redes: <ShieldIcon size={15} />,
 };
 // Zonas que solo tienen fotos (se publican al subirlas): no muestran la barra de guardado.
-const PHOTOS_ONLY: ContentSectionId[] = ["experiencias"];
+// Servicios también se publica al instante (cada cambio va directo al servidor).
+const PHOTOS_ONLY: ContentSectionId[] = ["experiencias", "servicios"];
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const URL_OK = /^https:\/\/[^\s]+$/;
@@ -48,6 +51,9 @@ type Form = { s: SiteSettings; policies: SitePolicy[]; t: SiteTexts };
 function validate({ s, policies, t }: Form) {
   const e: Record<string, { msg: string; tab: ContentSectionId }> = {};
   if (!t.hero.title.trim()) e.heroTitle = { msg: "Escribe el título de la portada.", tab: "portada" };
+  const lines = t.hero.rotating.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length > TEXT_LIMITS.rotatingLines || lines.some((l) => l.length > TEXT_LIMITS.highlight))
+    e.heroRotating = { msg: `Hasta ${TEXT_LIMITS.rotatingLines} frases, de máximo ${TEXT_LIMITS.highlight} caracteres cada una.`, tab: "portada" };
   if (!TIME.test(s.checkInStart) || !TIME.test(s.checkInEnd) || s.checkInEnd <= s.checkInStart) e.checkIn = { msg: "La hora final del check-in debe ser posterior a la inicial.", tab: "horarios" };
   if (!TIME.test(s.checkOutTime)) e.checkOut = { msg: "Elige la hora de check-out.", tab: "horarios" };
   const phones = s.phones.map((p) => p.trim()).filter(Boolean);
@@ -162,6 +168,13 @@ export function ContentSection({ id }: { id: ContentSectionId }) {
                     {(p) => <input {...p} type="text" maxLength={TEXT_LIMITS.highlight} value={f.t.hero.highlight} onChange={(e) => setT("hero", { highlight: e.target.value })} className={adminInput} />}
                   </Field>
                 </div>
+                <Field
+                  label="Frases que se alternan con el título resaltado (opcional)"
+                  error={err("heroRotating")}
+                  hint={`Una por línea, hasta ${TEXT_LIMITS.rotatingLines}. En la portada cambian solas, letra por letra: «al nevado» → «a la cascada»… Déjalo vacío para que no cambie.`}
+                >
+                  {(p) => <textarea {...p} rows={3} maxLength={TEXT_LIMITS.rotating} value={f.t.hero.rotating} onChange={(e) => setT("hero", { rotating: e.target.value })} className={`${adminInput} resize-y leading-relaxed`} placeholder={"a la cascada\na las montañas"} />}
+                </Field>
                 <Field label="Etiqueta junto al título" hint="Corta. Ej. «Murillo, Tolima · Desayuno incluido».">
                   {(p) => <input {...p} type="text" maxLength={TEXT_LIMITS.badge} value={f.t.hero.badge} onChange={(e) => setT("hero", { badge: e.target.value })} className={adminInput} />}
                 </Field>
@@ -176,6 +189,8 @@ export function ContentSection({ id }: { id: ContentSectionId }) {
         )}
 
         {id === "experiencias" && <PhotoGroups groups={["Alta montaña frente al nevado"]} />}
+
+        {id === "servicios" && <ServicesManager />}
 
         {id === "horarios" && (
           <Card aria-labelledby="ct-hours" className="flex max-w-[640px] flex-col gap-4 p-4 sm:p-5">

@@ -7,11 +7,13 @@ import { useEffect, useRef, useState } from "react";
 import { AlertIcon, BellIcon, CheckIcon, ChevronRightIcon, ClockIcon, CloseIcon, FileTextIcon, LoginIcon, MailIcon, SlidersIcon, VolumeIcon, VolumeOffIcon, WalletIcon } from "@/components/icons";
 import { api } from "@/lib/api";
 import { isMockApi } from "@/lib/config";
+import { NOTIFICATION_GROUPS, type NotificationGroup } from "@/lib/notification-groups";
 import { addDays, countdown, dateOf, fmtClock, fmtFullDate, plural, timeAgo } from "@/lib/format";
 import type { AdminNotification, NotificationKind } from "@/lib/types";
 import { useAdmin, useParam } from "./context";
 import { Popover } from "@/components/ui/floating";
 import { PREF, readPref, usePref, writePref } from "./prefs";
+import { PushPrompt } from "./push";
 import { paths } from "./routes";
 import { Button, Card, CardHeader, EmptyState, IconButton, PageHeader, Segmented, buttonClass } from "./ui";
 
@@ -78,13 +80,9 @@ export const LIVE_LABEL: Record<LiveStatus, string> = {
 
 /* ───────────── Sonido ───────────── */
 
-export type SoundGroup = "reservas" | "pagos" | "cambios";
-
-export const SOUND_GROUPS: { id: SoundGroup; label: string; description: string; kinds: NotificationKind[] }[] = [
-  { id: "reservas", label: "Reservas confirmadas", description: "Cuando se aprueba el abono de una reserva y queda confirmada.", kinds: ["reservation_created", "reservation_confirmed"] },
-  { id: "pagos", label: "Pagos", description: "Saldos pagados, pagos rechazados, pagos por reembolsar y comprobantes.", kinds: ["balance_paid", "payment_declined", "payment_refund", "proof_uploaded", "proof_approved", "proof_rejected"] },
-  { id: "cambios", label: "Cancelaciones, vencimientos y fallos", description: "Reservas canceladas, saldos que vencen sin pagar y correos que no se pudieron enviar.", kinds: ["reservation_cancelled", "reservation_expired", "balance_overdue", "email_failed"] },
-];
+// Los mismos grupos que eligen qué notificaciones push recibe cada dispositivo (lib/notification-groups.ts).
+export type SoundGroup = NotificationGroup;
+export const SOUND_GROUPS = NOTIFICATION_GROUPS;
 
 let audio: AudioContext | null = null;
 
@@ -313,6 +311,7 @@ export function NotificationCenter() {
               </div>
             )}
           </div>
+          <PushPrompt />
           <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2.5">
             <Link href={paths.notificaciones()} onClick={() => setOpen(false)} className={buttonClass("ghost", "sm")}>
               Ver todas

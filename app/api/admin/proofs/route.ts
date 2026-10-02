@@ -2,6 +2,7 @@ import { after, type NextRequest } from "next/server";
 import { toProof } from "@/lib/server/db";
 import { fail, json, readJson, requireAdmin, route } from "@/lib/server/http";
 import { processOutbox } from "@/lib/server/mailer";
+import { dispatchPush } from "@/lib/server/push";
 import { businessError, siteUrl } from "@/lib/server/payments";
 import { PROOF_BUCKET } from "@/lib/server/proofs";
 import type { ProofReview } from "@/lib/types";
@@ -46,7 +47,7 @@ export const POST = route(async (req: NextRequest) => {
         if (known) return fail(known.status, known.error === "NO_AVAILABILITY" ? "DATES_UNAVAILABLE" : known.error);
         throw payErr;
       }
-      after(() => processOutbox(siteUrl(req.nextUrl.origin)));
+      after(() => processOutbox(siteUrl(req.nextUrl.origin)).then(() => dispatchPush()));
     }
   }
 

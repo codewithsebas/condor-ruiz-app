@@ -221,10 +221,26 @@ export function CountBadge({ n, tone = "muted", label }: { n: number; tone?: "mu
 /* ───────────── Barra de guardado ───────────── */
 
 // Barra fija al pie para formularios: indica si hay cambios y concentra Descartar / Guardar.
+// Va pegada al borde inferior de la ventana y ocupa todo el ancho del área de contenido (de la barra lateral al borde
+// derecho), aunque el formulario sea corto. Publica su alto en --savebar-h: el panel deja ese espacio libre al final
+// de la página (shell.tsx) y los avisos flotantes aparecen por encima de ella.
 export function SaveBar({ dirty, onDiscard, onSave, saveLabel }: { dirty: boolean; onDiscard: () => void; onSave: () => void; saveLabel: string }) {
+  const bar = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = bar.current;
+    if (!el) return;
+    const html = document.documentElement;
+    const ro = new ResizeObserver(() => html.style.setProperty("--savebar-h", `${el.offsetHeight}px`));
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      html.style.removeProperty("--savebar-h");
+    };
+  }, []);
   return (
-    <div className="sticky bottom-0 z-10 -mx-4 mt-2 border-t border-line bg-panel/92 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-panel/80 lg:-mx-8 lg:px-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    // lg:left-[248px]: ancho de la barra lateral del panel (shell.tsx).
+    <div ref={bar} data-savebar className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-panel/92 pb-[env(safe-area-inset-bottom)] backdrop-blur supports-[backdrop-filter]:bg-panel/80 lg:left-[248px]">
+      <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-3 px-4 py-3 lg:px-8">
         <p aria-live="polite" className="flex items-center gap-2 text-[13.5px] font-medium text-ink-muted">
           <span aria-hidden="true" className={`size-2 rounded-full transition-colors ${dirty ? "bg-highlight" : "bg-line-strong"}`} />
           {dirty ? "Tienes cambios sin guardar" : "Sin cambios pendientes"}
@@ -296,7 +312,7 @@ export type ToastMsg = { id: number; text: string; kind: "ok" | "error"; action?
 
 export function Toasts({ toast, onDismiss }: { toast: ToastMsg | null; onDismiss: () => void }) {
   return (
-    <div aria-live="polite" className="admin-surface pointer-events-none fixed inset-x-0 bottom-4 z-90 flex justify-center px-4 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:justify-end">
+    <div aria-live="polite" className="admin-surface pointer-events-none fixed inset-x-0 bottom-4 z-90 flex justify-center px-4 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:justify-end [html:has([data-savebar])_&]:bottom-[calc(var(--savebar-h,64px)+16px)] sm:[html:has([data-savebar])_&]:bottom-[calc(var(--savebar-h,64px)+24px)]">
       {toast && (
         <div
           key={toast.id}

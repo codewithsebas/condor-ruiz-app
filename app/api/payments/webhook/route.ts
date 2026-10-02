@@ -1,6 +1,7 @@
 import { after, type NextRequest } from "next/server";
 import { fail, json, route } from "@/lib/server/http";
 import { processOutbox } from "@/lib/server/mailer";
+import { dispatchPush } from "@/lib/server/push";
 import { parseWompiEvent, settleTransaction, siteUrl } from "@/lib/server/payments";
 import { createServiceClient } from "@/lib/supabase/server";
 
@@ -17,6 +18,6 @@ export const POST = route(async (req: NextRequest) => {
   // Una referencia que no es nuestra (otro canal del comercio o una prueba de Wompi): se confirma la recepción y se ignora.
   if (!p) return json({ ok: true, ignored: true });
   const result = await settleTransaction(sb, p, tx);
-  if (result.changed) after(() => processOutbox(siteUrl(req.nextUrl.origin)));
+  if (result.changed) after(() => processOutbox(siteUrl(req.nextUrl.origin)).then(() => dispatchPush()));
   return json({ ok: true });
 });

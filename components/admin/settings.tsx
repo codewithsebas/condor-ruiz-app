@@ -7,6 +7,7 @@ import { useAdmin } from "./context";
 import { Combobox } from "@/components/ui/combobox";
 import { LIVE_LABEL, LiveDot, SOUND_GROUPS, chime, unlockAudio, useSound } from "./notifications";
 import { PREF, usePref, writePref } from "./prefs";
+import { PushSettingsCard } from "./push";
 import { Button, Callout, Card, CardHeader, Field, PageHeader, Switch, buttonClass } from "./ui";
 import { CALENDAR_VIEWS } from "./calendar";
 
@@ -26,7 +27,7 @@ export function SettingsView() {
 
   return (
     <>
-      <PageHeader title="Configuración" description="Preferencias de este navegador: sonido de los avisos, vista del calendario y sesión. No cambian nada en el sitio." />
+      <PageHeader title="Configuración" description="Preferencias de este navegador: notificaciones, sonido de los avisos, vista del calendario y sesión. No cambian nada en el sitio." />
 
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
         <Card aria-labelledby="st-sound" className="flex flex-col gap-4 p-4 sm:p-5">
@@ -53,6 +54,8 @@ export function SettingsView() {
         </Card>
 
         <div className="flex flex-col gap-4">
+          <PushSettingsCard />
+
           <Card aria-labelledby="st-live" className="flex flex-col gap-3 p-4 sm:p-5">
             <CardHeader id="st-live" icon={<BellIcon size={18} />} title="Tiempo real" subtitle="Reservas, comprobantes y bloqueos se actualizan sin recargar la página." />
             <p className="flex items-center gap-2.5 rounded-xl bg-canvas px-3.5 py-3 text-[13.5px] font-semibold text-ink">

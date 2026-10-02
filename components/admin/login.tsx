@@ -1,8 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { Brand } from "@/components/brand";
+import { useSite } from "@/components/site-provider";
 import { CondorSilhouette, EyeIcon, EyeOffIcon } from "@/components/icons";
 import { api } from "@/lib/api";
 import { config, isMockApi } from "@/lib/config";
@@ -58,13 +60,41 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
     }
   }
   const missing = (v: string) => (lg.error && !v ? ({ "aria-invalid": true } as const) : {});
+  // La foto y el título de la portada del sitio (Contenido del sitio → Portada): si cambian allá, cambian aquí.
+  const { photos, texts } = useSite();
+  const photo = photos["hero-main"];
   return (
-    <main className="admin-dark grid min-h-dvh place-items-center bg-bg px-4 py-10">
-      <div className="flex w-full max-w-[400px] flex-col gap-6">
-        <span className="flex items-center justify-center gap-3 text-on-dark">
+    <main className="admin-dark relative grid min-h-dvh bg-bg text-on-dark lg:grid-cols-[minmax(0,1.2fr)_minmax(460px,1fr)]">
+      {/* Foto: arriba en el celular, mitad izquierda en pantallas anchas. */}
+      <div aria-hidden="true" className="relative h-[38vh] min-h-[240px] overflow-hidden bg-surface lg:sticky lg:top-0 lg:h-dvh">
+        {photo ? (
+          <Image src={photo} alt="" fill preload sizes="(min-width: 1024px) 55vw, 100vw" className="object-cover motion-safe:animate-photo-settle" />
+        ) : (
+          <>
+            <svg viewBox="0 0 1200 220" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-1/2 w-full fill-bg/70">
+              <path d="M0 220V150l140-62 92 40 128-90 108 82 92-42 140 72 118-92 112 64 120-52 150 82v68z" />
+            </svg>
+            <CondorSilhouette className="absolute top-[28%] left-1/2 h-auto w-[min(38%,260px)] -translate-x-1/2 fill-on-dark/25 motion-safe:animate-glide" />
+          </>
+        )}
+        {/* Velos para leer la marca y el título sobre cualquier foto; en el celular la foto se funde con el fondo. */}
+        <span className="absolute inset-x-0 top-0 h-32 bg-linear-to-b from-black/45 to-transparent" />
+        <span className="absolute inset-x-0 bottom-0 h-2/3 bg-linear-to-t from-bg via-bg/55 to-transparent lg:h-1/2 lg:from-black/70 lg:via-black/25" />
+        <span className="absolute top-5 left-5 flex items-center gap-3 sm:top-7 sm:left-8">
           <Brand circle={44} mark={32} wordSize="1.35rem" eyebrowSize=".62rem" />
         </span>
-        <form noValidate onSubmit={onSubmit} aria-labelledby="lg-title" className="admin-surface flex flex-col gap-5 rounded-2xl bg-panel p-6 text-ink shadow-overlay motion-safe:animate-pop-in sm:p-8">
+        <p className="display absolute right-8 bottom-10 left-8 hidden text-[clamp(3rem,5.2vw,5.6rem)] leading-[.9] tracking-[.005em] text-balance lg:block">
+          {texts.hero.title} {texts.hero.highlight && <span className="text-accent">{texts.hero.highlight}</span>}
+          {texts.hero.badge && <span className="mt-4 block font-body text-[15px] leading-snug font-semibold tracking-normal text-on-dark/85 normal-case">{texts.hero.badge}</span>}
+        </p>
+      </div>
+
+      <div className="relative z-1 -mt-20 flex flex-col items-center justify-center gap-6 overflow-hidden px-4 pb-10 lg:mt-0 lg:px-12 lg:py-12">
+        {/* La cordillera de la pantalla de carga, al pie del lado del formulario. */}
+        <svg aria-hidden="true" viewBox="0 0 1200 220" preserveAspectRatio="none" className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-[24vh] w-full fill-surface lg:block">
+          <path d="M0 220V150l140-62 92 40 128-90 108 82 92-42 140 72 118-92 112 64 120-52 150 82v68z" />
+        </svg>
+        <form noValidate onSubmit={onSubmit} aria-labelledby="lg-title" className="admin-surface relative flex w-full max-w-[400px] flex-col gap-5 rounded-2xl bg-panel p-6 text-ink shadow-overlay motion-safe:animate-pop-in sm:p-8">
           <div>
             <h1 id="lg-title" className="text-[22px] leading-tight font-extrabold tracking-[-0.01em]">
               Panel de reservas
@@ -99,7 +129,7 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
             {lg.loading ? "Entrando…" : "Entrar"}
           </Button>
         </form>
-        <Link href="/" className="self-center rounded-sm text-[13.5px] font-semibold text-on-dark/75 transition-colors hover:text-on-dark">
+        <Link href="/" className="relative rounded-sm text-[13.5px] font-semibold text-on-dark/75 transition-colors hover:text-on-dark">
           ← Volver al sitio
         </Link>
       </div>

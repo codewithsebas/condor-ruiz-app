@@ -3,6 +3,7 @@ import { after, type NextRequest } from "next/server";
 import { publicView, runDeadlines, toPublicPayment } from "@/lib/server/db";
 import { fail, json, readJson, route } from "@/lib/server/http";
 import { processOutbox } from "@/lib/server/mailer";
+import { dispatchPush } from "@/lib/server/push";
 import { settleTransaction, simulatorAllowed, siteUrl } from "@/lib/server/payments";
 import { createServiceClient } from "@/lib/supabase/server";
 import type { PaymentState } from "@/lib/types";
@@ -35,7 +36,7 @@ export const POST = route(async (req: NextRequest) => {
     method: "SIMULADO",
     detail: status === "declined" ? "Fondos insuficientes (simulado)" : status === "error" ? "Error de comunicación con el banco (simulado)" : "",
   });
-  if (result.changed) after(() => processOutbox(siteUrl(req.nextUrl.origin)));
+  if (result.changed) after(() => processOutbox(siteUrl(req.nextUrl.origin)).then(() => dispatchPush()));
 
   const { data: fresh } = await sb.from("payments").select("*").eq("id", p.id).single().throwOnError();
   const { data: r } = await sb.from("reservations").select("*").eq("code", p.reservation_code).single().throwOnError();

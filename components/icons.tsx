@@ -135,20 +135,23 @@ export const PawIcon = ({ size = 18, className }: IconProps) => (
   </svg>
 );
 
-// Huellas de mascota que cruzan la página.
+// Huellas que cruzan la página. Con movimiento permitido se marcan una tras otra, como si el animal fuera pasando,
+// y las más viejas se desvanecen primero (cada huella repite la pisada con su propio retraso).
 type Paw = [x: number, y: number, rot: number];
 const PAW_A: Paw[] = [[10, 36, 75], [62, 14, 80], [118, 38, 85], [174, 16, 90], [230, 40, 95], [286, 18, 100], [342, 36, 105]];
 const PAW_B: Paw[] = [[10, 16, 100], [66, 38, 95], [122, 16, 90], [178, 40, 85], [234, 18, 80], [290, 38, 75]];
 
 export const PawTrail = ({ variant, className }: { variant: "a" | "b"; className?: string }) => (
   <svg viewBox="0 0 420 64" width={420} height={64} aria-hidden="true" className={`block h-auto max-w-[70%] fill-accent/60 ${className ?? ""}`}>
-    {(variant === "a" ? PAW_A : PAW_B).map(([x, y, rot]) => (
+    {(variant === "a" ? PAW_A : PAW_B).map(([x, y, rot], i) => (
       <g key={x} transform={`rotate(${rot} ${x + 8} ${y + 8}) translate(${x} ${y}) scale(${16 / 24})`}>
-        <ellipse cx="12" cy="16" rx="5.2" ry="4.4" />
-        <ellipse cx="5.6" cy="9.6" rx="2.1" ry="2.7" />
-        <ellipse cx="9.8" cy="5.4" rx="2.1" ry="2.7" />
-        <ellipse cx="14.4" cy="5.4" rx="2.1" ry="2.7" />
-        <ellipse cx="18.6" cy="9.6" rx="2.1" ry="2.7" />
+        <g className="svg-pivot motion-safe:animate-paw-step" style={{ animationDelay: `${i * 480}ms` }}>
+          <ellipse cx="12" cy="16" rx="5.2" ry="4.4" />
+          <ellipse cx="5.6" cy="9.6" rx="2.1" ry="2.7" />
+          <ellipse cx="9.8" cy="5.4" rx="2.1" ry="2.7" />
+          <ellipse cx="14.4" cy="5.4" rx="2.1" ry="2.7" />
+          <ellipse cx="18.6" cy="9.6" rx="2.1" ry="2.7" />
+        </g>
       </g>
     ))}
   </svg>
@@ -161,6 +164,7 @@ export const DottedPath = ({ d, width, height, className }: { d: string; width: 
   </svg>
 );
 export const BellIcon = (p: IconProps) => <Stroke stroke={2} {...p}><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0" /></Stroke>;
+export const SendIcon = (p: IconProps) => <Stroke stroke={2} {...p}><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></Stroke>;
 export const SlidersIcon = (p: IconProps) => <Stroke stroke={2} {...p}><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" /><circle cx="15" cy="6" r="2" /><circle cx="9" cy="12" r="2" /><circle cx="17" cy="18" r="2" /></Stroke>;
 export const ReceiptIcon = (p: IconProps) => <Stroke stroke={2} {...p}><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9 8h6M9 12h6M9 16h3" /></Stroke>;
 export const VolumeIcon = (p: IconProps) => <Stroke stroke={2} {...p}><path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" /></Stroke>;

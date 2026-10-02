@@ -21,6 +21,7 @@ export type Database = {
           created_at: string
           id: number
           kind: string
+          pushed_at: string | null
           read_at: string | null
           reservation_code: string | null
           title: string
@@ -30,6 +31,7 @@ export type Database = {
           created_at?: string
           id?: never
           kind: string
+          pushed_at?: string | null
           read_at?: string | null
           reservation_code?: string | null
           title: string
@@ -39,6 +41,7 @@ export type Database = {
           created_at?: string
           id?: never
           kind?: string
+          pushed_at?: string | null
           read_at?: string | null
           reservation_code?: string | null
           title?: string
@@ -453,6 +456,42 @@ export type Database = {
           },
         ]
       }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          device: string
+          endpoint: string
+          groups: string[]
+          id: string
+          last_success_at: string | null
+          p256dh: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          device?: string
+          endpoint: string
+          groups?: string[]
+          id?: string
+          last_success_at?: string | null
+          p256dh: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          device?: string
+          endpoint?: string
+          groups?: string[]
+          id?: string
+          last_success_at?: string | null
+          p256dh?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       rate_seasons: {
         Row: {
           activa: boolean
@@ -684,6 +723,42 @@ export type Database = {
           question?: string
           sort?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      site_services: {
+        Row: {
+          created_at: string
+          description: string
+          icon: string
+          id: string
+          note: string
+          sort: number
+          title: string
+          updated_at: string
+          visible: boolean
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          icon?: string
+          id?: string
+          note?: string
+          sort?: number
+          title: string
+          updated_at?: string
+          visible?: boolean
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          icon?: string
+          id?: string
+          note?: string
+          sort?: number
+          title?: string
+          updated_at?: string
+          visible?: boolean
         }
         Relationships: []
       }

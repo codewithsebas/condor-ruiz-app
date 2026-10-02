@@ -3,6 +3,7 @@ import { loadCabinTypes, loadClients, loadSeasons, runDeadlines, toBlock, toEmai
 import { json, requireAdmin, route } from "@/lib/server/http";
 import { processOutbox } from "@/lib/server/mailer";
 import { siteUrl } from "@/lib/server/payments";
+import { dispatchPush } from "@/lib/server/push";
 import { loadSiteContent } from "@/lib/server/site";
 
 // GET /api/admin/data → todo lo que necesita el panel. Consultas con la sesión del admin (RLS).
@@ -24,6 +25,8 @@ export const GET = route(async (req: NextRequest) => {
   ]);
   // Correos que fallaron y ya les toca reintentar: se envían después de responder.
   if (emails.some((e) => e.status === "failed" || e.status === "pending")) after(() => processOutbox(siteUrl(req.nextUrl.origin)));
+  // Avisos que aún no salieron como notificación push (p. ej. los del cron, si la base de datos no pudo avisar a la app).
+  after(dispatchPush);
   return json({
     reservations: reservations.map(toReservation),
     blocks: blocks.map(toBlock),

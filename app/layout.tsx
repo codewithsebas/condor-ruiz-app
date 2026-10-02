@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Bebas_Neue, Caveat, Manrope } from "next/font/google";
+import { ServiceWorker } from "@/components/service-worker";
 import { SiteProvider } from "@/components/site-provider";
 import { config } from "@/lib/config";
 import { getSiteCabins } from "@/lib/server/cabins";
@@ -17,6 +18,10 @@ export const metadata: Metadata = {
   title: { default: config.name, template: `%s | ${config.name}` },
   description: "Cabañas tipo chalet con vista al Nevado del Ruiz y a una cascada en Murillo, Tolima.",
   openGraph: { locale: "es_CO", siteName: config.name, type: "website" },
+  // PWA: los íconos salen de app/favicon.ico, app/icon.svg y app/apple-icon.tsx; el manifiesto, de app/manifest.webmanifest.
+  manifest: "/manifest.webmanifest",
+  applicationName: config.name,
+  appleWebApp: { capable: true, title: "Cóndor del Ruiz", statusBarStyle: "black" },
 };
 
 export const viewport: Viewport = {
@@ -31,6 +36,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <SiteProvider content={content} cabins={cabins}>
           {children}
         </SiteProvider>
+        <ServiceWorker />
       </body>
     </html>
   );

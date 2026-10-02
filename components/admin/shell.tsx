@@ -437,7 +437,8 @@ function Panel({ initialData, onLoggedOut, children }: { initialData: AdminData;
               </div>
             </div>
 
-            <main className={`admin-surface mx-auto flex w-full max-w-[1400px] min-w-0 flex-1 flex-col gap-5 px-4 pt-4 pb-8 lg:px-8 lg:pt-6 ${fullHeight ? "tall:min-h-0 tall:pb-5" : ""}`}>
+            {/* Con una barra de guardado (fija al pie), el final de la página deja libre su alto para no quedar tapado. */}
+            <main className={`admin-surface mx-auto flex w-full max-w-[1400px] min-w-0 flex-1 flex-col gap-5 px-4 pt-4 pb-8 lg:px-8 [.admin-root:has([data-savebar])_&]:pb-[calc(var(--savebar-h,64px)+24px)] lg:pt-6 ${fullHeight ? "tall:min-h-0 tall:pb-5" : ""}`}>
               <Breadcrumbs items={crumbs} className="lg:hidden" />
               {loadError && (
                 <Callout tone="warning" role="alert">

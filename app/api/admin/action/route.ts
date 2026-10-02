@@ -4,6 +4,7 @@ import { addDays, isISO, nightsBetween, todayISO } from "@/lib/format";
 import { isExclusionViolation, loadCabinTypes, loadOccupancy, loadSeasons, toReservation } from "@/lib/server/db";
 import { fail, json, readJson, requireAdmin, route } from "@/lib/server/http";
 import { processOutbox } from "@/lib/server/mailer";
+import { dispatchPush } from "@/lib/server/push";
 import { businessError, siteUrl } from "@/lib/server/payments";
 import type { AdminAction, Quote, ReservationStatus } from "@/lib/types";
 
@@ -42,7 +43,7 @@ export const POST = route(async (req: NextRequest) => {
       const { error: payErr } = await sb.rpc("register_manual_payment", { p_code: current.code, p_kind: kind, p_note: String(b.note ?? "").slice(0, 300) });
       if (payErr) throw payErr;
       // Confirmar el abono encola el correo de confirmación: se envía después de responder.
-      if (b.action === "confirm") after(() => processOutbox(siteUrl(req.nextUrl.origin)));
+      if (b.action === "confirm") after(() => processOutbox(siteUrl(req.nextUrl.origin)).then(() => dispatchPush()));
     } else if (b.action === "reschedule") {
       const { checkIn: ci, checkOut: co } = b;
       if (!isISO(ci) || !isISO(co) || co <= ci || ci < todayISO() || nightsBetween(ci, co) > 30) return fail(400, "INVALID_DATES");

@@ -15,10 +15,11 @@ export const photoPath = (url: string) => {
 };
 
 export async function loadSiteContent(sb: Db): Promise<SiteContent> {
-  const [{ data: s }, { data: policies }, { data: photos }] = await Promise.all([
+  const [{ data: s }, { data: policies }, { data: photos }, { data: services }] = await Promise.all([
     sb.from("site_settings").select("*").maybeSingle().throwOnError(),
     sb.from("site_policies").select("id, question, answer").order("sort").throwOnError(),
     sb.from("site_photos").select("slot, path").throwOnError(),
+    sb.from("site_services").select("id, title, description, icon, note, visible").order("sort").order("created_at").throwOnError(),
   ]);
   return {
     settings: s
@@ -27,6 +28,8 @@ export async function loadSiteContent(sb: Db): Promise<SiteContent> {
     policies: policies.map((p) => ({ id: p.id, q: p.question, a: p.answer })),
     photos: Object.fromEntries(photos.map((p) => [p.slot, photoUrl(p.path)])),
     texts: mergeTexts(s?.content),
+    // Todos, también los ocultos (el panel los necesita); las páginas públicas muestran solo los visibles.
+    services,
   };
 }
 

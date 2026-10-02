@@ -1,5 +1,6 @@
 // Contenido editable del sitio (horarios, contacto, políticas, imágenes). Lo usan servidor y navegador.
 import { config, type Policy } from "./config";
+import { DEFAULT_SERVICES } from "./content";
 
 export type SiteSettings = {
   checkInStart: string; // "HH:MM"
@@ -14,17 +15,24 @@ export type SitePolicy = Policy & { id: string };
 
 // Textos editables desde el panel (columna site_settings.content). Vacío = se usa el valor por defecto.
 export type SiteTexts = {
-  hero: { title: string; highlight: string; badge: string; description: string };
+  // rotating: otras frases que se alternan con el título resaltado en la portada (una por línea).
+  hero: { title: string; highlight: string; rotating: string; badge: string; description: string };
   location: { note: string };
   payment: { instructions: string };
   social: { instagram: string; facebook: string; tiktok: string };
 };
+
+// Servicio de la sección «Servicios incluidos» (tabla site_services). icon: clave de lib/service-icons.ts;
+// note: etiqueta opcional («Valor adicional») que lo destaca como extra. Ocultos: solo se ven en el panel.
+export type SiteService = { id: string; title: string; description: string; icon: string; note: string; visible: boolean };
+export const SERVICE_LIMITS = { title: 60, description: 160, note: 30, max: 40 };
 
 export type SiteContent = {
   settings: SiteSettings;
   policies: SitePolicy[];
   photos: Record<string, string>; // slot → URL pública
   texts: SiteTexts;
+  services: SiteService[]; // en el orden en que se muestran
 };
 
 // Configuración del negocio con los campos editables ya aplicados (misma forma que `config`).
@@ -34,6 +42,7 @@ export const defaultTexts: SiteTexts = {
   hero: {
     title: "Despierta frente",
     highlight: "al nevado",
+    rotating: "a la cascada\na las montañas",
     badge: "Murillo, Tolima · Desayuno incluido",
     description: "Cabañas tipo chalet con vista al Nevado del Ruiz y a una hermosa cascada, sendero ecológico, avistamiento de aves y zona de fogata.",
   },
@@ -43,7 +52,11 @@ export const defaultTexts: SiteTexts = {
 };
 
 // Límites de cada texto (los aplica la API al guardar).
-export const TEXT_LIMITS = { title: 40, highlight: 40, badge: 60, description: 320, note: 160, instructions: 600, url: 200 };
+export const TEXT_LIMITS = { title: 40, highlight: 40, rotating: 200, rotatingLines: 5, badge: 60, description: 320, note: 160, instructions: 600, url: 200 };
+
+// Frases que se alternan con el título resaltado: líneas no vacías del campo «rotating», con el mismo límite por línea.
+export const rotatingPhrases = (hero: { highlight: string; rotating: string }) =>
+  [hero.highlight, ...hero.rotating.split("\n")].map((x) => x.trim()).filter(Boolean).slice(0, TEXT_LIMITS.rotatingLines + 1);
 
 // Mezcla lo guardado con los valores por defecto; ignora claves desconocidas o que no sean texto.
 export function mergeTexts(raw: unknown): SiteTexts {
@@ -122,4 +135,5 @@ export const defaultContent: SiteContent = {
   policies: config.policies.map((p, i) => ({ ...p, id: `default-${i}` })),
   photos: {},
   texts: defaultTexts,
+  services: DEFAULT_SERVICES.map((x, i) => ({ id: `default-${i}`, title: x.title, description: "", icon: x.icon, note: x.note ?? "", visible: true })),
 };

@@ -9,6 +9,19 @@ const nextConfig: NextConfig = {
     // 90 para las fotos del sitio (PhotoSlot); 75 queda para miniaturas del panel.
     qualities: [75, 90],
   },
+  // PWA: el service worker nunca se guarda en caché (así cada despliegue llega a los celulares) y solo ejecuta código propio.
+  async headers() {
+    return [
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self'" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

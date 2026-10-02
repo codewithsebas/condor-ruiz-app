@@ -34,12 +34,13 @@ export function moduleOf(pathname: string): ModuleId | null {
 
 /* ───────────── Contenido del sitio: una ruta por zona ───────────── */
 
-export type ContentSectionId = "portada" | "experiencias" | "horarios" | "politicas" | "contacto" | "pagos" | "redes";
+export type ContentSectionId = "portada" | "experiencias" | "servicios" | "horarios" | "politicas" | "contacto" | "pagos" | "redes";
 
 export const CONTENT_SECTIONS: { id: ContentSectionId; label: string; where: string; href: string }[] = [
   { id: "portada", label: "Portada", where: "Lo primero que ven los visitantes: título, descripción y fotos principales.", href: "/#top" },
   { id: "experiencias", label: "Experiencias", where: "Sección «Alta montaña frente al nevado», con una foto por experiencia.", href: "/#experiencias" },
-  { id: "horarios", label: "Horarios", where: "Sección «Horarios», el pie de página y las horas de llegada del formulario de reserva.", href: "/#servicios" },
+  { id: "servicios", label: "Servicios", where: "Sección «Servicios incluidos» de la página de inicio.", href: "/#servicios" },
+  { id: "horarios", label: "Horarios", where: "Sección «Antes de venir» (horarios), el pie de página y las horas de llegada del formulario de reserva.", href: "/#antes-de-venir" },
   { id: "politicas", label: "Políticas y preguntas", where: "Sección «Reservas y políticas», la página de políticas y el resumen antes de enviar una reserva.", href: "/politicas" },
   { id: "contacto", label: "Contacto y ubicación", where: "Botones de WhatsApp, teléfonos del pie de página y secciones «Ubicación» y «Contacto».", href: "/#contacto" },
   { id: "pagos", label: "Pagos", where: "Página de confirmación de la reserva: cómo pagar el abono.", href: "/reservar" },

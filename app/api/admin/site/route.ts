@@ -35,12 +35,22 @@ export const PUT = route(async (req: NextRequest) => {
   const t = mergeTexts(b.content);
   const trim = (v: string) => v.trim();
   const texts = {
-    hero: { title: trim(t.hero.title), highlight: trim(t.hero.highlight), badge: trim(t.hero.badge), description: trim(t.hero.description) },
+    hero: {
+      title: trim(t.hero.title),
+      highlight: trim(t.hero.highlight),
+      // Una frase por línea, sin líneas vacías.
+      rotating: t.hero.rotating.split("\n").map(trim).filter(Boolean).join("\n"),
+      badge: trim(t.hero.badge),
+      description: trim(t.hero.description),
+    },
     location: { note: trim(t.location.note) },
     payment: { instructions: trim(t.payment.instructions) },
     social: { instagram: trim(t.social.instagram), facebook: trim(t.social.facebook), tiktok: trim(t.social.tiktok) },
   };
   if (!texts.hero.title || texts.hero.title.length > TEXT_LIMITS.title || texts.hero.highlight.length > TEXT_LIMITS.highlight) errors.hero = "El título de la portada es obligatorio (máximo 40 caracteres por línea).";
+  const lines = texts.hero.rotating ? texts.hero.rotating.split("\n") : [];
+  if (texts.hero.rotating.length > TEXT_LIMITS.rotating || lines.length > TEXT_LIMITS.rotatingLines || lines.some((l) => l.length > TEXT_LIMITS.highlight))
+    errors.heroRotating = `Hasta ${TEXT_LIMITS.rotatingLines} frases alternas, de máximo ${TEXT_LIMITS.highlight} caracteres cada una.`;
   if (texts.hero.badge.length > TEXT_LIMITS.badge || texts.hero.description.length > TEXT_LIMITS.description) errors.heroText = "La etiqueta o la descripción de la portada es demasiado larga.";
   if (texts.location.note.length > TEXT_LIMITS.note) errors.location = "La nota de ubicación es demasiado larga.";
   if (texts.payment.instructions.length > TEXT_LIMITS.instructions) errors.payment = "Las instrucciones de pago son demasiado largas.";

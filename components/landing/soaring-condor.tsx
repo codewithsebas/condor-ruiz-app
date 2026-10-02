@@ -1,12 +1,15 @@
 import type { CSSProperties } from "react";
+import { CONDOR_SILHOUETTE } from "../icons";
 
 // Cóndor en vuelo para la portada: la misma silueta del sitio, con las alas articuladas en el hombro.
 // Capas (cada una anima una sola cosa para que no se pisen):
 //   parallax (sigue al mouse, --hx/--hy de HeroParallax) › llegada › órbita horizontal › órbita vertical e inclinación › alas.
 // Todo con motion-safe: con movimiento reducido queda la silueta quieta, como antes.
 
-const BODY =
-  "M100 20 C92 15 80 11 62 11 C44 11 26 15 4 27 L11 28 L4 32 L13 32 L7 37 L17 35 L13 40 L25 35 C41 29 61 27 81 28 C89 29 94 31 97 35 L100 43 L103 35 C106 31 111 29 119 28 C139 27 159 29 175 35 L187 40 L183 35 L193 37 L187 32 L196 32 L189 28 L196 27 C174 15 156 11 138 11 C120 11 108 15 100 20 Z M96 20 C96 13 104 13 104 20 Z";
+// Torso: cabeza, lomo, vientre y cola, quieto entre las alas. Entre x 95 y 105 (donde se ve solo) sigue la silueta; a
+// los lados baja un poco por dentro de las alas, así tapa el corte del ala en todo el aleteo sin asomar como hombros.
+const TORSO =
+  "M92.4 18.2 L93.74 18.03 L95 17.35 L96.27 17.93 C97.5 13.69 102.5 13.69 103.73 17.93 L105 17.35 L106.26 18.03 L107.6 18.2 V31.1 C105.72 32.12 104.2 33.4 103 35 L100 43 L97 35 C95.8 33.4 94.28 32.12 92.4 31.1 Z";
 // Punto del hombro (en unidades del viewBox 200×50) sobre el que giran las alas.
 const SHOULDER = "100px 24px";
 const wing = (delay: string): CSSProperties => ({ transformBox: "view-box", transformOrigin: SHOULDER, animationDelay: delay });
@@ -35,25 +38,23 @@ export function SoaringCondor({ id, className = "", fill = "fill-on-dark", opaci
         <div className="motion-safe:animate-soar-x" style={orbit(13)}>
           <div className="motion-safe:animate-soar-y" style={orbit(6.5)}>
             <svg viewBox="0 0 200 50" className={`block h-auto w-full overflow-visible ${fill}`} style={{ opacity }}>
+              {/* Cada ala es la silueta recortada hasta el hombro (sin cabeza ni cola, que al girar se desprenderían);
+                  el recorte va dentro del grupo que gira, así el corte acompaña al ala y queda siempre bajo el torso. */}
               <defs>
                 <clipPath id={`${id}-l`}>
-                  <rect x="-20" y="-60" width="120" height="170" />
+                  <rect x="-20" y="-60" width="115" height="170" />
                 </clipPath>
                 <clipPath id={`${id}-r`}>
-                  <rect x="100" y="-60" width="120" height="170" />
-                </clipPath>
-                <clipPath id={`${id}-b`}>
-                  <rect x="91" y="0" width="18" height="50" />
+                  <rect x="105" y="-60" width="115" height="170" />
                 </clipPath>
               </defs>
-              <g clipPath={`url(#${id}-l)`}>
-                <path d={BODY} className="motion-safe:animate-wing-left" style={wing(`${-offset * 7}s`)} />
+              <g className="motion-safe:animate-wing-left" style={wing(`${-offset * 7}s`)}>
+                <path d={CONDOR_SILHOUETTE} clipPath={`url(#${id}-l)`} />
               </g>
-              <g clipPath={`url(#${id}-r)`}>
-                <path d={BODY} className="motion-safe:animate-wing-right" style={wing(`${-offset * 7}s`)} />
+              <g className="motion-safe:animate-wing-right" style={wing(`${-offset * 7}s`)}>
+                <path d={CONDOR_SILHOUETTE} clipPath={`url(#${id}-r)`} />
               </g>
-              {/* Cuerpo y cabeza: quietos sobre la unión de las alas. */}
-              <path d={BODY} clipPath={`url(#${id}-b)`} />
+              <path d={TORSO} />
             </svg>
           </div>
         </div>

@@ -107,6 +107,37 @@
   --animate-star: ec-star 4.5s ease-in-out infinite;
   --animate-icon-draw: ec-icon-draw 1s cubic-bezier(0.4, 0, 0.2, 1) both;
   --animate-progress: ec-progress linear both;
+  --animate-fog-drift: ec-fog-drift 46s ease-in-out infinite alternate;
+  --animate-fog-drift-back: ec-fog-drift 64s ease-in-out infinite alternate-reverse;
+  --animate-land-rise: ec-land-rise 1.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+  /* Capas de un paisaje que suben a su lugar al cargar (ingreso al panel): la cordillera y, detrás, el nevado. */
+  @keyframes ec-land-rise {
+    from {
+      opacity: 0;
+      transform: translateY(28%);
+    }
+  }
+
+  /* Niebla del horizonte: se corre muy despacio de un lado a otro. */
+  @keyframes ec-fog-drift {
+    from {
+      transform: translateX(-4%);
+    }
+    to {
+      transform: translateX(4%);
+    }
+  }
+
+  /* Capa lejana de un paisaje: mientras cruza la pantalla baja un poco (--parallax), así sube más lento que la página. */
+  @keyframes ec-parallax {
+    from {
+      transform: translateY(calc(var(--parallax, 20px) * -1));
+    }
+    to {
+      transform: translateY(var(--parallax, 20px));
+    }
+  }
 
   /* La ruta del mapa se dibuja (path con pathLength="1"). */
   @keyframes ec-route-draw {
@@ -493,10 +524,22 @@
      Donde no hay soporte, o con movimiento reducido, el contenido se ve quieto como siempre. */
   @supports (animation-timeline: view()) {
     @media (prefers-reduced-motion: no-preference) {
+      /* --reveal-after: scroll extra que espera (la segunda tarjeta de una fila llega un instante después, en cascada). */
       .reveal-on-scroll {
         animation: ec-rise linear both;
         animation-timeline: view();
-        animation-range: entry 5% entry 80%;
+        animation-range: entry calc(5% + var(--reveal-after, 0px)) entry calc(80% + var(--reveal-after, 0px));
+      }
+      /* Elementos altos (tarjetas de cabaña): aparecen en un tramo fijo del scroll y no proporcional a su alto, para
+         no quedarse a medio aparecer cuando ya se ven casi enteros. */
+      .reveal-on-scroll.reveal-tall {
+        animation-range: entry var(--reveal-after, 0px) entry calc(280px + var(--reveal-after, 0px));
+      }
+      /* Capas de un paisaje con profundidad: la distancia la da --parallax en la capa. */
+      .parallax-on-scroll {
+        animation: ec-parallax linear both;
+        animation-timeline: view();
+        animation-range: cover;
       }
       /* Trazo que se dibuja mientras entra en pantalla (máscara de la ruta del mapa). */
       .draw-on-scroll {

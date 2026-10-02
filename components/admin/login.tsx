@@ -2,24 +2,69 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { Fragment, useState, type CSSProperties, type FormEvent } from "react";
 import { Brand } from "@/components/brand";
 import { useSite } from "@/components/site-provider";
 import { CondorSilhouette, EyeIcon, EyeOffIcon } from "@/components/icons";
+import { SoaringCondor } from "@/components/landing/soaring-condor";
 import { api } from "@/lib/api";
 import { config, isMockApi } from "@/lib/config";
 import { adminInput } from "./shared";
 import { Button, Callout, Field } from "./ui";
 
+/* ───────────── Paisaje: el Nevado del Ruiz ───────────── */
+
+// Nevado del Ruiz (viewBox 560×200): volcán ancho de cumbre casi plana. La nieve, con lenguas de glaciar, y la sombra
+// de la ladera derecha se recortan con la silueta del volcán.
+const NEVADO = "M0 200C70 182 120 150 170 104C196 80 210 52 228 38Q246 26 268 28L292 24Q314 22 330 32C350 46 366 74 392 102C440 150 492 184 560 200Z";
+const NEVADO_SNOW = "M0 0H560V88L470 90L410 94L392 108L376 96L358 112L340 98L322 120L304 100L286 110L268 96L250 116L232 98L214 106L196 94L150 92L0 90Z";
+const NEVADO_SHADE = "M286 0H560V200H330Q302 110 286 0Z";
+// Cordillera delante del nevado (con un valle donde él asoma) y lomas cercanas.
+const RANGE = "M0 220V150l110-54 80 32 110-66 100 56 80-26 100 48 80-16 100 22 100-14 80 18 90-58 80 28 90-36v136z";
+const HILLS = "M0 100V46C160 22 320 64 500 42S820 16 1000 44 1150 38 1200 32V100Z";
+const FOG: CSSProperties = {
+  background: "radial-gradient(40% 60% at 30% 55%, rgb(242 235 211 / 0.08), transparent 70%), radial-gradient(34% 55% at 74% 45%, rgb(242 235 211 / 0.07), transparent 70%)",
+};
+
+// Paisaje del ingreso y de la pantalla de carga: el Nevado del Ruiz asoma detrás de la cordillera, entre niebla. Al
+// cargar, la cordillera sube a su lugar y el nevado aparece detrás, más despacio; después solo se mueven la niebla y el
+// cóndor. Con movimiento reducido queda quieto.
+function NevadoScene({ id, condor = true, className = "" }: { id: string; condor?: boolean; className?: string }) {
+  return (
+    <div aria-hidden="true" className={`pointer-events-none absolute inset-x-0 bottom-0 ${className}`}>
+      <div className="absolute bottom-[14%] left-[78%] w-[min(58%,520px)] -translate-x-1/2 sm:left-[68%]">
+        <svg viewBox="0 0 560 200" className="block h-auto w-full motion-safe:animate-land-rise" style={{ animationDuration: "2.2s", animationDelay: "250ms" }}>
+          <defs>
+            <clipPath id={`${id}-nevado`}>
+              <path d={NEVADO} />
+            </clipPath>
+          </defs>
+          <path d={NEVADO} className="fill-[color-mix(in_srgb,var(--color-surface)_84%,var(--color-on-dark))]" />
+          <g clipPath={`url(#${id}-nevado)`}>
+            <path d={NEVADO_SNOW} className="fill-card/80" />
+            <path d={NEVADO_SHADE} className="fill-bg/25" />
+          </g>
+        </svg>
+      </div>
+      {condor && <SoaringCondor id={`${id}-condor`} arrive className="absolute bottom-[60%] left-[7%] w-[clamp(56px,10%,100px)]" opacity={0.45} depth={0} slow={1.4} />}
+      <div className="absolute -inset-x-[10%] bottom-[18%] h-[38%] motion-safe:animate-fog-drift" style={FOG} />
+      <svg viewBox="0 0 1200 220" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-[72%] w-full fill-surface motion-safe:animate-land-rise">
+        <path d={RANGE} />
+      </svg>
+      <svg viewBox="0 0 1200 100" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-[30%] w-full fill-[color-mix(in_srgb,var(--color-surface)_55%,var(--color-deep))] motion-safe:animate-land-rise" style={{ animationDelay: "120ms" }}>
+        <path d={HILLS} />
+      </svg>
+    </div>
+  );
+}
+
 /* ───────────── Pantalla de carga ───────────── */
 
-// Mientras se valida la sesión y se cargan los datos: el cóndor de la portada planea sobre la cordillera.
+// Mientras se valida la sesión y se cargan los datos: el cóndor de la portada planea sobre el nevado y la cordillera.
 export function PanelLoader({ label = "Preparando tu panel…" }: { label?: string }) {
   return (
     <div role="status" aria-live="polite" className="admin-dark relative grid min-h-dvh place-items-center overflow-hidden bg-bg px-6 text-on-dark">
-      <svg aria-hidden="true" viewBox="0 0 1200 220" preserveAspectRatio="none" className="pointer-events-none absolute inset-x-0 bottom-0 h-[26vh] w-full fill-surface">
-        <path d="M0 220V150l140-62 92 40 128-90 108 82 92-42 140 72 118-92 112 64 120-52 150 82v68z" />
-      </svg>
+      <NevadoScene id="carga" condor={false} className="h-[30vh]" />
       <div className="relative flex flex-col items-center gap-7 motion-safe:animate-fade-in">
         <CondorSilhouette className="h-auto w-[clamp(150px,30vw,200px)] fill-on-dark/90 motion-safe:animate-glide" />
         <p className="flex flex-col items-center leading-none">
@@ -63,12 +108,18 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
   // La foto y el título de la portada del sitio (Contenido del sitio → Portada): si cambian allá, cambian aquí.
   const { photos, texts } = useSite();
   const photo = photos["hero-main"];
+  const split = (t: string | undefined, accent: boolean) => (t ?? "").split(" ").filter(Boolean).map((w) => ({ w, accent }));
+  const words = [...split(texts.hero.title, false), ...split(texts.hero.highlight, true)];
   return (
     <main className="admin-dark relative grid min-h-dvh bg-bg text-on-dark lg:grid-cols-[minmax(0,1.2fr)_minmax(460px,1fr)]">
       {/* Foto: arriba en el celular, mitad izquierda en pantallas anchas. */}
-      <div aria-hidden="true" className="relative h-[38vh] min-h-[240px] overflow-hidden bg-surface lg:sticky lg:top-0 lg:h-dvh">
+      {/* En el celular la foto se disuelve hacia abajo (máscara): así su borde no se marca como una línea sobre el logo. */}
+      <div aria-hidden="true" className="relative h-[38vh] min-h-[240px] overflow-hidden bg-surface max-lg:[mask-image:linear-gradient(to_bottom,black_65%,transparent)] lg:sticky lg:top-0 lg:h-dvh">
         {photo ? (
-          <Image src={photo} alt="" fill preload sizes="(min-width: 1024px) 55vw, 100vw" className="object-cover motion-safe:animate-photo-settle" />
+          // Se asienta al cargar y luego respira con un acercamiento muy lento, como la portada del sitio.
+          <div className="absolute inset-0 motion-safe:animate-ken-burns">
+            <Image src={photo} alt="" fill preload sizes="(min-width: 1024px) 55vw, 100vw" className="object-cover motion-safe:animate-photo-settle" />
+          </div>
         ) : (
           <>
             <svg viewBox="0 0 1200 220" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-1/2 w-full fill-bg/70">
@@ -77,23 +128,34 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
             <CondorSilhouette className="absolute top-[28%] left-1/2 h-auto w-[min(38%,260px)] -translate-x-1/2 fill-on-dark/25 motion-safe:animate-glide" />
           </>
         )}
-        {/* Velos para leer la marca y el título sobre cualquier foto; en el celular la foto se funde con el fondo. */}
-        <span className="absolute inset-x-0 top-0 h-32 bg-linear-to-b from-black/45 to-transparent" />
+        {/* Velo para leer el título sobre cualquier foto; en el celular la foto se funde con el fondo. */}
         <span className="absolute inset-x-0 bottom-0 h-2/3 bg-linear-to-t from-bg via-bg/55 to-transparent lg:h-1/2 lg:from-black/70 lg:via-black/25" />
-        <span className="absolute top-5 left-5 flex items-center gap-3 sm:top-7 sm:left-8">
-          <Brand circle={44} mark={32} wordSize="1.35rem" eyebrowSize=".62rem" />
-        </span>
+        {/* El título sube palabra por palabra, como en la portada del sitio. */}
         <p className="display absolute right-8 bottom-10 left-8 hidden text-[clamp(3rem,5.2vw,5.6rem)] leading-[.9] tracking-[.005em] text-balance lg:block">
-          {texts.hero.title} {texts.hero.highlight && <span className="text-accent">{texts.hero.highlight}</span>}
-          {texts.hero.badge && <span className="mt-4 block font-body text-[15px] leading-snug font-semibold tracking-normal text-on-dark/85 normal-case">{texts.hero.badge}</span>}
+          {words.map(({ w, accent }, i) => (
+            <Fragment key={i}>
+              {i > 0 && " "}
+              <span className={`inline-block motion-safe:animate-rise ${accent ? "text-accent" : ""}`} style={{ animationDelay: `${350 + i * 90}ms` }}>
+                {w}
+              </span>
+            </Fragment>
+          ))}
+          {texts.hero.badge && (
+            <span className="mt-4 block font-body text-[15px] leading-snug font-semibold tracking-normal text-on-dark/85 normal-case motion-safe:animate-rise" style={{ animationDelay: `${450 + words.length * 90}ms` }}>
+              {texts.hero.badge}
+            </span>
+          )}
         </p>
       </div>
 
-      <div className="relative z-1 -mt-20 flex flex-col items-center justify-center gap-6 overflow-hidden px-4 pb-10 lg:mt-0 lg:px-12 lg:py-12">
-        {/* La cordillera de la pantalla de carga, al pie del lado del formulario. */}
-        <svg aria-hidden="true" viewBox="0 0 1200 220" preserveAspectRatio="none" className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-[24vh] w-full fill-surface lg:block">
-          <path d="M0 220V150l140-62 92 40 128-90 108 82 92-42 140 72 118-92 112 64 120-52 150 82v68z" />
-        </svg>
+      {/* En pantallas anchas el formulario se centra un poco más arriba, para dejar ver el nevado debajo. */}
+      <div className="relative z-1 -mt-20 flex flex-col items-center justify-center gap-6 overflow-hidden px-4 pb-10 lg:mt-0 lg:px-12 lg:pt-12 lg:pb-[clamp(80px,20vh,200px)]">
+        {/* El paisaje de la pantalla de carga, al pie del lado del formulario: el nevado y un cóndor que llega planeando. */}
+        <NevadoScene id="ingreso" className="h-[150px] lg:h-[clamp(170px,32vh,340px)]" />
+        {/* Logo y nombre del sitio sobre el formulario. */}
+        <p className="relative flex items-center gap-3 motion-safe:animate-rise">
+          <Brand circle={52} mark={38} wordSize="1.6rem" eyebrowSize=".7rem" />
+        </p>
         <form noValidate onSubmit={onSubmit} aria-labelledby="lg-title" className="admin-surface relative flex w-full max-w-[400px] flex-col gap-5 rounded-2xl bg-panel p-6 text-ink shadow-overlay motion-safe:animate-pop-in sm:p-8">
           <div>
             <h1 id="lg-title" className="text-[22px] leading-tight font-extrabold tracking-[-0.01em]">
@@ -102,12 +164,12 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
             <p className="mt-1 text-[14px] text-ink-muted">{isMockApi ? "Modo simulado: entra con cualquier correo y contraseña." : "Ingresa con tu cuenta de administración."}</p>
           </div>
           <Field label="Correo">
-            {(p) => <input {...p} {...missing(lg.email)} type="email" autoComplete="username" inputMode="email" value={lg.email} onChange={(e) => setLg({ ...lg, email: e.target.value })} className={adminInput} />}
+            {(p) => <input {...p} {...missing(lg.email)} type="email" autoComplete="username" inputMode="email" placeholder="tucorreo@ejemplo.com" value={lg.email} onChange={(e) => setLg({ ...lg, email: e.target.value })} className={adminInput} />}
           </Field>
           <Field label="Contraseña">
             {(p) => (
               <div className="relative">
-                <input {...p} {...missing(lg.password)} type={show ? "text" : "password"} autoComplete="current-password" value={lg.password} onChange={(e) => setLg({ ...lg, password: e.target.value })} className={`${adminInput} pr-12`} />
+                <input {...p} {...missing(lg.password)} type={show ? "text" : "password"} autoComplete="current-password" placeholder="***********" value={lg.password} onChange={(e) => setLg({ ...lg, password: e.target.value })} className={`${adminInput} pr-12`} />
                 <button
                   type="button"
                   onClick={() => setShow(!show)}
@@ -130,7 +192,7 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
           </Button>
         </form>
         <Link href="/" className="relative rounded-sm text-[13.5px] font-semibold text-on-dark/75 transition-colors hover:text-on-dark">
-          ← Volver al sitio
+          ←  Volver al sitio
         </Link>
       </div>
     </main>

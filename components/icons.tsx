@@ -118,9 +118,14 @@ export const LogoMark = ({ size = 38, snow = false }: { size?: number; snow?: bo
   </svg>
 );
 
+// Silueta del cóndor en vuelo (viewBox 200×50): alas, cola y la cabeza. La cabeza va en el mismo sentido de giro que
+// el contorno: en sentido contrario, la parte que se superpone con las alas quedaba como dos huecos (parecían ojos).
+export const CONDOR_SILHOUETTE =
+  "M100 20 C92 15 80 11 62 11 C44 11 26 15 4 27 L11 28 L4 32 L13 32 L7 37 L17 35 L13 40 L25 35 C41 29 61 27 81 28 C89 29 94 31 97 35 L100 43 L103 35 C106 31 111 29 119 28 C139 27 159 29 175 35 L187 40 L183 35 L193 37 L187 32 L196 32 L189 28 L196 27 C174 15 156 11 138 11 C120 11 108 15 100 20 Z M104 20 C104 13 96 13 96 20 Z";
+
 export const CondorSilhouette = ({ className, style }: { className?: string; style?: CSSProperties }) => (
   <svg viewBox="0 0 200 50" aria-hidden="true" className={className} style={style}>
-    <path d="M100 20 C92 15 80 11 62 11 C44 11 26 15 4 27 L11 28 L4 32 L13 32 L7 37 L17 35 L13 40 L25 35 C41 29 61 27 81 28 C89 29 94 31 97 35 L100 43 L103 35 C106 31 111 29 119 28 C139 27 159 29 175 35 L187 40 L183 35 L193 37 L187 32 L196 32 L189 28 L196 27 C174 15 156 11 138 11 C120 11 108 15 100 20 Z M96 20 C96 13 104 13 104 20 Z" />
+    <path d={CONDOR_SILHOUETTE} />
   </svg>
 );
 

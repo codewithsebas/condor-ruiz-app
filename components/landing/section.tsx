@@ -67,10 +67,12 @@ type HeaderProps = {
 export function SectionHeader({ id, kicker, title, accent, subtitle, layout = "split", tone = "base", breakTitle = false, children }: HeaderProps) {
   const light = tone === "light";
   return (
+    // Aparece en dos tiempos al llegar con el scroll: la frase y el título, y después el subtítulo (que queda más abajo:
+    // al pie del título en escritorio, debajo en el celular).
     <header
-      className={`reveal-on-scroll mb-[clamp(28px,4vw,52px)] grid gap-x-12 gap-y-4 ${layout === "split" ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-end" : ""}`}
+      className={`mb-[clamp(28px,4vw,52px)] grid gap-x-12 gap-y-4 ${layout === "split" ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-end" : ""}`}
     >
-      <div className="flex min-w-0 flex-col gap-4">
+      <div className="reveal-on-scroll flex min-w-0 flex-col gap-4">
         <p className={`kicker pb-1 ${light ? "text-on-light" : ""}`}>
           <SparkleIcon className="motion-safe:animate-twinkle" />
           {kicker}
@@ -86,7 +88,7 @@ export function SectionHeader({ id, kicker, title, accent, subtitle, layout = "s
         </h2>
       </div>
       {(subtitle || children) && (
-        <div className="flex max-w-[52ch] flex-col items-start gap-4 lg:pb-2">
+        <div className="reveal-on-scroll flex max-w-[52ch] flex-col items-start gap-4 lg:pb-2">
           {subtitle && <p className={`text-[1.02rem] leading-relaxed text-pretty ${light ? "text-on-light-muted" : "text-on-dark-muted"}`}>{subtitle}</p>}
           {children}
         </div>

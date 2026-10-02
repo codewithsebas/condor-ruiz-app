@@ -3,6 +3,7 @@ import { BookingProvider, BookingWidget, CabinReserveButton } from "@/components
 import { CopyButton } from "@/components/landing/copy-button";
 import { ExperienceGallery } from "@/components/landing/experience-gallery";
 import { HeroParallax, RotatingWords } from "@/components/landing/hero-motion";
+import { Horizon } from "@/components/landing/horizon";
 import { LandingHeader } from "@/components/landing/landing-header";
 import { PoliciesAccordion } from "@/components/landing/policies-accordion";
 import { Section, SectionHeader } from "@/components/landing/section";
@@ -163,11 +164,15 @@ export default async function HomePage() {
             <DottedPath d="M-10 150 C 60 140, 30 60, 110 60 S 190 20, 170 0" width={200} height={160} className="-top-14 left-0 stroke-on-dark/30" />
             <SectionHeader id="cabanas-title" kicker="Elige la tuya" title="Nuestras cabañas" accent="tipo chalet" subtitle="Cabañas tipo chalet con vista al Nevado del Ruiz. Compara y elige la que mejor se ajusta a tu grupo: el precio se calcula al instante con tus fechas." />
             <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,420px),1fr))] gap-4">
-              {cabins.map((c) => {
+              {/* Cada tarjeta aparece al llegar con el scroll (la de al lado, un instante después); al pasar el mouse se
+                  eleva y su foto se acerca despacio. */}
+              {cabins.map((c, i) => {
                 return (
-                  <article key={c.id} className="flex flex-col gap-4 rounded-lg bg-card p-3 text-on-light transition duration-250 hover:-translate-y-1.5 hover:shadow-card">
+                  <article key={c.id} className={`reveal-on-scroll reveal-tall group flex flex-col gap-4 rounded-lg bg-card p-3 text-on-light transition duration-250 hover:-translate-y-1.5 hover:shadow-card ${i % 2 ? "[--reveal-after:64px]" : ""}`}>
                     <div className="relative aspect-4/3 overflow-hidden rounded-md bg-card-muted">
-                      <PhotoSlot src={c.photos[0]} alt={c.full} placeholder={`Foto real: ${c.full.toLowerCase()}`} sizes="(min-width: 1392px) 660px, (min-width: 888px) 50vw, 100vw" />
+                      <div className="absolute inset-0 transition-transform duration-[1.4s] ease-out group-hover:scale-[1.04]">
+                        <PhotoSlot src={c.photos[0]} alt={c.full} placeholder={`Foto real: ${c.full.toLowerCase()}`} sizes="(min-width: 1392px) 660px, (min-width: 888px) 50vw, 100vw" />
+                      </div>
                       {c.badge && <span className="pointer-events-none absolute top-3 left-3 rounded-full bg-highlight px-3.5 py-[7px] text-[.8rem] font-extrabold text-on-light">{c.badge}</span>}
                     </div>
                     <div className="flex flex-col gap-3 px-2 pb-2">
@@ -198,9 +203,9 @@ export default async function HomePage() {
                 );
               })}
             </div>
-            <a href="#servicios" className="btn btn-surface mt-6 min-h-12 px-[22px] font-bold">
+            <a href="#servicios" className="group btn btn-surface mt-6 min-h-12 px-[22px] font-bold">
               Todas las cabañas incluyen
-              <ArrowDownIcon />
+              <ArrowDownIcon className="transition-transform duration-300 group-hover:translate-y-0.5" />
             </a>
           </Section>
         </BookingProvider>
@@ -224,9 +229,8 @@ export default async function HomePage() {
           <ExperienceGallery items={EXPERIENCES.map((e) => ({ ...e, src: photos[`exp-${e.id}`] }))} />
         </Section>
 
-        <div aria-hidden="true" className="gutter-1360">
-          <PawTrail variant="b" />
-        </div>
+        {/* Horizonte: la cordillera y el nevado entre niebla, antes de bajar al valle de «Así se llega». */}
+        <Horizon />
 
         {/* Ubicación */}
         <Section id="ubicacion" tone="deep" labelledBy="ubicacion-title">
@@ -329,8 +333,8 @@ export default async function HomePage() {
               {[
                 ["Check-in", site.checkIn, <LoginIcon key="i" size={22} />],
                 ["Check-out", site.checkOut, <LogoutIcon key="o" size={22} />],
-              ].map(([label, value, icon]) => (
-                <div key={label as string} className="flex flex-col gap-3 rounded-lg bg-card p-5 text-on-light">
+              ].map(([label, value, icon], i) => (
+                <div key={label as string} className={`reveal-on-scroll flex flex-col gap-3 rounded-lg bg-card p-5 text-on-light ${i ? "[--reveal-after:48px]" : ""}`}>
                   <span aria-hidden="true" className="grid size-11 place-items-center rounded-full bg-cta text-cta-text">
                     {icon}
                   </span>

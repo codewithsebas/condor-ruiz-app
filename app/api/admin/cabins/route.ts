@@ -2,7 +2,7 @@ import { revalidatePath } from "next/cache";
 import type { NextRequest } from "next/server";
 import { ACTIVE_STATUSES, slugify } from "@/lib/booking";
 import { todayISO } from "@/lib/format";
-import { type Db, loadCabinTypes } from "@/lib/server/db";
+import { type Db, isMissingTable, loadCabinTypes } from "@/lib/server/db";
 import { fail, json, readJson, requireAdmin, route } from "@/lib/server/http";
 import { PHOTO_BUCKET } from "@/lib/server/site";
 import type { CabinInput } from "@/lib/types";
@@ -78,6 +78,11 @@ export const PUT = route(async (req: NextRequest) => {
     ]);
     if (rs.length || bs.length)
       return fail(422, "VALIDATION_ERROR", { fields: { units: `Hay reservas o bloqueos vigentes en las unidades que quitarías${rs.length ? ` (${rs.map((r) => r.code).join(", ")})` : ""}. Reprográmalos primero.` } });
+    // Una unidad enlazada con Booking seguiría recibiendo sus fechas: primero se desenlaza en el módulo Booking.com.
+    const { data: linked, error: le } = await sb.from("channel_calendars").select("label, unit").eq("cabin_type_id", id).gt("unit", v.row.units).not("import_url", "is", null);
+    if (le && !isMissingTable(le)) throw le;
+    if (linked?.length)
+      return fail(422, "VALIDATION_ERROR", { fields: { units: `La unidad ${linked.map((c) => c.unit).join(", ")} está enlazada con Booking.com (${linked.map((c) => c.label).join(", ")}). Quita el enlace primero.` } });
   }
   await sb.from("cabin_types").update(v.row).eq("id", id).throwOnError();
   return done(sb);

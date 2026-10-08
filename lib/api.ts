@@ -3,8 +3,8 @@ import { config, isMockApi, type CabinTypeId } from "./config";
 import { mockRequest } from "./mock-server";
 import { sleep } from "./format";
 import type {
-  AdminAction, AdminData, AdminNotification, ApiResult, Availability, Block, BlockInput, CabinInput, CabinType, ClientProfile, ClientProfileInput, EmailRecord, FieldErrors, PaymentKind, PaymentProof, PaymentStart,
-  PaymentState, ProofReview, PublicReservation, RateSeason, Rates, Reservation, ReservationInput, SeasonInput, SiteInput,
+  AdminAction, AdminData, AdminNotification, ApiResult, Availability, Block, BlockInput, CabinInput, CabinType, ChannelCalendar, ChannelCalendarInput, ChannelStay, ChannelSyncResult, ClientProfile, ClientProfileInput,
+  EmailRecord, FieldErrors, PaymentKind, PaymentProof, PaymentStart, PaymentState, ProofReview, PublicReservation, RateSeason, Rates, Reservation, ReservationInput, SeasonInput, SiteInput,
 } from "./types";
 import type { NotificationGroup } from "./notification-groups";
 import type { SiteContent, SiteService } from "./site";
@@ -90,6 +90,8 @@ export const resetIdem = () => sessionStorage.removeItem("ec-idem");
 
 export type ValidationError = { error: "VALIDATION_ERROR"; fields: FieldErrors };
 export type ApiError = { error: string; fields?: FieldErrors };
+// Calendarios de Booking.com y sus fechas (con el resultado de la lectura, si se leyó en esa solicitud).
+export type Channels = { calendars: ChannelCalendar[]; stays: ChannelStay[]; results?: ChannelSyncResult[] };
 // Un dispositivo registrado para notificaciones push: qué grupos recibe y cómo se reconoce ("Chrome en Android").
 export type PushDevice = { groups: NotificationGroup[]; device: string; lastSuccessAt: string | null };
 
@@ -112,6 +114,12 @@ export const api = {
     addBlock: (b: BlockInput) => request<Block[]>("POST", "/admin/blocks", { body: b }),
     updateBlock: (b: BlockInput & { id: string }) => request<Block[]>("PUT", "/admin/blocks", { body: b }),
     deleteBlock: (id: string) => request<Block[]>("DELETE", "/admin/blocks", { query: { id } }),
+    channels: {
+      list: () => request<Channels>("GET", "/admin/channels"),
+      save: (b: ChannelCalendarInput) => request<Channels | ValidationError | ApiError>("PUT", "/admin/channels", { body: b }),
+      sync: () => request<Channels | ApiError>("POST", "/admin/channels", { body: { action: "sync" } }),
+      rotate: (id: string) => request<Channels | ApiError>("POST", "/admin/channels", { body: { action: "rotate", id } }),
+    },
     saveRates: (b: Rates) => request<CabinType[]>("PUT", "/admin/cabin-types", { body: b }),
     createCabin: (b: CabinInput) => request<CabinType[] | ValidationError>("POST", "/admin/cabins", { body: b }),
     updateCabin: (b: CabinInput & { id: string }) => request<CabinType[] | ValidationError>("PUT", "/admin/cabins", { body: b }),

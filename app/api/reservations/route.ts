@@ -1,6 +1,7 @@
-import type { NextRequest } from "next/server";
-import { computeQuote, depositDueAt, findUnit, newReservationCode, validateReservation } from "@/lib/booking";
+import { after, type NextRequest } from "next/server";
+import { computeQuote, depositDueAt, findUnit, newReservationCode, validateReservation, webFirst } from "@/lib/booking";
 import { addDays, todayISO } from "@/lib/format";
+import { atMost, linkedUnits, syncSoon } from "@/lib/server/channels";
 import { loadOccupancy, loadPricing, runDeadlines, toPublic } from "@/lib/server/db";
 import { fail, json, readJson, route } from "@/lib/server/http";
 import { verifyTurnstile } from "@/lib/server/turnstile";
@@ -55,11 +56,19 @@ export const POST = route(async (req: NextRequest) => {
     idempotency_key: idemKey,
   };
 
+  // Antes de asignar la cabaña se leen los calendarios de Booking de este tipo si hace más de 90 s que no se leen
+  // (máximo 2,5 s de espera: si Booking tarda, se sigue con la última lectura y esta termina en segundo plano).
+  const sync = syncSoon({ cabinTypeId: type.id, minAgeMs: 90_000 });
+  after(() => sync);
+  await atMost(sync, 2500);
+  // Las unidades que no se venden en Booking se asignan primero: así quedan libres las que sí.
+  const prefer = webFirst(units[type.id] ?? 0, await linkedUnits(sb, type.id));
+
   // La restricción de exclusión en la base de datos resuelve reservas simultáneas:
   // si otra solicitud tomó la unidad, se recalcula y se intenta de nuevo.
   for (let attempt = 0; attempt < 4; attempt++) {
     const occ = await loadOccupancy(sb, b.checkIn, addDays(b.checkOut, -1), type.id);
-    const unit = findUnit(occ, units[type.id] ?? 0, type.id, b.checkIn, b.checkOut);
+    const unit = findUnit(occ, units[type.id] ?? 0, type.id, b.checkIn, b.checkOut, undefined, prefer);
     if (!unit) return fail(409, "DATES_UNAVAILABLE");
     const { data, error } = await sb
       .from("reservations")

@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { CalendarIcon, ChevronRightIcon, ClockIcon, FileTextIcon, HomeIcon, LoginIcon, LogoutIcon, TrendIcon, WalletIcon } from "@/components/icons";
 import { StatusPill } from "@/components/status-pill";
 import { balanceDue, finance, pendingOf } from "@/lib/admin-metrics";
-import { ACTIVE_STATUSES } from "@/lib/booking";
+import { ACTIVE_STATUSES, channelBlocks } from "@/lib/booking";
 import { addDays, cop, countdown, fmtDate, fmtFullDate, plural } from "@/lib/format";
 import type { Reservation } from "@/lib/types";
 import { useAdmin } from "./context";
@@ -54,7 +54,7 @@ function occupancy(d: ReturnType<typeof useAdmin>["data"], date: string) {
     total += c.units;
     const set = new Set<number>();
     d.reservations.forEach((r) => r.cabinTypeId === c.id && ACTIVE_STATUSES.includes(r.status) && r.checkIn <= date && date < r.checkOut && set.add(r.unit));
-    d.blocks.forEach((b) => b.cabinTypeId === c.id && b.from <= date && date <= b.to && set.add(b.unit));
+    [...d.blocks, ...channelBlocks(d.channelStays)].forEach((b) => b.cabinTypeId === c.id && b.from <= date && date <= b.to && set.add(b.unit));
     busy += set.size;
   }
   return { busy, total };
@@ -70,7 +70,7 @@ export function Dashboard() {
   const pend = R.filter((r) => r.status === "pending_deposit" || balanceDue(r, now)).sort((a, b) => (deadlineOf(a) < deadlineOf(b) ? -1 : 1));
   const proofFor = (code: string) => data.proofs.find((p) => p.reservationCode === code && p.status === "pending");
   const occToday = occupancy(data, today);
-  const month = finance(R, data.blocks, data.cabinTypes, { from: today.slice(0, 8) + "01", to: today });
+  const month = finance(R, data.blocks, data.cabinTypes, { from: today.slice(0, 8) + "01", to: today }, "", data.channelStays);
   const toCollect = R.reduce((s, r) => s + pendingOf(r).total, 0);
 
   return (

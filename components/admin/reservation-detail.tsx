@@ -7,6 +7,7 @@ import { AlertIcon, CheckIcon, FileTextIcon, ListIcon, LockIcon, MailIcon, NoteI
 import { KeyValues, StatusPill } from "@/components/status-pill";
 import { balanceDue, buildClients, typeMarks } from "@/lib/admin-metrics";
 import { api } from "@/lib/api";
+import { channelBlocks } from "@/lib/booking";
 import { config } from "@/lib/config";
 import { addDays, cop, countdown, dateOf, fmtClock, fmtDate, fmtDateTime, nightsBetween, plural, timeAgo, waTo } from "@/lib/format";
 import { BALANCE_MINUTES, PAYMENT_STATUS, kindLabel, methodLabel } from "@/lib/payments";
@@ -124,7 +125,7 @@ export function ReservationDetail({ code }: { code: string }) {
         reschedule: true,
         ci: r.checkIn,
         co: r.checkOut,
-        marks: typeMarks(data.reservations, data.blocks, r.cabinTypeId, units, today, addDays(today, 365), r.code),
+        marks: typeMarks(data.reservations, [...data.blocks, ...channelBlocks(data.channelStays)], r.cabinTypeId, units, today, addDays(today, 365), r.code),
         text: "Elige las nuevas fechas. Se valida la disponibilidad de la misma cabaña y se recalcula el total con las tarifas vigentes (lo ya pagado se conserva).",
       }),
     );

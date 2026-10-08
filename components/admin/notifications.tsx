@@ -4,7 +4,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { AlertIcon, BellIcon, CheckIcon, ChevronRightIcon, ClockIcon, CloseIcon, FileTextIcon, LoginIcon, MailIcon, SlidersIcon, VolumeIcon, VolumeOffIcon, WalletIcon } from "@/components/icons";
+import { AlertIcon, BellIcon, CheckIcon, ChevronRightIcon, ClockIcon, CloseIcon, FileTextIcon, LoginIcon, MailIcon, RefreshIcon, SlidersIcon, VolumeIcon, VolumeOffIcon, WalletIcon, WarningIcon } from "@/components/icons";
 import { api } from "@/lib/api";
 import { isMockApi } from "@/lib/config";
 import { NOTIFICATION_GROUPS, type NotificationGroup } from "@/lib/notification-groups";
@@ -33,7 +33,7 @@ const browserClient = () => {
 type Row = { id: number; kind: string; title: string; body: string; reservation_code: string | null; read_at: string | null; created_at: string };
 const toNotification = (n: Row): AdminNotification => ({ id: n.id, kind: n.kind as NotificationKind, title: n.title, body: n.body, reservationCode: n.reservation_code, readAt: n.read_at, createdAt: n.created_at });
 
-// Escucha notificaciones nuevas y cambios en reservas, comprobantes y bloqueos (sin sondeos).
+// Escucha notificaciones nuevas y cambios en reservas, comprobantes, bloqueos y fechas de Booking (sin sondeos).
 export function useRealtime(handlers: { onNotification: (n: AdminNotification) => void; onChange: () => void }) {
   const [status, setStatus] = useState<LiveStatus>(() => (browserClient() ? "connecting" : "off"));
   const h = useRef(handlers);
@@ -58,6 +58,7 @@ export function useRealtime(handlers: { onNotification: (n: AdminNotification) =
         .on("postgres_changes", { event: "*", schema: "public", table: "payments" }, changed)
         .on("postgres_changes", { event: "*", schema: "public", table: "email_outbox" }, changed)
         .on("postgres_changes", { event: "*", schema: "public", table: "blocks" }, changed)
+        .on("postgres_changes", { event: "*", schema: "public", table: "channel_stays" }, changed)
         .subscribe((st) => alive && setStatus(st === "SUBSCRIBED" ? "live" : st === "CHANNEL_ERROR" || st === "TIMED_OUT" || st === "CLOSED" ? "offline" : "connecting"));
     })();
     // El token de la sesión se renueva: Realtime necesita el nuevo para seguir autorizado.
@@ -152,6 +153,9 @@ const KIND: Record<NotificationKind, { icon: typeof BellIcon; tone: string; grou
   proof_uploaded: { icon: FileTextIcon, tone: "bg-info-soft text-info", group: "pagos" },
   proof_approved: { icon: CheckIcon, tone: "bg-success-soft text-success", group: "pagos" },
   proof_rejected: { icon: AlertIcon, tone: "bg-error-soft text-error", group: "pagos" },
+  channel_conflict: { icon: WarningIcon, tone: "bg-error-soft text-error", group: "reservas" },
+  channel_moved: { icon: RefreshIcon, tone: "bg-info-soft text-info", group: "cambios" },
+  channel_sync_failed: { icon: RefreshIcon, tone: "bg-warning-soft text-warning", group: "cambios" },
 };
 const kindOf = (n: AdminNotification) => KIND[n.kind] ?? KIND.reservation_created;
 

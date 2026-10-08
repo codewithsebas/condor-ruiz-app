@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { BanIcon, CalendarIcon, CheckIcon, ClockIcon, MoonIcon, PencilIcon, PlusIcon, TrashIcon, WarningIcon } from "@/components/icons";
-import { BLOCK_REASONS, clashingReservations } from "@/lib/booking";
+import { BLOCK_REASONS, channelBlocks, clashingReservations } from "@/lib/booking";
 import { unitMarks } from "@/lib/admin-metrics";
 import { api } from "@/lib/api";
 import { addDays, fmtDate, isISO, nightsBetween, plural } from "@/lib/format";
@@ -192,7 +192,7 @@ function BlockEditor({ initial, onClose, onDelete }: { initial: Draft; onClose: 
   // Choques en vivo: reservas activas y otros bloqueos en las unidades y fechas elegidas.
   const clashes = d.from && d.to ? unitList.flatMap((u) => clashingReservations(data.reservations, d.type, u, d.from!, d.to!)) : [];
   const overlaps = d.from && d.to ? data.blocks.filter((b) => b.id !== d.id && b.cabinTypeId === d.type && unitList.includes(b.unit) && b.from <= d.to! && d.from! <= b.to) : [];
-  const marks = useMemo(() => unitMarks(data.reservations, data.blocks, d.type, d.unit === "all" ? "all" : Number(d.unit), today, addDays(today, 400), d.id), [data, d.type, d.unit, today, d.id]);
+  const marks = useMemo(() => unitMarks(data.reservations, [...data.blocks, ...channelBlocks(data.channelStays)], d.type, d.unit === "all" ? "all" : Number(d.unit), today, addDays(today, 400), d.id), [data, d.type, d.unit, today, d.id]);
 
   const errs = {
     dates: !d.from || !d.to ? "Elige el primer y el último día del bloqueo." : "",

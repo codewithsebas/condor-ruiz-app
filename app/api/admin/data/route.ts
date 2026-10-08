@@ -1,5 +1,5 @@
 import { after, type NextRequest } from "next/server";
-import { loadCabinTypes, loadClients, loadSeasons, runDeadlines, toBlock, toEmail, toNotification, toPayment, toProof, toReservation } from "@/lib/server/db";
+import { loadCabinTypes, loadChannels, loadClients, loadSeasons, runDeadlines, toBlock, toEmail, toNotification, toPayment, toProof, toReservation } from "@/lib/server/db";
 import { json, requireAdmin, route } from "@/lib/server/http";
 import { processOutbox } from "@/lib/server/mailer";
 import { siteUrl } from "@/lib/server/payments";
@@ -11,7 +11,7 @@ export const GET = route(async (req: NextRequest) => {
   const { sb, error } = await requireAdmin();
   if (error) return error;
   await runDeadlines();
-  const [{ data: reservations }, { data: blocks }, { types, units }, seasons, site, { data: proofs }, { data: payments }, { data: emails }, clients, { data: notifications }] = await Promise.all([
+  const [{ data: reservations }, { data: blocks }, { types, units }, seasons, site, { data: proofs }, { data: payments }, { data: emails }, clients, { data: notifications }, channels] = await Promise.all([
     sb.from("reservations").select("*, reservation_notes(text, created_at)").order("check_in", { ascending: false }).throwOnError(),
     sb.from("blocks").select("*").order("from_date").throwOnError(),
     loadCabinTypes(sb),
@@ -22,6 +22,7 @@ export const GET = route(async (req: NextRequest) => {
     sb.from("email_outbox").select("*").order("created_at", { ascending: false }).limit(300).throwOnError(),
     loadClients(sb),
     sb.from("admin_notifications").select("*").order("created_at", { ascending: false }).limit(150).throwOnError(),
+    loadChannels(sb, siteUrl(req.nextUrl.origin)),
   ]);
   // Correos que fallaron y ya les toca reintentar: se envían después de responder.
   if (emails.some((e) => e.status === "failed" || e.status === "pending")) after(() => processOutbox(siteUrl(req.nextUrl.origin)));
@@ -39,5 +40,7 @@ export const GET = route(async (req: NextRequest) => {
     emails: emails.map(toEmail),
     clients,
     notifications: notifications.map(toNotification),
+    channelCalendars: channels.calendars,
+    channelStays: channels.stays,
   });
 });

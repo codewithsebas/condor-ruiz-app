@@ -1,12 +1,12 @@
 // Adaptador simulado: implementa el contrato de la API sobre localStorage.
 // Se activa con NEXT_PUBLIC_USE_MOCK_API=1 (demos sin backend). Solo corre en el navegador.
-import { availability, clashingReservations, computeQuote, depositDueAt, findUnit, newReservationCode, slugify, unavailableDates, validateReservation } from "./booking";
+import { availability, channelBlocks, clashingReservations, computeQuote, depositDueAt, findUnit, newReservationCode, slugify, unavailableDates, validateReservation, webFirst } from "./booking";
 import { config } from "./config";
 import { addDays, sleep, todayISO } from "./format";
 import { BALANCE_MINUTES } from "./payments";
 import { defaultContent, defaultTexts, mergeTexts, type SiteContent, type SiteService } from "./site";
 import type {
-  AdminNotification, ApiResult, Block, BlockInput, CabinInput, CabinType, ClientProfile, EmailRecord, NotificationKind, PaymentKind, PaymentRecord, PaymentStatus, PublicReservation, RateSeason, Rates, Reservation,
+  AdminNotification, ApiResult, Block, BlockInput, CabinInput, CabinType, ChannelCalendar, ChannelCalendarInput, ChannelStay, ClientProfile, EmailRecord, NotificationKind, PaymentKind, PaymentRecord, PaymentStatus, PublicReservation, RateSeason, Rates, Reservation,
   ReservationInput, SeasonInput, SiteInput,
 } from "./types";
 
@@ -29,6 +29,9 @@ type Db = {
   emails: EmailRecord[];
   idem: Record<string, string>;
   site?: SiteContent;
+  // Booking.com (se agregan al cargar si la base simulada se creó antes de existir).
+  channelCalendars?: ChannelCalendar[];
+  channelStays?: ChannelStay[];
 };
 
 // Escenarios de prueba para el envío: localStorage.setItem('ec-mock-settings', '{"post":"409"}')
@@ -149,6 +152,26 @@ function applyPayment(db: Db, p: PaymentRecord): "confirmed" | "balance_paid" | 
   return p.kind === "balance" ? "balance_paid" : "confirmed";
 }
 
+// Booking.com simulado: las tres unidades de la demo enlazadas y algunas noches vendidas allá.
+function seedChannels(d: Db) {
+  const t = todayISO();
+  const ago = (min: number) => new Date(Date.now() - min * 6e4).toISOString();
+  const cal = (id: string, cabinTypeId: string, unit: number, label: string, events: number): ChannelCalendar => ({
+    id, channel: "booking", label, cabinTypeId, unit, importUrl: `https://admin.booking.com/hotel/hoteladmin/ical.html?t=demo-${id}`,
+    exportUrl: `${location.origin}/api/ical/demo${id}`, lastSyncedAt: ago(3), lastFetchedAt: ago(40), lastStatus: "ok", lastError: "", lastEventCount: events,
+  });
+  const stay = (id: string, calendarId: string, cabinTypeId: string, unit: number, inOff: number, n: number, removed = false): ChannelStay => ({
+    id, calendarId, cabinTypeId, unit, checkIn: addDays(t, inOff), checkOut: addDays(t, inOff + n), summary: "CLOSED - Not available", firstSeenAt: ago(60 * 24), removedAt: removed ? ago(60 * 20) : null,
+  });
+  d.channelCalendars ??= [cal("c1", "estandar", 1, "Cabaña 1", 1), cal("c2", "estandar", 2, "Cabaña 2", 1), cal("c3", "premium", 1, "Cabaña 005", 1)];
+  d.channelStays ??= [stay("cs1", "c1", "estandar", 1, 4, 2), stay("cs2", "c2", "estandar", 2, 12, 3), stay("cs3", "c3", "premium", 1, 10, 2), stay("cs4", "c2", "estandar", 2, 18, 2, true)];
+  return d as Db & Required<Pick<Db, "channelCalendars" | "channelStays">>;
+}
+const channelsOf = (d: Db) => {
+  const c = seedChannels(d);
+  return { calendars: c.channelCalendars, stays: c.channelStays };
+};
+
 // Contenido del sitio simulado; los datos guardados antes de existir los servicios toman los de por defecto.
 const siteOf = (d: Db): SiteContent => ({ ...defaultContent, ...d.site, services: d.site?.services ?? defaultContent.services });
 
@@ -201,7 +224,7 @@ function expire(db: Db) {
 
 const occ = (db: Db) => ({
   reservations: db.reservations.map((r) => ({ code: r.code, cabinTypeId: r.cabinTypeId, unit: r.unit, checkIn: r.checkIn, checkOut: r.checkOut, status: r.status })),
-  blocks: db.blocks,
+  blocks: [...db.blocks, ...channelBlocks(channelsOf(db).stays)],
 });
 
 export type MockRequest = { query?: Record<string, string | number | undefined>; body?: unknown; headers?: Record<string, string> };
@@ -235,7 +258,8 @@ export async function mockRequest(method: string, path: string, opts: MockReques
     if (key && db.idem[key]) return { status: 201, data: pub(db, db.reservations.find((r) => r.code === db.idem[key])!) };
     const f = validateReservation(body, activeTypes(db), todayISO());
     if (Object.keys(f).length) return invalid(f);
-    const unit = findUnit(occ(db), unitsOf(db)[body.cabinTypeId] ?? 0, body.cabinTypeId, body.checkIn, body.checkOut);
+    const linked = channelsOf(db).calendars.filter((c) => c.cabinTypeId === body.cabinTypeId && c.importUrl).map((c) => c.unit);
+    const unit = findUnit(occ(db), unitsOf(db)[body.cabinTypeId] ?? 0, body.cabinTypeId, body.checkIn, body.checkOut, undefined, webFirst(unitsOf(db)[body.cabinTypeId] ?? 0, linked));
     if (!unit) return { status: 409, data: { error: "DATES_UNAVAILABLE" } };
     const r: Reservation = {
       ...body, code: newReservationCode(), unit, status: "pending_deposit",
@@ -325,6 +349,7 @@ export async function mockRequest(method: string, path: string, opts: MockReques
     return ok({
       reservations: db.reservations, blocks: db.blocks, cabinTypes: [...db.cabins].sort((a, b) => a.sort - b.sort), seasons: db.seasons, unidades: unitsOf(db),
       site: siteOf(db), proofs: [], payments: [...db.payments].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)), emails: db.emails, clients: db.clients, notifications: db.notifications,
+      channelCalendars: channelsOf(db).calendars, channelStays: channelsOf(db).stays,
     });
   // En modo simulado el contenido se guarda solo en este navegador y no cambia las páginas públicas.
   if (method === "PUT" && path === "/admin/site") {
@@ -395,6 +420,45 @@ export async function mockRequest(method: string, path: string, opts: MockReques
     db.blocks = db.blocks.filter((b) => b.id !== q.id);
     save(db);
     return ok(db.blocks);
+  }
+
+  if (path === "/admin/channels") {
+    const ch = seedChannels(db);
+    const done = (results?: unknown[]) => {
+      save(db);
+      return ok({ calendars: ch.channelCalendars, stays: ch.channelStays, ...(results && { results }) });
+    };
+    const read = (c: ChannelCalendar) => {
+      Object.assign(c, { lastSyncedAt: new Date().toISOString(), lastStatus: "ok", lastError: "", lastEventCount: ch.channelStays.filter((s) => s.calendarId === c.id && !s.removedAt).length });
+      return { calendarId: c.id, ok: true, events: c.lastEventCount, added: 0, removed: 0, moved: [], conflicts: [] };
+    };
+    if (method === "GET") return done();
+    if (method === "PUT") {
+      const b = opts.body as ChannelCalendarInput;
+      const url = String(b.importUrl ?? "").trim() || null;
+      if (url && !/^https:\/\/\S+$/.test(url)) return invalid({ importUrl: "Pega el enlace de exportación del extranet (empieza por https://)." });
+      let c = ch.channelCalendars.find((x) => x.cabinTypeId === b.cabinTypeId && x.unit === b.unit);
+      if (!c) {
+        const id = `c${Date.now()}`;
+        c = { id, channel: "booking", label: "", cabinTypeId: b.cabinTypeId, unit: b.unit, importUrl: null, exportUrl: `${location.origin}/api/ical/demo${id}`, lastSyncedAt: null, lastFetchedAt: null, lastStatus: null, lastError: "", lastEventCount: 0 };
+        ch.channelCalendars.push(c);
+      }
+      const changed = c.importUrl !== url;
+      Object.assign(c, { label: String(b.label ?? "").trim().slice(0, 80), importUrl: url });
+      if (changed) {
+        ch.channelStays = db.channelStays = ch.channelStays.filter((s) => s.calendarId !== c.id);
+        Object.assign(c, { lastSyncedAt: null, lastStatus: null, lastError: "", lastEventCount: 0 });
+      }
+      return done(changed && url ? [read(c)] : undefined);
+    }
+    const b = (opts.body || {}) as { action?: string; id?: string };
+    if (method === "POST" && b.action === "sync") return done(ch.channelCalendars.filter((c) => c.importUrl).map(read));
+    if (method === "POST" && b.action === "rotate") {
+      const c = ch.channelCalendars.find((x) => x.id === b.id);
+      if (!c) return { status: 404, data: { error: "NOT_FOUND" } };
+      Object.assign(c, { exportUrl: `${location.origin}/api/ical/demo${c.id}-${Date.now().toString(36)}`, lastFetchedAt: null });
+      return done();
+    }
   }
 
   if (method === "PUT" && path === "/admin/cabin-types") {

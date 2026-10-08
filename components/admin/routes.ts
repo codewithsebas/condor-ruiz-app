@@ -1,9 +1,9 @@
 // Mapa del panel: cada módulo es una página con su ruta. Lo usan el menú, las migas de pan, los títulos y los enlaces.
 // Sin "use client": las páginas del servidor también lo leen (validación de segmentos dinámicos).
 import type { ComponentType } from "react";
-import { BanIcon, BellIcon, CalendarIcon, FileTextIcon, GridIcon, HomeIcon, ListIcon, ReceiptIcon, SlidersIcon, TagIcon, TrendIcon, UsersIcon } from "@/components/icons";
+import { BanIcon, BellIcon, CalendarIcon, FileTextIcon, GridIcon, HomeIcon, ListIcon, ReceiptIcon, RefreshIcon, SlidersIcon, TagIcon, TrendIcon, UsersIcon } from "@/components/icons";
 
-export type ModuleId = "dashboard" | "calendario" | "reservas" | "pagos" | "clientes" | "bloqueos" | "finanzas" | "cabanas" | "tarifas" | "contenido" | "notificaciones" | "configuracion";
+export type ModuleId = "dashboard" | "calendario" | "reservas" | "pagos" | "clientes" | "bloqueos" | "booking" | "finanzas" | "cabanas" | "tarifas" | "contenido" | "notificaciones" | "configuracion";
 
 type Module = { label: string; href: string; icon: ComponentType<{ size?: number; className?: string }>; group: string; description: string };
 
@@ -14,6 +14,7 @@ export const MODULES: Record<ModuleId, Module> = {
   pagos: { label: "Pagos", href: "/admin/pagos", icon: ReceiptIcon, group: "Operación", description: "Transacciones en línea, pagos recibidos y lo que falta por cobrar." },
   clientes: { label: "Clientes", href: "/admin/clientes", icon: UsersIcon, group: "Operación", description: "Historial, valor y valoración interna de cada huésped." },
   bloqueos: { label: "Bloqueos", href: "/admin/bloqueos", icon: BanIcon, group: "Operación", description: "Fechas cerradas por mantenimiento, uso propio u otros motivos." },
+  booking: { label: "Booking.com", href: "/admin/booking", icon: RefreshIcon, group: "Operación", description: "Calendarios sincronizados con Booking.com: lo que se vende allá bloquea la web y lo que se vende aquí cierra Booking." },
   finanzas: { label: "Finanzas", href: "/admin/finanzas", icon: TrendIcon, group: "Negocio", description: "Ingresos, ocupación y su evolución por periodo." },
   cabanas: { label: "Cabañas", href: "/admin/cabanas", icon: HomeIcon, group: "Sitio web", description: "Cabañas que se ofrecen en el sitio: información, capacidad y fotos." },
   tarifas: { label: "Tarifas", href: "/admin/tarifas", icon: TagIcon, group: "Sitio web", description: "Precio base por cabaña y temporadas con precio especial." },
@@ -83,6 +84,7 @@ export const paths = {
   clientes: (q?: Query) => withQuery("/admin/clientes", q),
   cliente: (key: string) => `/admin/clientes/${clientSlug(key)}`,
   bloqueos: (q?: Query) => withQuery("/admin/bloqueos", q),
+  booking: "/admin/booking",
   finanzas: (q?: Query) => withQuery("/admin/finanzas", q),
   cabanas: "/admin/cabanas",
   nuevaCabana: "/admin/cabanas/nueva",

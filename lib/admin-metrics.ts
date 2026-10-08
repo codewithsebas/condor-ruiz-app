@@ -1,5 +1,5 @@
 // Cálculos del panel (clientes y finanzas) sobre los datos ya cargados. Funciones puras: sin red ni estado.
-import { ACTIVE_STATUSES } from "./booking";
+import { ACTIVE_STATUSES, type ChannelSpan } from "./booking";
 import { MS, addDays, dateOf, nightsBetween, parseISO } from "./format";
 import type { Block, CabinType, ClientProfile, Reservation, ReservationStatus } from "./types";
 
@@ -152,7 +152,8 @@ const overlapNights = (ci: string, coExclusive: string, r: Range) => {
 export type GuestType = "Pareja" | "Familia" | "Grupo" | "Individual";
 export const guestType = (r: Reservation): GuestType => (r.children > 0 ? "Familia" : r.adults >= 3 ? "Grupo" : r.adults === 1 ? "Individual" : "Pareja");
 
-export function finance(reservations: Reservation[], blocks: Block[], cabins: CabinType[], range: Range, cabinId = "") {
+// channelStays: noches ocupadas en Booking.com (cuentan como ocupadas en la ocupación; sus ingresos no pasan por la app).
+export function finance(reservations: Reservation[], blocks: Block[], cabins: CabinType[], range: Range, cabinId = "", channelStays: ChannelSpan[] = []) {
   const rs = cabinId ? reservations.filter((r) => r.cabinTypeId === cabinId) : reservations;
   const payments = rs.flatMap(paymentsOf).filter((p) => inRange(p.date, range));
   const deposits = payments.filter((p) => p.kind === "deposit");
@@ -177,7 +178,9 @@ export function finance(reservations: Reservation[], blocks: Block[], cabins: Ca
   const cabs = cabins.filter((c) => !cabinId || c.id === cabinId);
   const capacity = cabs.reduce((s, c) => s + c.units, 0) * daysIn(range);
   const blocked = blocks.filter((b) => !cabinId || b.cabinTypeId === cabinId).reduce((s, b) => s + overlapNights(b.from, addDays(b.to, 1), range), 0);
-  const occupied = rs.filter((r) => [...ACTIVE_STATUSES, "completed"].includes(r.status)).reduce((s, r) => s + overlapNights(r.checkIn, r.checkOut, range), 0);
+  const occupied =
+    rs.filter((r) => [...ACTIVE_STATUSES, "completed"].includes(r.status)).reduce((s, r) => s + overlapNights(r.checkIn, r.checkOut, range), 0) +
+    channelStays.filter((x) => !x.removedAt && (!cabinId || x.cabinTypeId === cabinId)).reduce((s, x) => s + overlapNights(x.checkIn, x.checkOut, range), 0);
   const available = Math.max(0, capacity - blocked);
 
   // Estadías del periodo (llegan dentro del rango): cuánto ya está cobrado y cuánto falta.

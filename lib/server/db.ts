@@ -1,11 +1,12 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ACTIVE_STATUSES, type Occupancy, type Units } from "@/lib/booking";
+import { ACTIVE_STATUSES, channelBlocks, type Occupancy, type Units } from "@/lib/booking";
 import type { Database, Tables } from "@/lib/supabase/database.types";
 import type {
-  AdminNotification, Block, CabinType, ClientEntry, ClientProfile, DocType, EmailKind, EmailRecord, EmailStatus, NotificationKind, PaymentKind, PaymentProof, PaymentProvider, PaymentRecord, PaymentStatus, ProofStatus,
-  PublicPayment, PublicReservation, Quote, RateSeason, Reservation, Severity, Trust,
+  AdminNotification, Block, CabinType, ChannelCalendar, ChannelStay, ClientEntry, ClientProfile, DocType, EmailKind, EmailRecord, EmailStatus, NotificationKind, PaymentKind, PaymentProof, PaymentProvider, PaymentRecord,
+  PaymentStatus, ProofStatus, PublicPayment, PublicReservation, Quote, RateSeason, Reservation, Severity, Trust,
 } from "@/lib/types";
+import { addDays, todayISO } from "@/lib/format";
 import { createServiceClient } from "@/lib/supabase/server";
 import { photoUrl } from "./site";
 
@@ -64,7 +65,8 @@ export async function loadPricing(sb: Db) {
   return { types, units, seasons };
 }
 
-// Reservas activas y bloqueos que tocan alguna noche entre firstNight y lastNight (inclusive).
+// Reservas activas, bloqueos y fechas ocupadas en Booking que tocan alguna noche entre firstNight y lastNight (inclusive).
+// Las de Booking entran como bloqueos (channelBlocks): cuentan igual en toda la lógica de disponibilidad.
 export async function loadOccupancy(sb: Db, firstNight: string, lastNight: string, cabinTypeId?: string): Promise<Occupancy> {
   let rq = sb
     .from("reservations")
@@ -77,11 +79,71 @@ export async function loadOccupancy(sb: Db, firstNight: string, lastNight: strin
     rq = rq.eq("cabin_type_id", cabinTypeId);
     bq = bq.eq("cabin_type_id", cabinTypeId);
   }
-  const [{ data: rs }, { data: bs }] = await Promise.all([rq.throwOnError(), bq.throwOnError()]);
+  const [{ data: rs }, { data: bs }, stays] = await Promise.all([rq.throwOnError(), bq.throwOnError(), loadChannelStays(sb, firstNight, lastNight, cabinTypeId)]);
   return {
     reservations: rs.map((r) => ({ code: r.code, cabinTypeId: r.cabin_type_id, unit: r.unit, checkIn: r.check_in, checkOut: r.check_out, status: r.status })),
-    blocks: bs.map((b) => ({ cabinTypeId: b.cabin_type_id, unit: b.unit, from: b.from_date, to: b.to_date })),
+    blocks: [...bs.map((b) => ({ cabinTypeId: b.cabin_type_id, unit: b.unit, from: b.from_date, to: b.to_date })), ...channelBlocks(stays)],
   };
+}
+
+/* ───────────── Booking.com (calendarios iCal) ───────────── */
+
+// Mientras la migración de canales no esté aplicada, las tablas no existen: se trata como «sin calendarios de Booking»
+// para que el sitio y el panel sigan funcionando. Cualquier otro error sí se propaga.
+export const isMissingTable = (e: unknown) => ["PGRST205", "42P01"].includes((e as { code?: string } | null)?.code ?? "");
+
+export const toChannelStay = (s: Tables<"channel_stays">): ChannelStay => ({
+  id: s.id,
+  calendarId: s.calendar_id,
+  cabinTypeId: s.cabin_type_id,
+  unit: s.unit,
+  checkIn: s.check_in,
+  checkOut: s.check_out,
+  summary: s.summary,
+  firstSeenAt: s.first_seen_at,
+  removedAt: s.removed_at,
+});
+
+// `base`: dirección pública del sitio (siteUrl), para el enlace que Booking importa.
+export const toChannelCalendar = (c: Tables<"channel_calendars">, base: string): ChannelCalendar => ({
+  id: c.id,
+  channel: "booking",
+  label: c.label,
+  cabinTypeId: c.cabin_type_id,
+  unit: c.unit,
+  importUrl: c.import_url,
+  exportUrl: `${base}/api/ical/${c.export_token}`,
+  lastSyncedAt: c.last_synced_at,
+  lastFetchedAt: c.last_fetched_at,
+  lastStatus: (c.last_status as ChannelCalendar["lastStatus"]) ?? null,
+  lastError: c.last_error,
+  lastEventCount: c.last_event_count,
+});
+
+// Calendarios de Booking y sus fechas desde hace un año (las canceladas también, para el historial). Para el panel.
+export async function loadChannels(sb: Db, base: string): Promise<{ calendars: ChannelCalendar[]; stays: ChannelStay[] }> {
+  const [c, s] = await Promise.all([
+    sb.from("channel_calendars").select("*").order("cabin_type_id").order("unit"),
+    sb.from("channel_stays").select("*").gte("check_out", addDays(todayISO(), -400)).order("check_in"),
+  ]);
+  const error = c.error ?? s.error;
+  if (error) {
+    if (isMissingTable(error)) return { calendars: [], stays: [] };
+    throw error;
+  }
+  return { calendars: c.data!.map((x) => toChannelCalendar(x, base)), stays: s.data!.map(toChannelStay) };
+}
+
+// Fechas de Booking vigentes (sin removed_at) que tocan alguna noche entre firstNight y lastNight.
+export async function loadChannelStays(sb: Db, firstNight: string, lastNight: string, cabinTypeId?: string): Promise<ChannelStay[]> {
+  let q = sb.from("channel_stays").select("*").is("removed_at", null).lte("check_in", lastNight).gt("check_out", firstNight);
+  if (cabinTypeId) q = q.eq("cabin_type_id", cabinTypeId);
+  const { data, error } = await q;
+  if (error) {
+    if (isMissingTable(error)) return [];
+    throw error;
+  }
+  return data.map(toChannelStay);
 }
 
 // Plazos de pago (retenciones sin abono, intentos sin completar y saldos sin pagar tras el check-in).

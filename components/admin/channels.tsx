@@ -1,0 +1,373 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { AlertIcon, CalendarIcon, CheckIcon, ClockIcon, ExternalLinkIcon, PencilIcon, RefreshIcon } from "@/components/icons";
+import { api, type Channels } from "@/lib/api";
+import { isMockApi } from "@/lib/config";
+import { addDays, fmtDate, nightsBetween, plural, timeAgo } from "@/lib/format";
+import type { ChannelCalendar, ChannelSyncResult } from "@/lib/types";
+import { useAdmin } from "./context";
+import { MODULES, paths } from "./routes";
+import { adminInput } from "./shared";
+import { Badge, Button, Callout, Card, CardHeader, EmptyState, Field, Modal, PageHeader, StatCard, type Tone } from "./ui";
+
+// Booking.com: cada unidad de la app se enlaza con un tipo de alojamiento de Booking por calendarios iCal.
+//   · Enlace de exportación de Booking → la app lo lee cada 5 minutos y esas fechas quedan bloqueadas en la web.
+//   · Enlace para Booking (de la app) → se importa en el extranet y cierra allá lo vendido en la web.
+// Solo viajan fechas: ni nombres, ni precios. Booking lee el enlace de la app a su ritmo (de 1 a 3 horas).
+
+type Unit = { key: string; cabinTypeId: string; unit: number; name: string; cal: ChannelCalendar | null };
+type Draft = { cabinTypeId: string; unit: number; name: string; label: string; importUrl: string };
+
+const ERRORS: Record<string, string> = {
+  CHANNELS_NOT_READY: "Falta aplicar en la base de datos la actualización para Booking.com.",
+  INVALID_UNIT: "Esa cabaña ya no existe. Recarga la página.",
+};
+
+// Booking descarga el enlace de la web cada pocas horas. Si nunca lo hizo, falta pegarlo en el extranet (Importar
+// calendario); si lleva más de 12 horas sin hacerlo, Booking dejó de ver lo que se vende en la web.
+const STALE_FETCH_MS = 12 * 3600_000;
+
+function stateOf(c: ChannelCalendar | null, now: number): { label: string; tone: Tone } {
+  if (!c?.importUrl) return { label: "Sin enlazar", tone: "neutral" };
+  if (c.lastStatus === "error") return { label: "Error al leer", tone: "danger" };
+  if (!c.lastSyncedAt) return { label: "Pendiente", tone: "warning" };
+  if (!c.lastFetchedAt) return { label: "Falta importar en Booking", tone: "warning" };
+  if (now - Date.parse(c.lastFetchedAt) > STALE_FETCH_MS) return { label: "Booking no lee la web", tone: "danger" };
+  return { label: "Sincronizada", tone: "success" };
+}
+
+// Resumen de una lectura para el aviso: «2 fechas nuevas · 1 cancelada».
+function summary(results: ChannelSyncResult[]) {
+  const failed = results.filter((r) => !r.ok);
+  if (failed.length) return { ok: false, text: failed[0].error ?? "No se pudo leer el calendario." };
+  const added = results.reduce((s, r) => s + r.added, 0);
+  const removed = results.reduce((s, r) => s + r.removed, 0);
+  const moved = results.flatMap((r) => r.moved);
+  const conflicts = results.flatMap((r) => r.conflicts);
+  const parts = [added && plural(added, "fecha nueva", "fechas nuevas"), removed && plural(removed, "cancelada", "canceladas"), moved.length && `${plural(moved.length, "reserva reacomodada", "reservas reacomodadas")}`];
+  if (conflicts.length) return { ok: false, text: `Posible sobreventa: ${conflicts.join(", ")}. Revisa Notificaciones.` };
+  const changes = parts.filter(Boolean).join(" · ");
+  return { ok: true, text: results.length ? `Booking.com leído${changes ? `: ${changes}` : ", sin cambios"}` : "Ya estaba al día" };
+}
+
+export function ChannelsView() {
+  const { data, setData, toast, onAuthError, today, now, cabinLabel } = useAdmin();
+  const [editing, setEditing] = useState<Draft | null>(null);
+  const [syncing, setSyncing] = useState(false);
+
+  const units: Unit[] = data.cabinTypes
+    .filter((c) => c.units > 0)
+    .flatMap((c) =>
+      Array.from({ length: c.units }, (_, i) => ({
+        key: `${c.id}:${i + 1}`,
+        cabinTypeId: c.id,
+        unit: i + 1,
+        name: cabinLabel(c.id, i + 1),
+        cal: data.channelCalendars.find((x) => x.cabinTypeId === c.id && x.unit === i + 1) ?? null,
+      })),
+    );
+  const linked = units.filter((u) => u.cal?.importUrl);
+  const failing = linked.filter((u) => u.cal!.lastStatus === "error");
+  const lastRead = linked.map((u) => u.cal!.lastSyncedAt).filter((x): x is string => !!x).sort().at(-1) ?? null;
+  const next30 = addDays(today, 30);
+  const upcoming = data.channelStays.filter((s) => !s.removedAt && s.checkOut > today).sort((a, b) => (a.checkIn < b.checkIn ? -1 : 1));
+  const cancelled = data.channelStays.filter((s) => s.removedAt && s.checkOut > today).sort((a, b) => (a.checkIn < b.checkIn ? -1 : 1));
+  let nights30 = 0;
+  for (const s of upcoming) {
+    const a = s.checkIn > today ? s.checkIn : today;
+    const z = s.checkOut < next30 ? s.checkOut : next30;
+    if (z > a) nights30 += nightsBetween(a, z);
+  }
+
+  const apply = (c: Channels) => setData((d) => ({ ...d, channelCalendars: c.calendars, channelStays: c.stays }));
+  const errorOf = (r: { status: number; data: unknown }) => ERRORS[(r.data as { error?: string } | null)?.error ?? ""] ?? "No se pudo completar. Inténtalo de nuevo.";
+
+  async function syncNow() {
+    setSyncing(true);
+    try {
+      const r = await api.admin.channels.sync();
+      if (r.status === 401 || r.status === 403) return onAuthError();
+      if (r.status !== 200 || !r.data || !("calendars" in r.data)) return toast(errorOf(r), "error");
+      apply(r.data);
+      const s = summary(r.data.results ?? []);
+      toast(s.text, s.ok ? "ok" : "error");
+    } catch {
+      toast("Error de conexión. Inténtalo de nuevo.", "error");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  const copy = (url: string) =>
+    navigator.clipboard?.writeText(url).then(
+      () => toast("Enlace copiado. Pégalo en Booking.com → Importar calendario."),
+      () => toast("No se pudo copiar. Selecciona el enlace y cópialo a mano.", "error"),
+    );
+
+  return (
+    <>
+      <PageHeader
+        title={MODULES.booking.label}
+        description="Lo que se vende en Booking.com bloquea esas fechas en la web, y lo que se vende en la web las cierra en Booking.com. Solo se comparten fechas: ni huéspedes ni precios."
+        actions={
+          linked.length > 0 && (
+            <Button variant="primary" icon={<RefreshIcon size={14} />} loading={syncing} onClick={syncNow}>
+              Sincronizar ahora
+            </Button>
+          )
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard label="Cabañas enlazadas" value={`${linked.length} de ${units.length}`} hint={linked.length ? "con su calendario de Booking.com" : "Ninguna todavía"} icon={<RefreshIcon size={15} />} />
+        <StatCard label="Noches de Booking.com" value={nights30} hint="ocupadas en los próximos 30 días" icon={<CalendarIcon size={15} />} />
+        <StatCard
+          label="Última lectura"
+          value={lastRead ? timeAgo(lastRead, now) : "—"}
+          hint={failing.length ? `${plural(failing.length, "calendario con error", "calendarios con error")}` : "se lee cada 5 minutos"}
+          icon={<ClockIcon size={15} />}
+          tone={failing.length ? "danger" : undefined}
+        />
+      </div>
+
+      {isMockApi && <Callout>Modo simulado: los enlaces son de ejemplo y «Sincronizar ahora» no lee Booking.com de verdad.</Callout>}
+      {failing.length > 0 && (
+        <Callout tone="error" role="alert">
+          No se pudo leer {failing.map((u) => u.cal!.label || u.name).join(", ")}: {failing[0].cal!.lastError} Mientras tanto, las fechas de Booking.com quedan como en la última lectura.
+        </Callout>
+      )}
+
+      <Card className="flex flex-col">
+        <CardHeader id="ch-units" icon={<RefreshIcon size={18} />} title="Cabañas y tipos de alojamiento" subtitle="Enlaza cada cabaña con su tipo de alojamiento en Booking.com. Las que no se venden allá quedan sin enlazar." />
+        <ul aria-labelledby="ch-units" className="flex flex-col divide-y divide-line border-t border-line">
+          {units.map((u) => {
+            const st = stateOf(u.cal, now);
+            const c = u.cal;
+            return (
+              <li key={u.key} className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 sm:px-5">
+                <div className="min-w-[220px] flex-1">
+                  <p className="flex flex-wrap items-center gap-2 text-[14px] font-semibold text-ink">
+                    {u.name}
+                    <Badge tone={st.tone} icon={st.tone === "success" ? <CheckIcon size={11} /> : st.tone === "danger" ? <AlertIcon size={11} /> : undefined}>
+                      {st.label}
+                    </Badge>
+                  </p>
+                  <p className="text-[13px] text-ink-muted">
+                    {c?.label ? `En Booking.com: ${c.label}` : c?.importUrl ? "En Booking.com" : "Solo se vende en la web"}
+                    {c?.importUrl && c.lastSyncedAt && ` · leída ${timeAgo(c.lastSyncedAt, now)} · ${plural(c.lastEventCount, "fecha", "fechas")}`}
+                    {c?.importUrl && (c.lastFetchedAt ? ` · Booking vio la web ${timeAgo(c.lastFetchedAt, now)}` : " · Booking aún no ha leído el enlace de la web")}
+                  </p>
+                  {c?.lastStatus === "error" && <p className="mt-1 text-[12.5px] font-semibold text-error">{c.lastError}</p>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {c?.importUrl && (
+                    <Button size="sm" variant="ghost" onClick={() => copy(c.exportUrl)}>
+                      Copiar enlace para Booking
+                    </Button>
+                  )}
+                  <Button size="sm" icon={<PencilIcon size={13} />} onClick={() => setEditing({ cabinTypeId: u.cabinTypeId, unit: u.unit, name: u.name, label: c?.label ?? "", importUrl: c?.importUrl ?? "" })}>
+                    {c?.importUrl ? "Editar" : "Enlazar"}
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <Card className="flex flex-col">
+          <CardHeader id="ch-stays" icon={<CalendarIcon size={18} />} title="Próximas fechas de Booking.com" subtitle="Reservas o cierres hechos en Booking.com (el calendario no los distingue). No se pueden reservar en la web." />
+          {upcoming.length ? (
+            <ul aria-labelledby="ch-stays" className="flex flex-col divide-y divide-line border-t border-line">
+              {upcoming.slice(0, 40).map((s) => (
+                <li key={s.id}>
+                  <Link href={paths.calendario({ fecha: s.checkIn })} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-[13.5px] transition-colors hover:bg-canvas sm:px-5">
+                    <span className="font-semibold text-ink">{cabinLabel(s.cabinTypeId, s.unit)}</span>
+                    <span className="text-ink-muted tabular-nums">
+                      {fmtDate(s.checkIn)} → {fmtDate(s.checkOut)} · {plural(nightsBetween(s.checkIn, s.checkOut), "noche", "noches")}
+                      {s.checkIn <= today && <Badge tone="info" className="ml-2">En curso</Badge>}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="border-t border-line p-4">
+              <EmptyState compact icon={<CalendarIcon size={20} />} title={linked.length ? "Sin fechas ocupadas en Booking.com" : "Todavía no hay cabañas enlazadas"} text={linked.length ? "Cuando alguien reserve allá, las fechas aparecerán aquí." : "Enlaza una cabaña para empezar."} />
+            </div>
+          )}
+          {cancelled.length > 0 && (
+            <p className="border-t border-line px-4 py-2.5 text-[12.5px] text-ink-muted sm:px-5">
+              Canceladas en Booking.com y ya disponibles en la web: {cancelled.map((s) => `${cabinLabel(s.cabinTypeId, s.unit)} ${fmtDate(s.checkIn)}`).join(" · ")}
+            </p>
+          )}
+        </Card>
+
+        <Card className="flex flex-col gap-3 p-4 sm:p-5">
+          <h2 className="text-[15px] font-bold text-ink">Cómo enlazar una cabaña</h2>
+          <ol className="flex list-decimal flex-col gap-2 pl-5 text-[13.5px] leading-snug text-ink">
+            <li>
+              En el extranet de Booking.com entra a <strong>Tarifas y disponibilidad → Sincronizar calendarios</strong> y pulsa <strong>Conectar un calendario</strong> en el tipo de alojamiento.
+            </li>
+            <li>
+              Paso 1, <strong>Importar calendario</strong>: pega el <strong>enlace para Booking</strong> de la cabaña que corresponde (aquí, en <strong>Enlazar</strong>) y ponle de nombre «Web Cóndor del Ruiz».
+            </li>
+            <li>
+              Paso 2, <strong>Exportar calendario</strong>: copia el enlace de Booking.com y pégalo aquí, en esa misma cabaña.
+            </li>
+          </ol>
+          <Callout tone="warning">
+            Booking.com descarga el calendario de la web a su ritmo (cada pocas horas; cada cabaña muestra cuándo lo vio por última vez). Si en ese rato alguien reserva allá una cabaña ya vendida aquí, la app la reacomoda en otra libre del mismo tipo o te avisa de la posible sobreventa.
+          </Callout>
+          <p className="text-[12.5px] text-ink-muted">
+            Booking.com solo permite sincronizar calendarios si cada tipo de alojamiento tiene una unidad y no hay un channel manager conectado.{" "}
+            <a href="https://admin.booking.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-ink underline-offset-2 hover:underline">
+              Abrir el extranet <ExternalLinkIcon size={12} />
+            </a>
+          </p>
+        </Card>
+      </div>
+
+      {editing && (
+        <LinkEditor
+          draft={editing}
+          cal={data.channelCalendars.find((x) => x.cabinTypeId === editing.cabinTypeId && x.unit === editing.unit) ?? null}
+          onClose={() => setEditing(null)}
+          onSaved={(c, msg, ok) => {
+            apply(c);
+            setEditing(null);
+            toast(msg, ok ? "ok" : "error");
+          }}
+          onAuthError={onAuthError}
+          errorOf={errorOf}
+          copy={copy}
+        />
+      )}
+    </>
+  );
+}
+
+function LinkEditor({
+  draft,
+  cal,
+  onClose,
+  onSaved,
+  onAuthError,
+  errorOf,
+  copy,
+}: {
+  draft: Draft;
+  cal: ChannelCalendar | null;
+  onClose: () => void;
+  onSaved: (c: Channels, msg: string, ok: boolean) => void;
+  onAuthError: () => void;
+  errorOf: (r: { status: number; data: unknown }) => string;
+  copy: (url: string) => void;
+}) {
+  const { ask, setData } = useAdmin();
+  const [d, setD] = useState(draft);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const unlinking = !!cal?.importUrl && !d.importUrl.trim();
+
+  async function save() {
+    setBusy(true);
+    setErrors({});
+    try {
+      const r = await api.admin.channels.save({ cabinTypeId: d.cabinTypeId, unit: d.unit, label: d.label, importUrl: d.importUrl });
+      if (r.status === 401 || r.status === 403) return onAuthError();
+      if (r.status === 200 && r.data && "calendars" in r.data) {
+        const res = r.data.results ?? [];
+        if (!d.importUrl.trim()) return onSaved(r.data, `${d.name} quedó sin enlazar`, true);
+        if (!res.length) return onSaved(r.data, "Cambios guardados", true);
+        const s = summary(res);
+        return onSaved(r.data, s.ok ? `${d.name} enlazada · ${plural(res[0].events, "fecha leída", "fechas leídas")}` : `Se guardó el enlace, pero no se pudo leer: ${s.text}`, s.ok);
+      }
+      const fields = (r.data as { fields?: Record<string, string> } | null)?.fields;
+      setErrors(fields ?? { form: errorOf(r) });
+    } catch {
+      setErrors({ form: "Error de conexión. Inténtalo de nuevo." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const rotate = (c: ChannelCalendar) =>
+    ask({
+      title: "Cambiar el enlace para Booking",
+      text: "El enlace actual dejará de funcionar. Tendrás que pegar el nuevo en el extranet (Importar calendario) o Booking.com dejará de ver las reservas de la web.",
+      okLabel: "Cambiar enlace",
+      danger: true,
+      done: "Enlace cambiado. Pégalo de nuevo en Booking.com.",
+      run: async () => {
+        const r = await api.admin.channels.rotate(c.id);
+        if (r.status === 200 && r.data && "calendars" in r.data) {
+          const next = r.data;
+          setData((x) => ({ ...x, channelCalendars: next.calendars, channelStays: next.stays }));
+        }
+        return r;
+      },
+    });
+
+  return (
+    <Modal onClose={onClose} labelledBy="ch-ed-title" initialFocus="[data-autofocus]" className="m-auto w-[calc(100%-32px)] max-w-[620px] rounded-2xl p-0 motion-safe:open:animate-pop-in">
+      <div className="flex flex-col gap-4 p-5 sm:p-6">
+        <div>
+          <h2 id="ch-ed-title" className="text-[17px] font-bold text-ink">
+            {d.name} en Booking.com
+          </h2>
+          <p className="mt-1 text-[13.5px] text-ink-muted">Pega el enlace de exportación del tipo de alojamiento que corresponde a esta cabaña.</p>
+        </div>
+        <Field label="Nombre en Booking.com (opcional)" error={errors.label} hint="Como aparece en el extranet, para reconocerla. Ej. «Cabaña 005».">
+          {(p) => <input {...p} type="text" maxLength={80} value={d.label} onChange={(e) => setD({ ...d, label: e.target.value })} className={adminInput} />}
+        </Field>
+        <Field label="Enlace de exportación de Booking.com" error={errors.importUrl} hint="Extranet → Tarifas y disponibilidad → Sincronizar calendarios → Exportar calendario. Déjalo vacío para desenlazar.">
+          {(p) => (
+            <textarea
+              {...p}
+              data-autofocus
+              rows={3}
+              maxLength={1000}
+              spellCheck={false}
+              value={d.importUrl}
+              onChange={(e) => setD({ ...d, importUrl: e.target.value })}
+              placeholder="https://admin.booking.com/hotel/hoteladmin/ical.html?t=…"
+              className={`${adminInput} resize-none font-mono text-[13px] break-all`}
+            />
+          )}
+        </Field>
+        {unlinking && <Callout tone="warning">Al desenlazarla, sus fechas de Booking.com dejan de bloquear la web.</Callout>}
+        {cal && (
+          <div className="flex flex-col gap-2 rounded-xl bg-canvas p-3.5">
+            <p className="text-[13px] font-semibold text-ink">Enlace para Booking.com (Importar calendario)</p>
+            <code className="block rounded-lg bg-panel px-3 py-2 font-mono text-[12px] break-all text-ink-muted shadow-panel">{cal.exportUrl}</code>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => copy(cal.exportUrl)}>
+                Copiar enlace
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => rotate(cal)}>
+                Cambiar enlace
+              </Button>
+            </div>
+          </div>
+        )}
+        {errors.form && (
+          <Callout tone="error" role="alert">
+            {errors.form}
+          </Callout>
+        )}
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button variant="primary" loading={busy} onClick={save}>
+            {unlinking ? "Desenlazar" : d.importUrl.trim() && d.importUrl.trim() !== (cal?.importUrl ?? "") ? "Guardar y leer" : "Guardar"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}

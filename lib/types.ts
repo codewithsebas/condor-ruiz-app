@@ -183,6 +183,33 @@ export type Block = {
 
 export type BlockInput = Omit<Block, "id" | "unit"> & { unit: number | "all" };
 
+// Calendario de Booking.com enlazado a una unidad: importUrl es el enlace de exportación de Booking (la app lo lee) y
+// exportUrl el que Booking importa (reservas de la web y bloqueos del panel). Sincronización por iCal, sin datos del huésped.
+export type ChannelCalendar = {
+  id: string;
+  channel: "booking";
+  label: string;
+  cabinTypeId: CabinTypeId;
+  unit: number;
+  importUrl: string | null;
+  exportUrl: string;
+  lastSyncedAt: string | null;
+  // Última vez que Booking descargó exportUrl: desde ese momento ve cerradas las reservas de la web.
+  lastFetchedAt: string | null;
+  lastStatus: "ok" | "error" | null;
+  lastError: string;
+  lastEventCount: number;
+};
+
+// Noches ocupadas en Booking (una reserva o un cierre: el iCal no los distingue). checkOut exclusivo, como en las reservas.
+// removedAt: dejó de venir en el calendario de Booking (se canceló).
+export type ChannelStay = { id: string; calendarId: string; cabinTypeId: CabinTypeId; unit: number; checkIn: string; checkOut: string; summary: string; firstSeenAt: string; removedAt: string | null };
+
+// Cuerpo de PUT /admin/channels: enlaza (o desenlaza, con importUrl vacío) una unidad con un tipo de Booking.
+export type ChannelCalendarInput = { cabinTypeId: string; unit: number; label: string; importUrl: string };
+// Resultado de una sincronización (por calendario).
+export type ChannelSyncResult = { calendarId: string; ok: boolean; events: number; added: number; removed: number; moved: string[]; conflicts: string[]; error?: string };
+
 export type Rates = Partial<Record<CabinTypeId, { precioPareja: number; personaAdicional: number; maxPersonas: number }>>;
 
 // Valoración interna de un cliente: solo la ve el equipo, nunca se expone en rutas públicas.
@@ -216,7 +243,10 @@ export type NotificationKind =
   | "payment_refund"
   | "balance_paid"
   | "balance_overdue"
-  | "email_failed";
+  | "email_failed"
+  | "channel_conflict"
+  | "channel_moved"
+  | "channel_sync_failed";
 
 export type AdminNotification = { id: number; kind: NotificationKind; title: string; body: string; reservationCode: string | null; readAt: string | null; createdAt: string };
 
@@ -232,6 +262,8 @@ export type AdminData = {
   emails: EmailRecord[];
   clients: Record<string, ClientProfile>;
   notifications: AdminNotification[];
+  channelCalendars: ChannelCalendar[];
+  channelStays: ChannelStay[]; // vigentes y recientes (las canceladas también, para el historial)
 };
 
 // Cuerpo de PUT /admin/site.

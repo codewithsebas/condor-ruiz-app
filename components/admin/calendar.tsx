@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { BanIcon, ChevronLeftIcon, ChevronRightIcon, HomeIcon, LoginIcon, LogoutIcon, MoonIcon } from "@/components/icons";
+import { BanIcon, ChevronLeftIcon, ChevronRightIcon, HomeIcon, LoginIcon, LogoutIcon, MoonIcon, RefreshIcon } from "@/components/icons";
 import { StatusPill } from "@/components/status-pill";
-import { ACTIVE_STATUSES, nightlyRate } from "@/lib/booking";
+import { ACTIVE_STATUSES, channelBlocks, isChannelBlock, nightlyRate } from "@/lib/booking";
 import { MONTHS, MS, WD, WD_FULL, WD_MIN, addDays, cop, countdown, fmtDate, fmtFullDate, isISO, monthStart, nightsBetween, parseISO, plural, statusOf } from "@/lib/format";
 import { pendingOf } from "@/lib/admin-metrics";
 import { fmtTime } from "@/lib/site";
@@ -37,6 +37,16 @@ const lastOfMonth = (m: string) => {
 };
 const mondayOf = (d: string) => addDays(d, -((parseISO(d).getUTCDay() + 6) % 7));
 const BLOCK_BG = "repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-status-block) 32%, white) 0 5px, color-mix(in srgb, var(--color-status-block) 14%, white) 5px 10px)";
+// Noches ocupadas en Booking.com: azul de Booking. No se editan aquí (se gestionan en el extranet).
+const BOOKING_STYLE: CSSProperties = { background: "color-mix(in srgb, var(--color-status-booking) 22%, white)", borderLeft: "3px solid var(--color-status-booking)" };
+const blockStyle = (b: Block): CSSProperties => (isChannelBlock(b) ? BOOKING_STYLE : { background: BLOCK_BG });
+const blockHref = (b: Block) => (isChannelBlock(b) ? paths.booking : paths.bloqueos({ editar: b.id }));
+
+// Bloqueos del panel y noches de Booking.com juntos: el calendario los dibuja igual (Booking con su color y sin editar).
+function useCalBlocks() {
+  const { data } = useAdmin();
+  return useMemo(() => [...data.blocks, ...channelBlocks(data.channelStays)], [data.blocks, data.channelStays]);
+}
 
 // Estilo de cada estado: relleno suave del color del estado + borde de acento. Pendiente = borde punteado (aún no asegurada).
 function barStyle(r: Pick<Reservation, "status">): CSSProperties {
@@ -130,15 +140,18 @@ function ReservationTip({ r, cabin }: { r: Reservation; cabin: string }) {
 }
 
 function BlockTip({ b, cabin }: { b: Block; cabin: string }) {
+  const booking = isChannelBlock(b);
   return (
     <div className="flex flex-col gap-1">
-      <strong className="text-[13px]">Bloqueado · {b.reason}</strong>
+      <strong className="text-[13px]">{booking ? "Booking.com · reserva o cierre" : `Bloqueado · ${b.reason}`}</strong>
       <span className="text-white/85">{cabin}</span>
       <span>
-        {fmtDate(b.from)} → {fmtDate(b.to)} · {plural(nightsBetween(b.from, b.to) + 1, "día", "días")}
+        {booking
+          ? `${fmtDate(b.from)} → ${fmtDate(addDays(b.to, 1))} · ${plural(nightsBetween(b.from, b.to) + 1, "noche", "noches")}`
+          : `${fmtDate(b.from)} → ${fmtDate(b.to)} · ${plural(nightsBetween(b.from, b.to) + 1, "día", "días")}`}
       </span>
       {b.notes && <span className="text-white/85">{b.notes}</span>}
-      <span className="mt-0.5 border-t border-white/15 pt-1.5 text-white/60">Clic para editar el bloqueo</span>
+      <span className="mt-0.5 border-t border-white/15 pt-1.5 text-white/60">{booking ? "Se gestiona en el extranet de Booking.com" : "Clic para editar el bloqueo"}</span>
     </div>
   );
 }
@@ -147,6 +160,7 @@ function BlockTip({ b, cabin }: { b: Block; cabin: string }) {
 
 export function CalendarView() {
   const { data, today } = useAdmin();
+  const calBlocks = useCalBlocks();
   const [wrap, width] = useWidth();
   const pref = usePref(PREF.calendarView, "auto");
   const [viewParam, setViewParam] = useParam<CalView | "">("vista", "");
@@ -187,8 +201,9 @@ export function CalendarView() {
   let blockedNights = 0;
   for (const d of days)
     for (const u of rows) {
-      if (data.reservations.some((r) => occupies(r, u) && ACTIVE_STATUSES.concat(["completed"]).includes(r.status) && r.checkIn <= d && d < r.checkOut)) busyNights++;
-      else if (data.blocks.some((b) => blocks(b, u) && b.from <= d && d <= b.to)) blockedNights++;
+      const b = calBlocks.find((x) => blocks(x, u) && x.from <= d && d <= x.to);
+      if (data.reservations.some((r) => occupies(r, u) && ACTIVE_STATUSES.concat(["completed"]).includes(r.status) && r.checkIn <= d && d < r.checkOut) || (b && isChannelBlock(b))) busyNights++;
+      else if (b) blockedNights++;
     }
   const capacity = rows.length * days.length - blockedNights;
   const occupancy = capacity ? Math.round((busyNights / capacity) * 100) : 0;
@@ -292,6 +307,7 @@ const LEGEND: { label: string; style: CSSProperties }[] = [
   { label: "En estadía", style: barStyle({ status: "checked_in" }) },
   { label: "Finalizada", style: barStyle({ status: "completed" }) },
   { label: "Bloqueo", style: { background: BLOCK_BG } },
+  { label: "Booking.com", style: BOOKING_STYLE },
 ];
 
 function Legend() {
@@ -313,6 +329,7 @@ type TimelineProps = { days: string[]; rows: Unit[]; view: CalView; today: strin
 
 function Timeline({ days, rows, view, today, width, onDay }: TimelineProps) {
   const { data, cabinLabel } = useAdmin();
+  const calBlocks = useCalBlocks();
   const tip = useTip();
   const scroller = useRef<HTMLDivElement>(null);
   const cellAnchor = useRef<HTMLElement | null>(null);
@@ -334,7 +351,7 @@ function Timeline({ days, rows, view, today, width, onDay }: TimelineProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from]);
 
-  const free = (u: Unit, d: string) => !data.reservations.some((r) => occupies(r, u) && r.checkIn <= d && d < r.checkOut) && !data.blocks.some((b) => blocks(b, u) && b.from <= d && d <= b.to);
+  const free = (u: Unit, d: string) => !data.reservations.some((r) => occupies(r, u) && r.checkIn <= d && d < r.checkOut) && !calBlocks.some((b) => blocks(b, u) && b.from <= d && d <= b.to);
   const visible = data.reservations.filter((r) => r.checkIn <= to && r.checkOut > from && rows.some((u) => occupies(r, u)));
 
   const gridStyle: CSSProperties = {
@@ -438,8 +455,8 @@ function Timeline({ days, rows, view, today, width, onDay }: TimelineProps) {
                   );
                 })}
 
-                {/* Bloqueos */}
-                {data.blocks
+                {/* Bloqueos y noches de Booking.com */}
+                {calBlocks
                   .filter((b) => blocks(b, u) && b.from <= to && b.to >= from)
                   .map((b) => {
                     const start = b.from < from ? 2 : 2 + idx(b.from) * 2;
@@ -449,15 +466,15 @@ function Timeline({ days, rows, view, today, width, onDay }: TimelineProps) {
                     return (
                       <Link
                         key={b.id}
-                        href={paths.bloqueos({ editar: b.id })}
-                        aria-label={`Bloqueo ${b.reason}, ${fmtDate(b.from)} a ${fmtDate(b.to)}`}
+                        href={blockHref(b)}
+                        aria-label={`${isChannelBlock(b) ? "Booking.com" : `Bloqueo ${b.reason}`}, ${fmtDate(b.from)} a ${fmtDate(b.to)}`}
                         {...tip(() => <BlockTip b={b} cabin={cabinLabel(b.cabinTypeId, b.unit)} />)}
                         className={`@container relative z-1 my-auto flex h-[calc(100%-14px)] max-h-[84px] min-w-0 items-center gap-1.5 overflow-hidden px-2 text-left text-[12px] font-semibold text-ink-muted transition-[filter,box-shadow] duration-150 hover:shadow-panel hover:brightness-95 ${
                           cut.l ? "rounded-l-none" : "ml-0.5 rounded-l-lg"
                         } ${cut.r ? "rounded-r-none" : "mr-0.5 rounded-r-lg"}`}
-                        style={{ gridRow, gridColumn: `${start} / ${end}`, background: BLOCK_BG }}
+                        style={{ gridRow, gridColumn: `${start} / ${end}`, ...blockStyle(b) }}
                       >
-                        <BanIcon size={13} className="hidden flex-none @min-[48px]:block" />
+                        {isChannelBlock(b) ? <RefreshIcon size={13} className="hidden flex-none @min-[48px]:block" /> : <BanIcon size={13} className="hidden flex-none @min-[48px]:block" />}
                         <span className="truncate">{b.reason}</span>
                       </Link>
                     );
@@ -502,7 +519,7 @@ function Timeline({ days, rows, view, today, width, onDay }: TimelineProps) {
             );
           })}
         </div>
-        {!visible.length && !data.blocks.some((b) => b.from <= to && b.to >= from) && (
+        {!visible.length && !calBlocks.some((b) => b.from <= to && b.to >= from) && (
           <p className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 translate-y-2 rounded-full bg-panel/95 px-4 py-2 text-[13px] font-medium whitespace-nowrap text-ink-muted shadow-panel">Sin reservas en este periodo</p>
         )}
       </div>
@@ -545,6 +562,7 @@ function Timeline({ days, rows, view, today, width, onDay }: TimelineProps) {
 // Cada día muestra una franja por unidad (reserva, bloqueo o libre) y cuántas quedan libres. Tocar un día abre su agenda.
 function MonthGrid({ month, rows, today, onPick }: { month: string; rows: Unit[]; today: string; onPick: (d: string) => void }) {
   const { data } = useAdmin();
+  const calBlocks = useCalBlocks();
   const tip = useTip();
   const start = mondayOf(month);
   const end = addDays(mondayOf(lastOfMonth(month)), 6);
@@ -555,7 +573,7 @@ function MonthGrid({ month, rows, today, onPick }: { month: string; rows: Unit[]
   const stateOf = (u: Unit, d: string) => {
     const r = data.reservations.find((x) => occupies(x, u) && x.checkIn <= d && d < x.checkOut);
     if (r) return { kind: "res" as const, r };
-    const b = data.blocks.find((x) => blocks(x, u) && x.from <= d && d <= x.to);
+    const b = calBlocks.find((x) => blocks(x, u) && x.from <= d && d <= x.to);
     return b ? { kind: "block" as const, b } : { kind: "free" as const };
   };
 
@@ -586,7 +604,7 @@ function MonthGrid({ month, rows, today, onPick }: { month: string; rows: Unit[]
                   <strong>{fmtDate(d, true)}</strong>
                   {states.map(({ u, s }) => (
                     <span key={u.key}>
-                      {u.label}: {s.kind === "res" ? `${s.r.guest.fullName} (${statusOf(s.r.status).label})` : s.kind === "block" ? `Bloqueada · ${s.b.reason}` : "Libre"}
+                      {u.label}: {s.kind === "res" ? `${s.r.guest.fullName} (${statusOf(s.r.status).label})` : s.kind === "block" ? (isChannelBlock(s.b) ? "Booking.com" : `Bloqueada · ${s.b.reason}`) : "Libre"}
                     </span>
                   ))}
                 </span>
@@ -617,7 +635,7 @@ function MonthGrid({ month, rows, today, onPick }: { month: string; rows: Unit[]
                         s.kind === "res"
                           ? { background: `color-mix(in srgb, ${statusOf(s.r.status).bg} 100%, black ${s.r.status === "completed" ? 30 : 12}%)` }
                           : s.kind === "block"
-                            ? { background: "repeating-linear-gradient(135deg, var(--color-status-block) 0 3px, transparent 3px 5px)" }
+                            ? { background: isChannelBlock(s.b) ? "var(--color-status-booking)" : "repeating-linear-gradient(135deg, var(--color-status-block) 0 3px, transparent 3px 5px)" }
                             : { background: "color-mix(in srgb, var(--color-ink) 7%, transparent)" }
                       }
                     />
@@ -640,14 +658,15 @@ function MonthGrid({ month, rows, today, onPick }: { month: string; rows: Unit[]
 
 function DayAgenda({ day, rows }: { day: string; rows: Unit[] }) {
   const { data, cabinLabel } = useAdmin();
+  const calBlocks = useCalBlocks();
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 content-start gap-3 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
       {rows.map((u) => {
         const stay = data.reservations.find((r) => occupies(r, u) && r.checkIn <= day && day < r.checkOut);
         const leaving = data.reservations.find((r) => occupies(r, u) && r.checkOut === day);
-        const block = data.blocks.find((b) => blocks(b, u) && b.from <= day && day <= b.to);
+        const block = calBlocks.find((b) => blocks(b, u) && b.from <= day && day <= b.to);
         const arriving = stay && stay.checkIn === day;
-        const state = block ? { label: "Bloqueada", tone: "bg-ink/8 text-ink-muted" } : arriving ? { label: "Llega hoy", tone: "bg-success-soft text-success" } : stay ? { label: "Ocupada", tone: "bg-info-soft text-info" } : { label: "Libre", tone: "bg-success-soft text-success" };
+        const state = block ? (isChannelBlock(block) ? { label: "Booking.com", tone: "bg-info-soft text-info" } : { label: "Bloqueada", tone: "bg-ink/8 text-ink-muted" }) : arriving ? { label: "Llega hoy", tone: "bg-success-soft text-success" } : stay ? { label: "Ocupada", tone: "bg-info-soft text-info" } : { label: "Libre", tone: "bg-success-soft text-success" };
         const night = stay ? nightsBetween(stay.checkIn, day) + 1 : 0;
         const total = stay ? nightsBetween(stay.checkIn, stay.checkOut) : 0;
         return (
@@ -685,10 +704,10 @@ function DayAgenda({ day, rows }: { day: string; rows: Unit[] }) {
                 {pendingOf(stay).total > 0 && <span className="text-[12.5px] font-semibold text-warning">Pendiente por cobrar {cop(pendingOf(stay).total)}</span>}
               </Link>
             ) : block ? (
-              <Link href={paths.bloqueos({ editar: block.id })} className="flex flex-col gap-1 rounded-xl p-3 text-left" style={{ background: BLOCK_BG }}>
-                <strong className="text-[14px] text-ink">{block.reason}</strong>
+              <Link href={blockHref(block)} className="flex flex-col gap-1 rounded-xl p-3 text-left" style={blockStyle(block)}>
+                <strong className="text-[14px] text-ink">{isChannelBlock(block) ? "Reserva o cierre en Booking.com" : block.reason}</strong>
                 <span className="text-[12.5px] text-ink-muted">
-                  {fmtDate(block.from)} → {fmtDate(block.to)}
+                  {isChannelBlock(block) ? `${fmtDate(block.from)} → ${fmtDate(addDays(block.to, 1))} (salida)` : `${fmtDate(block.from)} → ${fmtDate(block.to)}`}
                   {block.notes ? ` · ${block.notes}` : ""}
                 </span>
               </Link>

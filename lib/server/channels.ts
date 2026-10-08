@@ -38,7 +38,7 @@ export function validImportUrl(url: string) {
 
 export const newExportToken = () => randomBytes(24).toString("hex");
 
-const unitName = (types: CabinType[], typeId: string, unit: number) => `${(types.find((t) => t.id === typeId)?.nombre ?? typeId).replace(/^Cabaña\s+/i, "")} ${unit}`;
+export const unitName = (types: CabinType[], typeId: string, unit: number) => `${(types.find((t) => t.id === typeId)?.nombre ?? typeId).replace(/^Cabaña\s+/i, "")} ${unit}`;
 
 async function fetchIcs(url: string): Promise<IcsEvent[]> {
   let res: Response;
@@ -63,7 +63,7 @@ async function fetchIcs(url: string): Promise<IcsEvent[]> {
   }
 }
 
-async function notify(sb: Db, kind: NotificationKind, title: string, body: string, code: string | null) {
+export async function notify(sb: Db, kind: NotificationKind, title: string, body: string, code: string | null) {
   await sb.from("admin_notifications").insert({ kind, title: title.slice(0, 200), body: body.slice(0, 500), reservation_code: code }).throwOnError();
 }
 
@@ -80,9 +80,9 @@ async function claim(sb: Db, cal: CalendarRow, minAgeMs: number) {
   return data.length > 0;
 }
 
-// Unidades de un tipo enlazadas con Booking (las reservas de la web prueban primero las demás).
+// Unidades de un tipo enlazadas con Booking, por iCal o por Beds24 (las reservas de la web prueban primero las demás).
 export async function linkedUnits(sb: Db, cabinTypeId: string) {
-  const { data, error } = await sb.from("channel_calendars").select("unit").eq("cabin_type_id", cabinTypeId).not("import_url", "is", null);
+  const { data, error } = await sb.from("channel_calendars").select("unit").eq("cabin_type_id", cabinTypeId).or("import_url.not.is.null,beds24_room_id.not.is.null");
   if (error) {
     if (isMissingTable(error)) return [];
     throw error;
@@ -138,6 +138,54 @@ async function resolveConflicts(sb: Db, cal: CalendarRow, changed: ChannelSpan[]
   }
 }
 
+// Una fecha ocupada en Booking tal como llega del canal (iCal o Beds24). checkOut exclusivo.
+export type StayEvent = { uid: string; checkIn: string; checkOut: string; summary: string };
+
+// Guarda las fechas de Booking de una unidad y reacomoda (o avisa) las reservas de la web que quedan encima.
+// full: `events` es todo lo vigente de la unidad que viene de esa fuente (un iCal, o las «beds24:» de una lectura completa
+// de Beds24), así que lo que ya no viene y aún no termina se canceló. Si no (un aviso de Beds24), solo se agregan o
+// cambian `events` y se quitan las de `gone`. Las fechas de otra fuente no se tocan: al pasar una unidad del iCal a
+// Beds24, las que ya trajo el iCal siguen bloqueando la web hasta que pasen.
+export async function applyStays(
+  sb: Db,
+  cal: CalendarRow,
+  events: StayEvent[],
+  o: { full: boolean; source?: string; gone?: string[]; units: Units; types: CabinType[]; result: ChannelSyncResult },
+) {
+  const today = todayISO();
+  let q = sb.from("channel_stays").select("*").eq("calendar_id", cal.id);
+  if (!o.full) q = q.in("external_uid", [...events.map((e) => e.uid), ...(o.gone ?? [])]);
+  else if (o.source) q = q.like("external_uid", `${o.source}%`);
+  const { data: existing } = await q.throwOnError();
+  const byUid = new Map(existing.map((s) => [s.external_uid, s]));
+
+  // Solo se escribe lo nuevo o cambiado: una lectura sin cambios no toca la base de datos (ni recarga el panel).
+  // `moved`: fechas nuevas o que cambiaron de noches o de unidad (las únicas que pueden crear un choque con la web).
+  const moved = (e: StayEvent) => {
+    const prev = byUid.get(e.uid);
+    return !prev || !!prev.removed_at || prev.check_in !== e.checkIn || prev.check_out !== e.checkOut || prev.unit !== cal.unit || prev.cabin_type_id !== cal.cabin_type_id;
+  };
+  const changed = events.filter((e) => moved(e) || byUid.get(e.uid)!.summary !== e.summary);
+  if (changed.length)
+    await sb
+      .from("channel_stays")
+      .upsert(
+        changed.map((e) => ({ calendar_id: cal.id, cabin_type_id: cal.cabin_type_id, unit: cal.unit, external_uid: e.uid, check_in: e.checkIn, check_out: e.checkOut, summary: e.summary, removed_at: null })),
+        { onConflict: "calendar_id,external_uid" },
+      )
+      .throwOnError();
+
+  // Lo que se canceló en Booking y aún no termina deja de ocupar. Lo pasado se conserva (historial de ocupación).
+  const uids = new Set(events.map((e) => e.uid));
+  const gone = existing.filter((s) => !s.removed_at && s.check_out > today && (o.full ? !uids.has(s.external_uid) : !!o.gone?.includes(s.external_uid))).map((s) => s.id);
+  if (gone.length) await sb.from("channel_stays").update({ removed_at: new Date().toISOString() }).in("id", gone).throwOnError();
+
+  o.result.added += changed.length;
+  o.result.removed += gone.length;
+  const spans = changed.filter(moved).map((e) => ({ cabinTypeId: cal.cabin_type_id, unit: cal.unit, checkIn: e.checkIn, checkOut: e.checkOut }));
+  if (spans.length) await resolveConflicts(sb, cal, spans, o.units, o.types, today, o.result);
+}
+
 // Lee un calendario de Booking y actualiza sus fechas. Si falla no borra nada (la disponibilidad queda como estaba).
 async function syncCalendar(sb: Db, cal: CalendarRow, units: Units, types: CabinType[], notifyErrors: boolean): Promise<ChannelSyncResult> {
   const result: ChannelSyncResult = { calendarId: cal.id, ok: true, events: 0, added: 0, removed: 0, moved: [], conflicts: [] };
@@ -146,36 +194,9 @@ async function syncCalendar(sb: Db, cal: CalendarRow, units: Units, types: Cabin
     const events = (await fetchIcs(cal.import_url!)).filter(
       (e) => e.checkOut > addDays(today, -HISTORY_DAYS) && e.checkIn < addDays(today, HORIZON_DAYS) && nightsBetween(e.checkIn, e.checkOut) <= MAX_NIGHTS,
     );
-    const { data: existing } = await sb.from("channel_stays").select("*").eq("calendar_id", cal.id).throwOnError();
-    const byUid = new Map(existing.map((s) => [s.external_uid, s]));
-    const now = new Date().toISOString();
-
-    // Solo se escribe lo nuevo o cambiado: una lectura sin cambios no toca la base de datos (ni recarga el panel).
-    // `moved`: fechas nuevas o que cambiaron de noches o de unidad (las únicas que pueden crear un choque con la web).
-    const moved = (e: IcsEvent) => {
-      const prev = byUid.get(e.uid);
-      return !prev || !!prev.removed_at || prev.check_in !== e.checkIn || prev.check_out !== e.checkOut || prev.unit !== cal.unit || prev.cabin_type_id !== cal.cabin_type_id;
-    };
-    const changed = events.filter((e) => moved(e) || byUid.get(e.uid)!.summary !== e.summary);
-    if (changed.length)
-      await sb
-        .from("channel_stays")
-        .upsert(
-          changed.map((e) => ({ calendar_id: cal.id, cabin_type_id: cal.cabin_type_id, unit: cal.unit, external_uid: e.uid, check_in: e.checkIn, check_out: e.checkOut, summary: e.summary, removed_at: null })),
-          { onConflict: "calendar_id,external_uid" },
-        )
-        .throwOnError();
-
-    // Lo que ya no viene y aún no termina se canceló en Booking. Lo pasado se conserva (historial de ocupación).
-    const uids = new Set(events.map((e) => e.uid));
-    const gone = existing.filter((s) => !s.removed_at && !uids.has(s.external_uid) && s.check_out > today).map((s) => s.id);
-    if (gone.length) await sb.from("channel_stays").update({ removed_at: now }).in("id", gone).throwOnError();
-
-    Object.assign(result, { events: events.length, added: changed.length, removed: gone.length });
-    const spans = changed.filter(moved).map((e) => ({ cabinTypeId: cal.cabin_type_id, unit: cal.unit, checkIn: e.checkIn, checkOut: e.checkOut }));
-    if (spans.length) await resolveConflicts(sb, cal, spans, units, types, today, result);
-
-    await sb.from("channel_calendars").update({ last_synced_at: now, last_status: "ok", last_error: "", last_event_count: events.length }).eq("id", cal.id).throwOnError();
+    result.events = events.length;
+    await applyStays(sb, cal, events, { full: true, units, types, result });
+    await sb.from("channel_calendars").update({ last_synced_at: new Date().toISOString(), last_status: "ok", last_error: "", last_event_count: events.length }).eq("id", cal.id).throwOnError();
   } catch (e) {
     const message = (e instanceof Error ? e.message : String(e)).slice(0, 500);
     console.error(`Calendario de Booking ${cal.id}:`, e);
@@ -193,7 +214,7 @@ async function syncCalendar(sb: Db, cal: CalendarRow, units: Units, types: Cabin
 // Lee los calendarios enlazados que no se leyeron en los últimos `minAgeMs` (todos, los de un tipo o uno).
 export async function syncCalendars(opts: { minAgeMs: number; notifyErrors: boolean; cabinTypeId?: string; calendarId?: string }): Promise<ChannelSyncResult[]> {
   const sb = createServiceClient();
-  let q = sb.from("channel_calendars").select("*").not("import_url", "is", null);
+  let q = sb.from("channel_calendars").select("*").not("import_url", "is", null).is("beds24_room_id", null);
   if (opts.cabinTypeId) q = q.eq("cabin_type_id", opts.cabinTypeId);
   if (opts.calendarId) q = q.eq("id", opts.calendarId);
   const { data, error } = await q;

@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ACTIVE_STATUSES, channelBlocks, type Occupancy, type Units } from "@/lib/booking";
 import type { Database, Tables } from "@/lib/supabase/database.types";
 import type {
-  AdminNotification, Block, CabinType, ChannelCalendar, ChannelStay, ClientEntry, ClientProfile, DocType, EmailKind, EmailRecord, EmailStatus, NotificationKind, PaymentKind, PaymentProof, PaymentProvider, PaymentRecord,
+  AdminNotification, Beds24Status, Block, CabinType, ChannelCalendar, ChannelStay, ClientEntry, ClientProfile, DocType, EmailKind, EmailRecord, EmailStatus, NotificationKind, PaymentKind, PaymentProof, PaymentProvider, PaymentRecord,
   PaymentStatus, ProofStatus, PublicPayment, PublicReservation, Quote, RateSeason, Reservation, Severity, Trust,
 } from "@/lib/types";
 import { addDays, todayISO } from "@/lib/format";
@@ -118,20 +118,32 @@ export const toChannelCalendar = (c: Tables<"channel_calendars">, base: string):
   lastStatus: (c.last_status as ChannelCalendar["lastStatus"]) ?? null,
   lastError: c.last_error,
   lastEventCount: c.last_event_count,
+  beds24RoomId: c.beds24_room_id,
 });
 
-// Calendarios de Booking y sus fechas desde hace un año (las canceladas también, para el historial). Para el panel.
-export async function loadChannels(sb: Db, base: string): Promise<{ calendars: ChannelCalendar[]; stays: ChannelStay[] }> {
-  const [c, s] = await Promise.all([
+// Calendarios de Booking y sus fechas desde hace un año (las canceladas también, para el historial), y el estado de la
+// conexión con Beds24 (sin el token; la tabla solo la lee la clave de servicio). Para el panel.
+export async function loadChannels(sb: Db, base: string): Promise<{ calendars: ChannelCalendar[]; stays: ChannelStay[]; beds24: Beds24Status | null }> {
+  const [c, s, b] = await Promise.all([
     sb.from("channel_calendars").select("*").order("cabin_type_id").order("unit"),
     sb.from("channel_stays").select("*").gte("check_out", addDays(todayISO(), -400)).order("check_in"),
+    createServiceClient().from("channel_credentials").select("webhook_key, last_pull_at, last_push_at, last_webhook_at, last_error, last_error_at").eq("provider", "beds24").maybeSingle(),
   ]);
-  const error = c.error ?? s.error;
+  const error = c.error ?? s.error ?? b.error;
   if (error) {
-    if (isMissingTable(error)) return { calendars: [], stays: [] };
+    if (isMissingTable(error)) return { calendars: [], stays: [], beds24: null };
     throw error;
   }
-  return { calendars: c.data!.map((x) => toChannelCalendar(x, base)), stays: s.data!.map(toChannelStay) };
+  const cred = b.data;
+  const beds24: Beds24Status | null = cred && {
+    webhookUrl: `${base}/api/channels/beds24?key=${cred.webhook_key}`,
+    lastPullAt: cred.last_pull_at,
+    lastPushAt: cred.last_push_at,
+    lastWebhookAt: cred.last_webhook_at,
+    lastError: cred.last_error,
+    lastErrorAt: cred.last_error_at,
+  };
+  return { calendars: c.data!.map((x) => toChannelCalendar(x, base)), stays: s.data!.map(toChannelStay), beds24 };
 }
 
 // Fechas de Booking vigentes (sin removed_at) que tocan alguna noche entre firstNight y lastNight.

@@ -336,8 +336,18 @@ function Panel({ initialData, onLoggedOut, children }: { initialData: AdminData;
       const r = await cf.run(cf);
       if (r.status === 401 || r.status === 403) return onLoggedOut();
       if (r.status >= 400) {
-        const fields = (r.data as { fields?: Record<string, string> } | null)?.fields;
-        const msg = fields ? Object.values(fields)[0] : r.status === 409 ? "Esas fechas no están disponibles." : r.status === 501 ? "No disponible en modo simulado." : "No se pudo completar la acción.";
+        const { fields, error: code } = (r.data as { fields?: Record<string, string>; error?: string } | null) ?? {};
+        const msg = fields
+          ? Object.values(fields)[0]
+          : code === "CHANNEL_CONFLICT"
+            ? "Booking.com ya vendió alguna de esas noches."
+            : code === "CHANNEL_UNAVAILABLE"
+              ? "No se pudo confirmar con Booking.com (Beds24 no respondió). Inténtalo en un momento."
+              : r.status === 409
+                ? "Esas fechas no están disponibles."
+                : r.status === 501
+                  ? "No disponible en modo simulado."
+                  : "No se pudo completar la acción.";
         setConfirm({ ...cf, busy: false, error: msg });
         return;
       }

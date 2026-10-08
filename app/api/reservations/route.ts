@@ -1,6 +1,7 @@
 import { after, type NextRequest } from "next/server";
-import { computeQuote, depositDueAt, findUnit, newReservationCode, validateReservation, webFirst } from "@/lib/booking";
+import { computeQuote, depositDueAt, newReservationCode, validateReservation, webFirst } from "@/lib/booking";
 import { addDays, todayISO } from "@/lib/format";
+import { claimUnit } from "@/lib/server/beds24-sync";
 import { atMost, linkedUnits, syncSoon } from "@/lib/server/channels";
 import { loadOccupancy, loadPricing, runDeadlines, toPublic } from "@/lib/server/db";
 import { fail, json, readJson, route } from "@/lib/server/http";
@@ -68,14 +69,32 @@ export const POST = route(async (req: NextRequest) => {
   // si otra solicitud tomó la unidad, se recalcula y se intenta de nuevo.
   for (let attempt = 0; attempt < 4; attempt++) {
     const occ = await loadOccupancy(sb, b.checkIn, addDays(b.checkOut, -1), type.id);
-    const unit = findUnit(occ, units[type.id] ?? 0, type.id, b.checkIn, b.checkOut, undefined, prefer);
-    if (!unit) return fail(409, "DATES_UNAVAILABLE");
+    const code = newReservationCode();
+    // Si la unidad se vende en Booking por Beds24, primero se retiene allá: si Booking ya la vendió, se prueba otra.
+    const claim = await claimUnit(occ, {
+      units: units[type.id] ?? 0,
+      cabinTypeId: type.id,
+      checkIn: b.checkIn,
+      checkOut: b.checkOut,
+      prefer,
+      source: "reservation",
+      sourceId: code,
+      label: `Web ${code}`,
+      adults: row.adults,
+      children: row.children,
+    });
+    // Sin Beds24 no se vende una cabaña que también está en Booking: mejor pedir que lo intente en un momento.
+    if (!claim.hold) return claim.channelDown ? fail(503, "CHANNEL_UNAVAILABLE") : fail(409, "DATES_UNAVAILABLE");
     const { data, error } = await sb
       .from("reservations")
-      .insert({ ...row, code: newReservationCode(), unit, deposit_due_at: depositDueAt() })
+      .insert({ ...row, code, unit: claim.unit, deposit_due_at: depositDueAt() })
       .select("*")
       .single();
-    if (!error) return json(toPublic(data), 201);
+    if (!error) {
+      await claim.hold.commit();
+      return json(toPublic(data), 201);
+    }
+    await claim.hold.release();
     if (error.code === "23P01") continue;
     if (error.code === "23505" && idemKey && error.message.includes("idempotency")) {
       const existing = await findByKey(idemKey);

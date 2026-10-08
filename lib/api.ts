@@ -3,7 +3,7 @@ import { config, isMockApi, type CabinTypeId } from "./config";
 import { mockRequest } from "./mock-server";
 import { sleep } from "./format";
 import type {
-  AdminAction, AdminData, AdminNotification, ApiResult, Availability, Block, BlockInput, CabinInput, CabinType, ChannelCalendar, ChannelCalendarInput, ChannelStay, ChannelSyncResult, ClientProfile, ClientProfileInput,
+  AdminAction, AdminData, AdminNotification, ApiResult, Availability, Beds24Room, Beds24Status, Block, BlockInput, CabinInput, CabinType, ChannelCalendar, ChannelCalendarInput, ChannelStay, ChannelSyncResult, ClientProfile, ClientProfileInput,
   EmailRecord, FieldErrors, PaymentKind, PaymentProof, PaymentStart, PaymentState, ProofReview, PublicReservation, RateSeason, Rates, Reservation, ReservationInput, SeasonInput, SiteInput,
 } from "./types";
 import type { NotificationGroup } from "./notification-groups";
@@ -90,8 +90,8 @@ export const resetIdem = () => sessionStorage.removeItem("ec-idem");
 
 export type ValidationError = { error: "VALIDATION_ERROR"; fields: FieldErrors };
 export type ApiError = { error: string; fields?: FieldErrors };
-// Calendarios de Booking.com y sus fechas (con el resultado de la lectura, si se leyó en esa solicitud).
-export type Channels = { calendars: ChannelCalendar[]; stays: ChannelStay[]; results?: ChannelSyncResult[] };
+// Calendarios de Booking.com, sus fechas y la conexión con Beds24 (con el resultado de la lectura, si se leyó en esa solicitud).
+export type Channels = { calendars: ChannelCalendar[]; stays: ChannelStay[]; beds24: Beds24Status | null; results?: ChannelSyncResult[] };
 // Un dispositivo registrado para notificaciones push: qué grupos recibe y cómo se reconoce ("Chrome en Android").
 export type PushDevice = { groups: NotificationGroup[]; device: string; lastSuccessAt: string | null };
 
@@ -119,6 +119,8 @@ export const api = {
       save: (b: ChannelCalendarInput) => request<Channels | ValidationError | ApiError>("PUT", "/admin/channels", { body: b }),
       sync: () => request<Channels | ApiError>("POST", "/admin/channels", { body: { action: "sync" } }),
       rotate: (id: string) => request<Channels | ApiError>("POST", "/admin/channels", { body: { action: "rotate", id } }),
+      connectBeds24: (code: string) => request<Channels | ValidationError | ApiError>("POST", "/admin/channels", { body: { action: "beds24-connect", code } }),
+      beds24Rooms: () => request<{ rooms: Beds24Room[] } | ApiError>("POST", "/admin/channels", { body: { action: "beds24-rooms" } }),
     },
     saveRates: (b: Rates) => request<CabinType[]>("PUT", "/admin/cabin-types", { body: b }),
     createCabin: (b: CabinInput) => request<CabinType[] | ValidationError>("POST", "/admin/cabins", { body: b }),

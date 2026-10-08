@@ -199,14 +199,20 @@ export type ChannelCalendar = {
   lastStatus: "ok" | "error" | null;
   lastError: string;
   lastEventCount: number;
+  // Habitación de Beds24 enlazada: la unidad se sincroniza en tiempo real por Beds24 y deja de usar el iCal.
+  beds24RoomId: number | null;
 };
+
+// Conexión con Beds24 (channel manager). webhookUrl: la que se pega en Beds24 → Properties → Access → Booking webhook.
+export type Beds24Status = { webhookUrl: string; lastPullAt: string | null; lastPushAt: string | null; lastWebhookAt: string | null; lastError: string; lastErrorAt: string | null };
+export type Beds24Room = { id: number; propertyId: number; propertyName: string; name: string; qty: number };
 
 // Noches ocupadas en Booking (una reserva o un cierre: el iCal no los distingue). checkOut exclusivo, como en las reservas.
 // removedAt: dejó de venir en el calendario de Booking (se canceló).
 export type ChannelStay = { id: string; calendarId: string; cabinTypeId: CabinTypeId; unit: number; checkIn: string; checkOut: string; summary: string; firstSeenAt: string; removedAt: string | null };
 
 // Cuerpo de PUT /admin/channels: enlaza (o desenlaza, con importUrl vacío) una unidad con un tipo de Booking.
-export type ChannelCalendarInput = { cabinTypeId: string; unit: number; label: string; importUrl: string };
+export type ChannelCalendarInput = { cabinTypeId: string; unit: number; label: string; importUrl: string; beds24RoomId?: number | null };
 // Resultado de una sincronización (por calendario).
 export type ChannelSyncResult = { calendarId: string; ok: boolean; events: number; added: number; removed: number; moved: string[]; conflicts: string[]; error?: string };
 
@@ -264,6 +270,7 @@ export type AdminData = {
   notifications: AdminNotification[];
   channelCalendars: ChannelCalendar[];
   channelStays: ChannelStay[]; // vigentes y recientes (las canceladas también, para el historial)
+  beds24: Beds24Status | null; // null: Beds24 no está conectado
 };
 
 // Cuerpo de PUT /admin/site.

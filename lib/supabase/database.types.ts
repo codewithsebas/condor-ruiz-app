@@ -154,8 +154,59 @@ export type Database = {
         }
         Relationships: []
       }
+      channel_bookings: {
+        Row: {
+          beds24_id: number | null
+          calendar_id: string
+          check_in: string
+          check_out: string
+          created_at: string
+          id: string
+          last_error: string
+          source: string
+          source_id: string
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          beds24_id?: number | null
+          calendar_id: string
+          check_in: string
+          check_out: string
+          created_at?: string
+          id?: string
+          last_error?: string
+          source: string
+          source_id: string
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          beds24_id?: number | null
+          calendar_id?: string
+          check_in?: string
+          check_out?: string
+          created_at?: string
+          id?: string
+          last_error?: string
+          source?: string
+          source_id?: string
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_bookings_calendar_id_fkey"
+            columns: ["calendar_id"]
+            isOneToOne: false
+            referencedRelation: "channel_calendars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       channel_calendars: {
         Row: {
+          beds24_room_id: number | null
           cabin_type_id: string
           channel: string
           created_at: string
@@ -173,6 +224,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          beds24_room_id?: number | null
           cabin_type_id: string
           channel?: string
           created_at?: string
@@ -190,6 +242,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          beds24_room_id?: number | null
           cabin_type_id?: string
           channel?: string
           created_at?: string
@@ -215,6 +268,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      channel_credentials: {
+        Row: {
+          access_expires_at: string | null
+          access_token: string | null
+          created_at: string
+          last_error: string
+          last_error_at: string | null
+          last_pull_at: string | null
+          last_push_at: string | null
+          last_webhook_at: string | null
+          provider: string
+          refresh_token: string
+          updated_at: string
+          webhook_key: string
+        }
+        Insert: {
+          access_expires_at?: string | null
+          access_token?: string | null
+          created_at?: string
+          last_error?: string
+          last_error_at?: string | null
+          last_pull_at?: string | null
+          last_push_at?: string | null
+          last_webhook_at?: string | null
+          provider: string
+          refresh_token: string
+          updated_at?: string
+          webhook_key?: string
+        }
+        Update: {
+          access_expires_at?: string | null
+          access_token?: string | null
+          created_at?: string
+          last_error?: string
+          last_error_at?: string | null
+          last_pull_at?: string | null
+          last_push_at?: string | null
+          last_webhook_at?: string | null
+          provider?: string
+          refresh_token?: string
+          updated_at?: string
+          webhook_key?: string
+        }
+        Relationships: []
       }
       channel_stays: {
         Row: {
@@ -923,7 +1021,7 @@ export type Database = {
         Args: { p_code: string; p_kind: Database["public"]["Enums"]["payment_kind"]; p_note?: string }
         Returns: Json
       }
-      request_channel_sync: { Args: never; Returns: undefined }
+      request_channel_sync: { Args: { mode?: string }; Returns: undefined }
       run_payment_deadlines: { Args: never; Returns: undefined }
       settle_payment: {
         Args: { p_detail?: string; p_method?: string; p_reference: string; p_status: Database["public"]["Enums"]["payment_status"]; p_tx_id: string }

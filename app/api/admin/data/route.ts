@@ -42,5 +42,6 @@ export const GET = route(async (req: NextRequest) => {
     notifications: notifications.map(toNotification),
     channelCalendars: channels.calendars,
     channelStays: channels.stays,
+    beds24: channels.beds24,
   });
 });

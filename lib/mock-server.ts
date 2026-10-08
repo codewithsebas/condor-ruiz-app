@@ -158,7 +158,7 @@ function seedChannels(d: Db) {
   const ago = (min: number) => new Date(Date.now() - min * 6e4).toISOString();
   const cal = (id: string, cabinTypeId: string, unit: number, label: string, events: number): ChannelCalendar => ({
     id, channel: "booking", label, cabinTypeId, unit, importUrl: `https://admin.booking.com/hotel/hoteladmin/ical.html?t=demo-${id}`,
-    exportUrl: `${location.origin}/api/ical/demo${id}`, lastSyncedAt: ago(3), lastFetchedAt: ago(40), lastStatus: "ok", lastError: "", lastEventCount: events,
+    exportUrl: `${location.origin}/api/ical/demo${id}`, lastSyncedAt: ago(3), lastFetchedAt: ago(40), lastStatus: "ok", lastError: "", lastEventCount: events, beds24RoomId: null,
   });
   const stay = (id: string, calendarId: string, cabinTypeId: string, unit: number, inOff: number, n: number, removed = false): ChannelStay => ({
     id, calendarId, cabinTypeId, unit, checkIn: addDays(t, inOff), checkOut: addDays(t, inOff + n), summary: "CLOSED - Not available", firstSeenAt: ago(60 * 24), removedAt: removed ? ago(60 * 20) : null,
@@ -349,7 +349,7 @@ export async function mockRequest(method: string, path: string, opts: MockReques
     return ok({
       reservations: db.reservations, blocks: db.blocks, cabinTypes: [...db.cabins].sort((a, b) => a.sort - b.sort), seasons: db.seasons, unidades: unitsOf(db),
       site: siteOf(db), proofs: [], payments: [...db.payments].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)), emails: db.emails, clients: db.clients, notifications: db.notifications,
-      channelCalendars: channelsOf(db).calendars, channelStays: channelsOf(db).stays,
+      channelCalendars: channelsOf(db).calendars, channelStays: channelsOf(db).stays, beds24: null,
     });
   // En modo simulado el contenido se guarda solo en este navegador y no cambia las páginas públicas.
   if (method === "PUT" && path === "/admin/site") {
@@ -426,7 +426,7 @@ export async function mockRequest(method: string, path: string, opts: MockReques
     const ch = seedChannels(db);
     const done = (results?: unknown[]) => {
       save(db);
-      return ok({ calendars: ch.channelCalendars, stays: ch.channelStays, ...(results && { results }) });
+      return ok({ calendars: ch.channelCalendars, stays: ch.channelStays, beds24: null, ...(results && { results }) });
     };
     const read = (c: ChannelCalendar) => {
       Object.assign(c, { lastSyncedAt: new Date().toISOString(), lastStatus: "ok", lastError: "", lastEventCount: ch.channelStays.filter((s) => s.calendarId === c.id && !s.removedAt).length });
@@ -440,7 +440,7 @@ export async function mockRequest(method: string, path: string, opts: MockReques
       let c = ch.channelCalendars.find((x) => x.cabinTypeId === b.cabinTypeId && x.unit === b.unit);
       if (!c) {
         const id = `c${Date.now()}`;
-        c = { id, channel: "booking", label: "", cabinTypeId: b.cabinTypeId, unit: b.unit, importUrl: null, exportUrl: `${location.origin}/api/ical/demo${id}`, lastSyncedAt: null, lastFetchedAt: null, lastStatus: null, lastError: "", lastEventCount: 0 };
+        c = { id, channel: "booking", label: "", cabinTypeId: b.cabinTypeId, unit: b.unit, importUrl: null, exportUrl: `${location.origin}/api/ical/demo${id}`, lastSyncedAt: null, lastFetchedAt: null, lastStatus: null, lastError: "", lastEventCount: 0, beds24RoomId: null };
         ch.channelCalendars.push(c);
       }
       const changed = c.importUrl !== url;
@@ -459,6 +459,8 @@ export async function mockRequest(method: string, path: string, opts: MockReques
       Object.assign(c, { exportUrl: `${location.origin}/api/ical/demo${c.id}-${Date.now().toString(36)}`, lastFetchedAt: null });
       return done();
     }
+    // Beds24 necesita una cuenta real: en modo simulado no se conecta.
+    if (method === "POST" && (b.action === "beds24-connect" || b.action === "beds24-rooms")) return { status: 501, data: { error: "NOT_AVAILABLE_IN_MOCK" } };
   }
 
   if (method === "PUT" && path === "/admin/cabin-types") {

@@ -215,7 +215,11 @@ function BlockEditor({ initial, onClose, onDelete }: { initial: Draft; onClose: 
             ? `Hay reservas activas en esas fechas (${err.conflicts?.join(", ")}). Reprográmalas o elige otras fechas.`
             : err?.error === "BLOCK_OVERLAP"
               ? "Ya existe un bloqueo que se cruza con estas fechas."
-              : "No se pudo guardar el bloqueo. Inténtalo de nuevo.",
+              : err?.error === "CHANNEL_CONFLICT"
+                ? "Booking.com ya tiene una reserva en esas noches: no se pueden cerrar allá."
+                : err?.error === "CHANNEL_UNAVAILABLE"
+                  ? "No se pudo cerrar en Booking.com (Beds24 no respondió). Inténtalo en un momento."
+                  : "No se pudo guardar el bloqueo. Inténtalo de nuevo.",
         );
         return;
       }

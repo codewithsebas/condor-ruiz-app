@@ -71,8 +71,11 @@ export const PUT = route(async (req: NextRequest) => {
   // Cabañas que cubre este tipo de Booking: la de este calendario y las que se sumen, del mismo tipo y en un solo grupo.
   const pool = [unit, ...new Set((b.units ?? [unit]).map(Number).filter((u) => u !== unit))];
   if (pool.some((u) => !Number.isInteger(u) || u < 1 || u > units[b.cabinTypeId]!)) return fail(400, "INVALID_UNIT");
-  const inOther = all.find((c) => c.id !== current?.id && c.cabin_type_id === b.cabinTypeId && [c.unit, ...c.extra_units].some((u) => pool.includes(u)));
+  const others = all.filter((c) => c.id !== current?.id && c.cabin_type_id === b.cabinTypeId && [c.unit, ...c.extra_units].some((u) => pool.includes(u)));
+  const inOther = others.find((c) => c.import_url || c.beds24_room_id);
   if (inOther) return invalid({ units: `Alguna de esas cabañas ya la cubre ${inOther.label || `otro tipo de Booking.com`}.` });
+  // Calendarios sin enlazar de las cabañas que se suman al grupo: sobran (la cabaña queda en este).
+  const spare = others.filter((c) => c.unit !== unit).map((c) => c.id);
   if (roomId !== null && pool.length > 1) return invalid({ units: "Con Beds24, cada habitación se enlaza con una sola cabaña." });
   const extra = pool.slice(1);
   const regrouped = !!current && (current.extra_units.length !== extra.length || current.extra_units.some((u) => !extra.includes(u)));
@@ -92,6 +95,7 @@ export const PUT = route(async (req: NextRequest) => {
     }
   }
 
+  if (spare.length) await sb.from("channel_calendars").delete().in("id", spare).throwOnError();
   const changed = (current?.import_url ?? null) !== importUrl;
   const linking = roomId !== null && roomId !== (current?.beds24_room_id ?? null);
   const reset = changed ? { last_synced_at: null, sync_started_at: null, last_status: null, last_error: "", last_event_count: 0 } : {};

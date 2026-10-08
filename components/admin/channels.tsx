@@ -69,6 +69,11 @@ export function ChannelsView() {
   const [syncing, setSyncing] = useState(false);
   const beds24 = data.beds24;
 
+  // El tipo de Booking que cubre una cabaña (primero los enlazados: un calendario sin enlazar de esa cabaña no cuenta).
+  const calOf = (typeId: string, unit: number) => {
+    const all = data.channelCalendars.filter((x) => x.cabinTypeId === typeId && poolOf(x).includes(unit));
+    return all.find((x) => x.importUrl || x.beds24RoomId) ?? all[0] ?? null;
+  };
   const units: Unit[] = data.cabinTypes
     .filter((c) => c.units > 0)
     .flatMap((c) =>
@@ -77,7 +82,7 @@ export function ChannelsView() {
         cabinTypeId: c.id,
         unit: i + 1,
         name: cabinLabel(c.id, i + 1),
-        cal: data.channelCalendars.find((x) => x.cabinTypeId === c.id && poolOf(x).includes(i + 1)) ?? null,
+        cal: calOf(c.id, i + 1),
       })),
     );
   const live = units.filter((u) => u.cal?.beds24RoomId);
@@ -298,7 +303,7 @@ export function ChannelsView() {
           cal={data.channelCalendars.find((x) => x.cabinTypeId === editing.cabinTypeId && x.unit === editing.unit) ?? null}
           poolOptions={units
             .filter((u) => u.cabinTypeId === editing.cabinTypeId)
-            .map((u) => ({ unit: u.unit, name: u.name, takenBy: u.cal && u.cal.unit !== editing.unit ? u.cal.label || cabinLabel(u.cabinTypeId, u.cal.unit) : null }))}
+            .map((u) => ({ unit: u.unit, name: u.name, takenBy: u.cal && u.cal.unit !== editing.unit && (u.cal.importUrl || u.cal.beds24RoomId) ? u.cal.label || cabinLabel(u.cabinTypeId, u.cal.unit) : null }))}
           beds24={!!beds24}
           onClose={() => setEditing(null)}
           onSaved={(c, msg, ok) => {

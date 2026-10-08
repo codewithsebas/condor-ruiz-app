@@ -56,6 +56,8 @@ export const PUT = route(async (req: NextRequest) => {
   const importUrl = roomId ? null : String(b.importUrl ?? "").trim() || null;
   if (label.length > 80) return invalid({ label: "Máximo 80 caracteres." });
   if (importUrl && (importUrl.length > 1000 || !validImportUrl(importUrl))) return invalid({ importUrl: "Pega el enlace de exportación del extranet (empieza por https://)." });
+  // El enlace de la app es el que va en Booking (Importar calendario); aquí va el que exporta Booking.
+  if (importUrl?.includes("/api/ical/")) return invalid({ importUrl: "Ese es el enlace de la app, el que se pega en Booking.com. Aquí va el enlace de exportación de Booking.com (Exportar calendario)." });
 
   const { data: all, error: e1 } = await sb.from("channel_calendars").select("*");
   if (e1) {

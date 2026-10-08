@@ -79,10 +79,13 @@ export const PUT = route(async (req: NextRequest) => {
     if (rs.length || bs.length)
       return fail(422, "VALIDATION_ERROR", { fields: { units: `Hay reservas o bloqueos vigentes en las unidades que quitarías${rs.length ? ` (${rs.map((r) => r.code).join(", ")})` : ""}. Reprográmalos primero.` } });
     // Una unidad enlazada con Booking seguiría recibiendo sus fechas: primero se desenlaza en el módulo Booking.com.
-    const { data: linked, error: le } = await sb.from("channel_calendars").select("label, unit").eq("cabin_type_id", id).gt("unit", v.row.units).not("import_url", "is", null);
+    const { data: cals, error: le } = await sb.from("channel_calendars").select("label, unit, extra_units").eq("cabin_type_id", id).or("import_url.not.is.null,beds24_room_id.not.is.null");
     if (le && !isMissingTable(le)) throw le;
-    if (linked?.length)
-      return fail(422, "VALIDATION_ERROR", { fields: { units: `La unidad ${linked.map((c) => c.unit).join(", ")} está enlazada con Booking.com (${linked.map((c) => c.label).join(", ")}). Quita el enlace primero.` } });
+    const linked = (cals ?? []).filter((c) => [c.unit, ...c.extra_units].some((u) => u > v.row.units));
+    if (linked.length)
+      return fail(422, "VALIDATION_ERROR", {
+        fields: { units: `Alguna de las unidades que quitarías está enlazada con Booking.com (${linked.map((c) => c.label || `unidad ${c.unit}`).join(", ")}). Quita el enlace primero.` },
+      });
   }
   await sb.from("cabin_types").update(v.row).eq("id", id).throwOnError();
   return done(sb);

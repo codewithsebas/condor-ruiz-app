@@ -21,7 +21,12 @@ import { Badge, Button, Callout, Card, CardHeader, EmptyState, Field, Modal, Pag
 // Solo viajan fechas: ni nombres, ni precios.
 
 type Unit = { key: string; cabinTypeId: string; unit: number; name: string; cal: ChannelCalendar | null };
-type Draft = { cabinTypeId: string; unit: number; name: string; label: string; importUrl: string; beds24RoomId: number | null };
+type Draft = { cabinTypeId: string; unit: number; units: number[]; name: string; label: string; importUrl: string; beds24RoomId: number | null };
+// Cabaña del mismo tipo para elegir el grupo: takenBy, el tipo de Booking que ya la cubre (otro calendario).
+type PoolOption = { unit: number; name: string; takenBy: string | null };
+
+// Cabañas que cubre un tipo de Booking (los datos simulados viejos no traen units).
+const poolOf = (c: ChannelCalendar) => (c.units?.length ? c.units : [c.unit]);
 
 const ERRORS: Record<string, string> = {
   CHANNELS_NOT_READY: "Falta aplicar en la base de datos la actualización para Booking.com.",
@@ -72,7 +77,7 @@ export function ChannelsView() {
         cabinTypeId: c.id,
         unit: i + 1,
         name: cabinLabel(c.id, i + 1),
-        cal: data.channelCalendars.find((x) => x.cabinTypeId === c.id && x.unit === i + 1) ?? null,
+        cal: data.channelCalendars.find((x) => x.cabinTypeId === c.id && poolOf(x).includes(i + 1)) ?? null,
       })),
     );
   const live = units.filter((u) => u.cal?.beds24RoomId);
@@ -172,6 +177,10 @@ export function ChannelsView() {
                   </p>
                   <p className="text-[13px] text-ink-muted">
                     {c?.label ? `En Booking.com: ${c.label}` : c?.importUrl || c?.beds24RoomId ? "En Booking.com" : "Solo se vende en la web"}
+                    {c && poolOf(c).length > 1 && ` · junto con ${poolOf(c)
+                      .filter((x) => x !== u.unit)
+                      .map((x) => cabinLabel(u.cabinTypeId, x))
+                      .join(" y ")}`}
                     {c?.beds24RoomId && " · por Beds24"}
                     {c?.importUrl && !c.beds24RoomId && c.lastSyncedAt && ` · leída ${timeAgo(c.lastSyncedAt, now)} · ${plural(c.lastEventCount, "fecha", "fechas")}`}
                     {c?.importUrl && !c.beds24RoomId && (c.lastFetchedAt ? ` · Booking vio la web ${timeAgo(c.lastFetchedAt, now)}` : " · Booking aún no ha leído el enlace de la web")}
@@ -187,7 +196,17 @@ export function ChannelsView() {
                   <Button
                     size="sm"
                     icon={<PencilIcon size={13} />}
-                    onClick={() => setEditing({ cabinTypeId: u.cabinTypeId, unit: u.unit, name: u.name, label: c?.label ?? "", importUrl: c?.importUrl ?? "", beds24RoomId: c?.beds24RoomId ?? null })}
+                    onClick={() =>
+                      setEditing({
+                        cabinTypeId: u.cabinTypeId,
+                        unit: c?.unit ?? u.unit,
+                        units: c ? poolOf(c) : [u.unit],
+                        name: cabinLabel(u.cabinTypeId, c?.unit ?? u.unit),
+                        label: c?.label ?? "",
+                        importUrl: c?.importUrl ?? "",
+                        beds24RoomId: c?.beds24RoomId ?? null,
+                      })
+                    }
                   >
                     {c?.importUrl || c?.beds24RoomId ? "Editar" : "Enlazar"}
                   </Button>
@@ -277,6 +296,9 @@ export function ChannelsView() {
         <LinkEditor
           draft={editing}
           cal={data.channelCalendars.find((x) => x.cabinTypeId === editing.cabinTypeId && x.unit === editing.unit) ?? null}
+          poolOptions={units
+            .filter((u) => u.cabinTypeId === editing.cabinTypeId)
+            .map((u) => ({ unit: u.unit, name: u.name, takenBy: u.cal && u.cal.unit !== editing.unit ? u.cal.label || cabinLabel(u.cabinTypeId, u.cal.unit) : null }))}
           beds24={!!beds24}
           onClose={() => setEditing(null)}
           onSaved={(c, msg, ok) => {
@@ -417,6 +439,7 @@ function Beds24Card({
 function LinkEditor({
   draft,
   cal,
+  poolOptions,
   beds24,
   onClose,
   onSaved,
@@ -426,6 +449,7 @@ function LinkEditor({
 }: {
   draft: Draft;
   cal: ChannelCalendar | null;
+  poolOptions: PoolOption[];
   beds24: boolean;
   onClose: () => void;
   onSaved: (c: Channels, msg: string, ok: boolean) => void;
@@ -466,7 +490,7 @@ function LinkEditor({
     setBusy(true);
     setErrors({});
     try {
-      const r = await api.admin.channels.save({ cabinTypeId: d.cabinTypeId, unit: d.unit, label: d.label, importUrl: viaBeds24 ? "" : d.importUrl, beds24RoomId: d.beds24RoomId });
+      const r = await api.admin.channels.save({ cabinTypeId: d.cabinTypeId, unit: d.unit, units: viaBeds24 ? [d.unit] : d.units, label: d.label, importUrl: viaBeds24 ? "" : d.importUrl, beds24RoomId: d.beds24RoomId });
       if (r.status === 401 || r.status === 403) return onAuthError();
       if (r.status === 200 && r.data && "calendars" in r.data) {
         const res = r.data.results ?? [];
@@ -540,6 +564,35 @@ function LinkEditor({
               />
             )}
           </Field>
+        )}
+        {!viaBeds24 && poolOptions.length > 1 && (
+          <fieldset className="flex min-w-0 flex-col gap-2">
+            <legend className="mb-1.5 text-[13px] font-semibold text-ink">Cabañas de la web que cubre</legend>
+            <div className="flex flex-wrap gap-2">
+              {poolOptions.map((o) => {
+                const on = d.units.includes(o.unit);
+                const fixed = o.unit === d.unit;
+                return (
+                  <label
+                    key={o.unit}
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-[13.5px] font-semibold transition-colors ${o.takenBy ? "cursor-not-allowed border-line text-ink-subtle" : on ? "cursor-pointer border-ink bg-ink/5 text-ink" : "cursor-pointer border-line-strong text-ink-muted hover:text-ink"}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      disabled={fixed || !!o.takenBy}
+                      onChange={() => setD({ ...d, units: on ? d.units.filter((x) => x !== o.unit) : [...d.units, o.unit].sort((a, b) => a - b) })}
+                      className="size-4 accent-[var(--color-cta)]"
+                    />
+                    {o.name}
+                    {o.takenBy && <span className="font-normal">· {o.takenBy}</span>}
+                  </label>
+                );
+              })}
+            </div>
+            <p className="text-[12.5px] text-ink-muted">Booking.com vende una por noche: se cierra allá solo cuando todas las marcadas están ocupadas, y cada reserva suya ocupa una libre.</p>
+            {errors.units && <p className="text-[13px] font-semibold text-error">{errors.units}</p>}
+          </fieldset>
         )}
         {linking && (
           <Callout tone="info">Al guardar, la app sube a Beds24 las reservas y bloqueos de la web de esta cabaña y empieza a recibir las de Booking.com. Deja de usar el calendario iCal.</Callout>

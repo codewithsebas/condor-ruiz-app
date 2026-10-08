@@ -1,6 +1,6 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { ACTIVE_STATUSES, planChannelMoves, webFirst, type ChannelSpan, type Units } from "@/lib/booking";
+import { ACTIVE_STATUSES, CHANNEL_ID, planChannelMoves, poolFirst, unitFree, type ChannelSpan, type Pool, type Units } from "@/lib/booking";
 import { config } from "@/lib/config";
 import { addDays, fmtDate, nightsBetween, sleep, todayISO } from "@/lib/format";
 import { buildIcs, parseIcs, type IcsEvent } from "@/lib/ical";
@@ -10,10 +10,12 @@ import type { CabinType, ChannelSyncResult, NotificationKind } from "@/lib/types
 import { type Db, isExclusionViolation, isMissingTable, loadCabinTypes, loadOccupancy } from "./db";
 
 // Sincronización de disponibilidad con Booking.com por calendarios iCal (extranet → Sincronizar calendarios).
-//   Booking → app: se lee el enlace de exportación de cada unidad y sus fechas quedan en channel_stays (cuentan como
-//   bloqueos en la disponibilidad). Si caen sobre una reserva de la web, se reacomoda a otra unidad libre del mismo tipo
-//   o se avisa al equipo de una posible sobreventa.
-//   App → Booking: /api/ical/<token> publica las reservas activas y los bloqueos de la unidad; Booking lo importa a su ritmo.
+// Cada tipo de alojamiento de Booking (una unidad allá) cubre un grupo de cabañas del mismo tipo en la app (poolOf).
+//   Booking → app: se lee el enlace de exportación de cada tipo y sus fechas quedan en channel_stays, cada una en una
+//   cabaña libre del grupo (cuentan como bloqueos en la disponibilidad). Si no queda ninguna libre, la reserva de la web
+//   que esté encima se reacomoda a otra unidad libre del mismo tipo o se avisa al equipo de una posible sobreventa.
+//   App → Booking: /api/ical/<token> cierra las noches en que todas las cabañas del grupo están ocupadas; Booking lo
+//   importa a su ritmo.
 // Se lee cada 5 minutos (pg_cron → /api/channels/sync), justo antes de asignar una reserva nueva y al consultar
 // disponibilidad si hace rato no se lee. sync_started_at hace de candado: dos lecturas del mismo calendario no se cruzan.
 
@@ -80,20 +82,57 @@ async function claim(sb: Db, cal: CalendarRow, minAgeMs: number) {
   return data.length > 0;
 }
 
-// Unidades de un tipo enlazadas con Booking, por iCal o por Beds24 (las reservas de la web prueban primero las demás).
-export async function linkedUnits(sb: Db, cabinTypeId: string) {
-  const { data, error } = await sb.from("channel_calendars").select("unit").eq("cabin_type_id", cabinTypeId).or("import_url.not.is.null,beds24_room_id.not.is.null");
+// Cabañas de la app que cubre un tipo de alojamiento de Booking: la primera (`unit`) y las demás del grupo.
+export const poolOf = (cal: Pick<CalendarRow, "unit" | "extra_units">): Pool => [cal.unit, ...cal.extra_units];
+
+// Grupos de cabañas de un tipo enlazados con Booking, por iCal o por Beds24 (para repartir las reservas de la web).
+export async function channelPools(sb: Db, cabinTypeId: string): Promise<Pool[]> {
+  const { data, error } = await sb.from("channel_calendars").select("unit, extra_units").eq("cabin_type_id", cabinTypeId).or("import_url.not.is.null,beds24_room_id.not.is.null");
   if (error) {
     if (isMissingTable(error)) return [];
     throw error;
   }
-  return data.map((c) => c.unit);
+  return data.map(poolOf);
+}
+
+// Booking vuelve a exportar como cerradas las noches que importó del enlace de la app. Una fecha suya es ese eco si en
+// todas sus noches el enlace ya las cerraba (todas las cabañas del grupo ocupadas por la web, bloqueos o fechas de otros
+// tipos de Booking) y Booking lo descargó después del último cambio en ellas. Si no lo había descargado, no puede ser un
+// eco: es una venta de Booking. Solo aplica a los calendarios iCal (Beds24 no devuelve lo que crea la app).
+async function withoutEchoes(sb: Db, cal: CalendarRow, spans: ChannelSpan[]) {
+  if (!spans.length || !cal.last_fetched_at || cal.beds24_room_id) return spans;
+  const pool = poolOf(cal);
+  const fetched = cal.last_fetched_at;
+  const first = spans.reduce((m, s) => (s.checkIn < m ? s.checkIn : m), spans[0].checkIn);
+  const last = spans.reduce((m, s) => (s.checkOut > m ? s.checkOut : m), spans[0].checkOut);
+  const [{ data: rs }, { data: bs }, { data: ss }] = await Promise.all([
+    sb.from("reservations").select("unit, check_in, check_out, updated_at").eq("cabin_type_id", cal.cabin_type_id).in("unit", pool).in("status", ACTIVE_STATUSES).lt("check_in", last).gt("check_out", first).throwOnError(),
+    sb.from("blocks").select("unit, from_date, to_date, updated_at").eq("cabin_type_id", cal.cabin_type_id).in("unit", pool).lt("from_date", last).gte("to_date", first).throwOnError(),
+    sb.from("channel_stays").select("unit, check_in, check_out, first_seen_at").eq("cabin_type_id", cal.cabin_type_id).in("unit", pool).neq("calendar_id", cal.id).is("removed_at", null).lt("check_in", last).gt("check_out", first).throwOnError(),
+  ]);
+  const items = [
+    ...rs.map((r) => ({ unit: r.unit, from: r.check_in, to: r.check_out, at: r.updated_at })),
+    ...bs.map((b) => ({ unit: b.unit, from: b.from_date, to: addDays(b.to_date, 1), at: b.updated_at })),
+    ...ss.map((s) => ({ unit: s.unit, from: s.check_in, to: s.check_out, at: s.first_seen_at })),
+  ];
+  const closedBeforeFetch = (night: string) => {
+    const on = items.filter((i) => i.from <= night && night < i.to);
+    return new Set(on.map((i) => i.unit)).size >= pool.length && on.every((i) => Date.parse(i.at) < Date.parse(fetched));
+  };
+  return spans.filter((s) => {
+    for (let d = s.checkIn; d < s.checkOut; d = addDays(d, 1)) if (!closedBeforeFetch(d)) return true;
+    return false;
+  });
 }
 
 // Reservas de la web que quedaron sobre fechas nuevas de Booking: se reacomodan o se avisa de la posible sobreventa.
 async function resolveConflicts(sb: Db, cal: CalendarRow, changed: ChannelSpan[], units: Units, types: CabinType[], today: string, result: ChannelSyncResult) {
   const type = cal.cabin_type_id;
-  const live = changed.filter((s) => s.checkOut > today);
+  const live = await withoutEchoes(
+    sb,
+    cal,
+    changed.filter((s) => s.checkOut > today),
+  );
   if (!live.length) return;
   // Primero las reservas que tocan las fechas nuevas; luego la ocupación de todas sus noches (para buscarles otra unidad).
   let first = live.reduce((m, s) => (s.checkIn < m ? s.checkIn : m), live[0].checkIn);
@@ -104,8 +143,8 @@ async function resolveConflicts(sb: Db, cal: CalendarRow, changed: ChannelSpan[]
     if (r.checkOut > last) last = r.checkOut;
   }
   const occ = await loadOccupancy(sb, first, addDays(last, -1), type);
-  const linked = await linkedUnits(sb, type);
-  const plan = planChannelMoves(occ, live, units, today, (t) => webFirst(units[t] ?? 0, linked));
+  const pools = await channelPools(sb, type);
+  const plan = planChannelMoves(occ, live, units, today, (t, ci, co, work, code) => poolFirst(work, units[t] ?? 0, t, ci, co, pools, code));
   const where = (s: ChannelSpan) => `${cal.label || unitName(types, type, cal.unit)} del ${fmtDate(s.checkIn)} al ${fmtDate(s.checkOut)}`;
 
   for (const m of plan.moves) {
@@ -158,19 +197,48 @@ export async function applyStays(
   else if (o.source) q = q.like("external_uid", `${o.source}%`);
   const { data: existing } = await q.throwOnError();
   const byUid = new Map(existing.map((s) => [s.external_uid, s]));
+  const pool = poolOf(cal);
 
   // Solo se escribe lo nuevo o cambiado: una lectura sin cambios no toca la base de datos (ni recarga el panel).
-  // `moved`: fechas nuevas o que cambiaron de noches o de unidad (las únicas que pueden crear un choque con la web).
+  // `moved`: fechas nuevas, que cambiaron de noches o que quedaron fuera del grupo (las únicas que pueden chocar con la web).
   const moved = (e: StayEvent) => {
     const prev = byUid.get(e.uid);
-    return !prev || !!prev.removed_at || prev.check_in !== e.checkIn || prev.check_out !== e.checkOut || prev.unit !== cal.unit || prev.cabin_type_id !== cal.cabin_type_id;
+    return !prev || !!prev.removed_at || prev.check_in !== e.checkIn || prev.check_out !== e.checkOut || !pool.includes(prev.unit) || prev.cabin_type_id !== cal.cabin_type_id;
   };
   const changed = events.filter((e) => moved(e) || byUid.get(e.uid)!.summary !== e.summary);
+
+  // Cada fecha nueva ocupa una cabaña del grupo libre esas noches; si no queda ninguna, la primera del grupo (y la reserva
+  // de la web que esté allí se reacomoda o queda como posible sobreventa).
+  const unitOf = new Map<string, number>();
+  const fresh = changed.filter(moved);
+  if (fresh.length) {
+    const first = fresh.reduce((m, e) => (e.checkIn < m ? e.checkIn : m), fresh[0].checkIn);
+    const last = fresh.reduce((m, e) => (e.checkOut > m ? e.checkOut : m), fresh[0].checkOut);
+    const occ = await loadOccupancy(sb, first, addDays(last, -1), cal.cabin_type_id);
+    const own = new Set(fresh.map((e) => byUid.get(e.uid)?.id).filter(Boolean).map((id) => `${CHANNEL_ID}${id}`));
+    occ.blocks = occ.blocks.filter((b) => !own.has((b as { id?: string }).id ?? ""));
+    for (const e of fresh) {
+      const prev = byUid.get(e.uid)?.unit;
+      const order = prev && pool.includes(prev) ? [prev, ...pool.filter((u) => u !== prev)] : pool;
+      const unit = order.find((u) => unitFree(occ, o.units[cal.cabin_type_id] ?? 0, cal.cabin_type_id, u, e.checkIn, e.checkOut)) ?? order[0];
+      unitOf.set(e.uid, unit);
+      occ.blocks.push({ cabinTypeId: cal.cabin_type_id, unit, from: e.checkIn, to: addDays(e.checkOut, -1) });
+    }
+  }
   if (changed.length)
     await sb
       .from("channel_stays")
       .upsert(
-        changed.map((e) => ({ calendar_id: cal.id, cabin_type_id: cal.cabin_type_id, unit: cal.unit, external_uid: e.uid, check_in: e.checkIn, check_out: e.checkOut, summary: e.summary, removed_at: null })),
+        changed.map((e) => ({
+          calendar_id: cal.id,
+          cabin_type_id: cal.cabin_type_id,
+          unit: unitOf.get(e.uid) ?? byUid.get(e.uid)!.unit,
+          external_uid: e.uid,
+          check_in: e.checkIn,
+          check_out: e.checkOut,
+          summary: e.summary,
+          removed_at: null,
+        })),
         { onConflict: "calendar_id,external_uid" },
       )
       .throwOnError();
@@ -182,7 +250,7 @@ export async function applyStays(
 
   o.result.added += changed.length;
   o.result.removed += gone.length;
-  const spans = changed.filter(moved).map((e) => ({ cabinTypeId: cal.cabin_type_id, unit: cal.unit, checkIn: e.checkIn, checkOut: e.checkOut }));
+  const spans = fresh.map((e) => ({ cabinTypeId: cal.cabin_type_id, unit: unitOf.get(e.uid)!, checkIn: e.checkIn, checkOut: e.checkOut }));
   if (spans.length) await resolveConflicts(sb, cal, spans, o.units, o.types, today, o.result);
 }
 
@@ -241,8 +309,9 @@ export const atMost = <T,>(p: Promise<T>, ms: number) => Promise.race([p, sleep(
 
 /* ───────────── Calendario que importa Booking ───────────── */
 
-// Reservas activas (incluidas las retenidas mientras se paga el abono) y bloqueos de la unidad, desde ayer. Nunca las
-// fechas que vienen de Booking (no se le devuelve su propio calendario). Sin datos personales.
+// Noches cerradas del grupo desde ayer, por reservas activas (incluidas las retenidas mientras se paga el abono),
+// bloqueos o fechas de otros tipos de Booking. Nunca las de este tipo (no se le devuelve su propio calendario). Sin datos
+// personales.
 export async function exportCalendar(token: string, base: string): Promise<string | null> {
   if (!/^[0-9a-f]{48}$/.test(token)) return null;
   const sb = createServiceClient();
@@ -256,16 +325,35 @@ export async function exportCalendar(token: string, base: string): Promise<strin
   // Se anota la descarga (el panel muestra cuándo Booking vio la web por última vez); si falla, igual se sirve el calendario.
   // La hora se toma antes de leer las reservas: todo lo vendido hasta ese momento va en este calendario.
   const fetchedAt = new Date().toISOString();
-  const [{ data: rs }, { data: bs }, { types }] = await Promise.all([
-    sb.from("reservations").select("code, check_in, check_out").eq("cabin_type_id", cal.cabin_type_id).eq("unit", cal.unit).in("status", ACTIVE_STATUSES).gt("check_out", since).order("check_in").throwOnError(),
-    sb.from("blocks").select("id, from_date, to_date").eq("cabin_type_id", cal.cabin_type_id).eq("unit", cal.unit).gte("to_date", since).order("from_date").throwOnError(),
+  const pool = poolOf(cal);
+  const [{ data: rs }, { data: bs }, { data: ss }, { types }] = await Promise.all([
+    sb.from("reservations").select("unit, check_in, check_out").eq("cabin_type_id", cal.cabin_type_id).in("unit", pool).in("status", ACTIVE_STATUSES).gt("check_out", since).throwOnError(),
+    sb.from("blocks").select("unit, from_date, to_date").eq("cabin_type_id", cal.cabin_type_id).in("unit", pool).gte("to_date", since).throwOnError(),
+    // Fechas de otros tipos de Booking que hayan quedado en estas cabañas (las de este tipo, Booking ya las conoce).
+    sb.from("channel_stays").select("unit, check_in, check_out").eq("cabin_type_id", cal.cabin_type_id).in("unit", pool).neq("calendar_id", cal.id).is("removed_at", null).gt("check_out", since).throwOnError(),
     loadCabinTypes(sb),
     sb.from("channel_calendars").update({ last_fetched_at: fetchedAt }).eq("id", cal.id),
   ]);
+  // Booking vende una por noche de este tipo: se cierra allá cada noche en que ya no queda ninguna cabaña libre en el grupo.
+  const busy = new Map<string, Set<number>>();
+  const mark = (unit: number, from: string, to: string) => {
+    for (let d = from < since ? since : from; d < to; d = addDays(d, 1)) {
+      if (!busy.has(d)) busy.set(d, new Set());
+      busy.get(d)!.add(unit);
+    }
+  };
+  for (const r of rs) mark(r.unit, r.check_in, r.check_out);
+  for (const b of bs) mark(b.unit, b.from_date, addDays(b.to_date, 1));
+  for (const s of ss) mark(s.unit, s.check_in, s.check_out);
+  const closed = [...busy].filter(([, units]) => units.size >= pool.length).map(([night]) => night).sort();
   const host = new URL(base).host;
-  const events: IcsEvent[] = [
-    ...rs.map((r) => ({ uid: `${r.code}@${host}`, checkIn: r.check_in, checkOut: r.check_out, summary: "No disponible" })),
-    ...bs.map((b) => ({ uid: `bloqueo-${b.id}@${host}`, checkIn: b.from_date, checkOut: addDays(b.to_date, 1), summary: "No disponible" })),
-  ];
-  return buildIcs(events, { name: `${config.name} · ${unitName(types, cal.cabin_type_id, cal.unit)}`, prodId: `-//${config.name}//Disponibilidad//ES` });
+  const events: IcsEvent[] = [];
+  for (const night of closed) {
+    const prev = events.at(-1);
+    if (prev && prev.checkOut === night) prev.checkOut = addDays(night, 1);
+    else events.push({ uid: "", checkIn: night, checkOut: addDays(night, 1), summary: "No disponible" });
+  }
+  for (const e of events) e.uid = `cerrado-${cal.id.slice(0, 8)}-${e.checkIn}@${host}`;
+  const name = pool.map((u) => unitName(types, cal.cabin_type_id, u)).join(" y ");
+  return buildIcs(events, { name: `${config.name} · ${name}`, prodId: `-//${config.name}//Disponibilidad//ES` });
 }

@@ -157,7 +157,7 @@ function seedChannels(d: Db) {
   const t = todayISO();
   const ago = (min: number) => new Date(Date.now() - min * 6e4).toISOString();
   const cal = (id: string, cabinTypeId: string, unit: number, label: string, events: number): ChannelCalendar => ({
-    id, channel: "booking", label, cabinTypeId, unit, importUrl: `https://admin.booking.com/hotel/hoteladmin/ical.html?t=demo-${id}`,
+    id, channel: "booking", label, cabinTypeId, unit, units: [unit], importUrl: `https://admin.booking.com/hotel/hoteladmin/ical.html?t=demo-${id}`,
     exportUrl: `${location.origin}/api/ical/demo${id}`, lastSyncedAt: ago(3), lastFetchedAt: ago(40), lastStatus: "ok", lastError: "", lastEventCount: events, beds24RoomId: null,
   });
   const stay = (id: string, calendarId: string, cabinTypeId: string, unit: number, inOff: number, n: number, removed = false): ChannelStay => ({
@@ -258,7 +258,7 @@ export async function mockRequest(method: string, path: string, opts: MockReques
     if (key && db.idem[key]) return { status: 201, data: pub(db, db.reservations.find((r) => r.code === db.idem[key])!) };
     const f = validateReservation(body, activeTypes(db), todayISO());
     if (Object.keys(f).length) return invalid(f);
-    const linked = channelsOf(db).calendars.filter((c) => c.cabinTypeId === body.cabinTypeId && c.importUrl).map((c) => c.unit);
+    const linked = channelsOf(db).calendars.filter((c) => c.cabinTypeId === body.cabinTypeId && c.importUrl).flatMap((c) => c.units ?? [c.unit]);
     const unit = findUnit(occ(db), unitsOf(db)[body.cabinTypeId] ?? 0, body.cabinTypeId, body.checkIn, body.checkOut, undefined, webFirst(unitsOf(db)[body.cabinTypeId] ?? 0, linked));
     if (!unit) return { status: 409, data: { error: "DATES_UNAVAILABLE" } };
     const r: Reservation = {
@@ -440,11 +440,11 @@ export async function mockRequest(method: string, path: string, opts: MockReques
       let c = ch.channelCalendars.find((x) => x.cabinTypeId === b.cabinTypeId && x.unit === b.unit);
       if (!c) {
         const id = `c${Date.now()}`;
-        c = { id, channel: "booking", label: "", cabinTypeId: b.cabinTypeId, unit: b.unit, importUrl: null, exportUrl: `${location.origin}/api/ical/demo${id}`, lastSyncedAt: null, lastFetchedAt: null, lastStatus: null, lastError: "", lastEventCount: 0, beds24RoomId: null };
+        c = { id, channel: "booking", label: "", cabinTypeId: b.cabinTypeId, unit: b.unit, units: [b.unit], importUrl: null, exportUrl: `${location.origin}/api/ical/demo${id}`, lastSyncedAt: null, lastFetchedAt: null, lastStatus: null, lastError: "", lastEventCount: 0, beds24RoomId: null };
         ch.channelCalendars.push(c);
       }
       const changed = c.importUrl !== url;
-      Object.assign(c, { label: String(b.label ?? "").trim().slice(0, 80), importUrl: url });
+      Object.assign(c, { label: String(b.label ?? "").trim().slice(0, 80), importUrl: url, units: b.units?.length ? b.units : [b.unit] });
       if (changed) {
         ch.channelStays = db.channelStays = ch.channelStays.filter((s) => s.calendarId !== c.id);
         Object.assign(c, { lastSyncedAt: null, lastStatus: null, lastError: "", lastEventCount: 0 });

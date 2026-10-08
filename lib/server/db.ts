@@ -111,6 +111,7 @@ export const toChannelCalendar = (c: Tables<"channel_calendars">, base: string):
   label: c.label,
   cabinTypeId: c.cabin_type_id,
   unit: c.unit,
+  units: [c.unit, ...c.extra_units],
   importUrl: c.import_url,
   exportUrl: `${base}/api/ical/${c.export_token}`,
   lastSyncedAt: c.last_synced_at,

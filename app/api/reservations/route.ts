@@ -1,8 +1,8 @@
 import { after, type NextRequest } from "next/server";
-import { computeQuote, depositDueAt, newReservationCode, validateReservation, webFirst } from "@/lib/booking";
+import { computeQuote, depositDueAt, newReservationCode, poolFirst, validateReservation } from "@/lib/booking";
 import { addDays, todayISO } from "@/lib/format";
 import { claimUnit } from "@/lib/server/beds24-sync";
-import { atMost, linkedUnits, syncSoon } from "@/lib/server/channels";
+import { atMost, channelPools, syncSoon } from "@/lib/server/channels";
 import { loadOccupancy, loadPricing, runDeadlines, toPublic } from "@/lib/server/db";
 import { fail, json, readJson, route } from "@/lib/server/http";
 import { verifyTurnstile } from "@/lib/server/turnstile";
@@ -62,8 +62,7 @@ export const POST = route(async (req: NextRequest) => {
   const sync = syncSoon({ cabinTypeId: type.id, minAgeMs: 90_000 });
   after(() => sync);
   await atMost(sync, 2500);
-  // Las unidades que no se venden en Booking se asignan primero: así quedan libres las que sí.
-  const prefer = webFirst(units[type.id] ?? 0, await linkedUnits(sb, type.id));
+  const pools = await channelPools(sb, type.id);
 
   // La restricción de exclusión en la base de datos resuelve reservas simultáneas:
   // si otra solicitud tomó la unidad, se recalcula y se intenta de nuevo.
@@ -76,7 +75,9 @@ export const POST = route(async (req: NextRequest) => {
       cabinTypeId: type.id,
       checkIn: b.checkIn,
       checkOut: b.checkOut,
-      prefer,
+      // Primero las que no se venden en Booking y luego las de los grupos con más cabañas libres: así cada tipo de
+      // Booking conserva una libre el mayor tiempo posible.
+      prefer: poolFirst(occ, units[type.id] ?? 0, type.id, b.checkIn, b.checkOut, pools),
       source: "reservation",
       sourceId: code,
       label: `Web ${code}`,

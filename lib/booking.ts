@@ -58,11 +58,11 @@ export function freeUnits(occ: Occupancy, units: number, typeId: string, date: s
   return free;
 }
 
-// Primera unidad libre todas las noches del rango, o 0 si no hay. `prefer`: unidades que se prueban primero (las que no se
-// venden en Booking.com, para dejar libres las que sí).
+// Primera unidad libre todas las noches del rango, o 0 si no hay. `prefer`: unidades que se prueban primero, en ese orden
+// (las que no se venden en Booking.com y las de los grupos con más cabañas libres, para dejar libres las que sí).
 export function findUnit(occ: Occupancy, units: number, typeId: string, ci: string, co: string, ignoreCode?: string, prefer: number[] = []) {
   const all = Array.from({ length: units }, (_, i) => i + 1);
-  for (const u of [...all.filter((x) => prefer.includes(x)), ...all.filter((x) => !prefer.includes(x))]) {
+  for (const u of [...prefer.filter((x) => all.includes(x)), ...all.filter((x) => !prefer.includes(x))]) {
     let ok = true;
     for (let d = ci; d < co; d = addDays(d, 1))
       if (!freeUnits(occ, units, typeId, d, ignoreCode).includes(u)) {
@@ -145,7 +145,7 @@ export function clashingReservations<R extends Occupancy["reservations"][number]
 export type ChannelSpan = { id?: string; cabinTypeId: string; unit: number; checkIn: string; checkOut: string; removedAt?: string | null };
 
 export const CHANNEL_LABEL = "Booking.com";
-const CHANNEL_ID = "booking:";
+export const CHANNEL_ID = "booking:";
 
 // Las fechas de Booking entran a la disponibilidad como bloqueos (hasta la última noche, incluida): así cuentan en
 // freeUnits, findUnit, el calendario del sitio y el del panel sin reglas aparte. Las canceladas (removedAt) no cuentan.
@@ -159,22 +159,48 @@ export const isChannelBlock = (b: Pick<Block, "id">) => b.id.startsWith(CHANNEL_
 // Unidades que se prueban primero al asignar una reserva de la web: las que no están enlazadas con Booking.
 export const webFirst = (units: number, linked: number[]) => Array.from({ length: units }, (_, i) => i + 1).filter((u) => !linked.includes(u));
 
+// ¿Está libre la unidad todas las noches de [ci, co)?
+export function unitFree(occ: Occupancy, units: number, typeId: string, unit: number, ci: string, co: string, ignoreCode?: string) {
+  for (let d = ci; d < co; d = addDays(d, 1)) if (!freeUnits(occ, units, typeId, d, ignoreCode).includes(unit)) return false;
+  return true;
+}
+
+// Cabañas de la app que cubre cada tipo de alojamiento de Booking enlazado (uno por calendario). Booking vende una por
+// noche de cada tipo, así que mientras al grupo le quede una libre, lo que venda Booking tiene dónde quedarse.
+export type Pool = number[];
+
+// Orden en que la web prueba las unidades de un tipo para [ci, co): primero las que no se venden en Booking; después las
+// de los grupos con más cabañas libres esas noches. Así cada tipo de Booking conserva una libre el mayor tiempo posible.
+export function poolFirst(occ: Occupancy, units: number, typeId: string, ci: string, co: string, pools: Pool[], ignoreCode?: string) {
+  const slack = new Map<Pool, number>();
+  for (const p of pools) {
+    let min = Infinity;
+    for (let d = ci; d < co; d = addDays(d, 1)) {
+      const free = freeUnits(occ, units, typeId, d, ignoreCode);
+      min = Math.min(min, p.filter((u) => free.includes(u)).length);
+    }
+    slack.set(p, min);
+  }
+  const score = (u: number) => {
+    const p = pools.find((x) => x.includes(u));
+    return p ? slack.get(p)! : Infinity;
+  };
+  return Array.from({ length: units }, (_, i) => i + 1).sort((a, b) => score(b) - score(a) || a - b);
+}
+
 // Reservas de la web que quedaron sobre noches que Booking acaba de ocupar en la misma unidad (`stays`: las fechas nuevas
-// o cambiadas de esta sincronización; `occ` ya las incluye como bloqueos). Si otra unidad del mismo tipo está libre todas
-// sus noches, se reacomoda allí (moves); si no, o si el huésped ya está alojado, es una posible sobreventa (conflicts).
-// Una fecha de Booking con exactamente las mismas noches que la reserva es su eco (Booking vuelve a exportar lo que
-// importó de la web) y no cuenta.
-export function planChannelMoves(occ: Occupancy, stays: ChannelSpan[], units: Units, today: string, prefer: (typeId: string) => number[] = () => []) {
+// o cambiadas de esta sincronización, sin los ecos; `occ` ya las incluye como bloqueos). Si otra unidad del mismo tipo
+// está libre todas sus noches, se reacomoda allí (moves); si no, o si el huésped ya está alojado, es una posible
+// sobreventa (conflicts). `prefer`: orden en que se prueban las unidades para esas noches.
+export function planChannelMoves(occ: Occupancy, stays: ChannelSpan[], units: Units, today: string, prefer: (typeId: string, ci: string, co: string, occ: Occupancy, code: string) => number[] = () => []) {
   const work: Occupancy = { reservations: occ.reservations.map((r) => ({ ...r })), blocks: occ.blocks };
   const moves: { code: string; cabinTypeId: string; from: number; to: number }[] = [];
   const conflicts: { code: string; stay: ChannelSpan }[] = [];
   for (const r of work.reservations) {
     if (!ACTIVE_STATUSES.includes(r.status) || r.checkOut <= today) continue;
-    const stay = stays.find(
-      (s) => !s.removedAt && s.cabinTypeId === r.cabinTypeId && s.unit === r.unit && s.checkIn < r.checkOut && r.checkIn < s.checkOut && !(s.checkIn === r.checkIn && s.checkOut === r.checkOut),
-    );
+    const stay = stays.find((s) => !s.removedAt && s.cabinTypeId === r.cabinTypeId && s.unit === r.unit && s.checkIn < r.checkOut && r.checkIn < s.checkOut);
     if (!stay) continue;
-    const to = r.status === "checked_in" ? 0 : findUnit(work, units[r.cabinTypeId] ?? 0, r.cabinTypeId, r.checkIn, r.checkOut, r.code, prefer(r.cabinTypeId));
+    const to = r.status === "checked_in" ? 0 : findUnit(work, units[r.cabinTypeId] ?? 0, r.cabinTypeId, r.checkIn, r.checkOut, r.code, prefer(r.cabinTypeId, r.checkIn, r.checkOut, work, r.code));
     if (to && to !== r.unit) {
       moves.push({ code: r.code, cabinTypeId: r.cabinTypeId, from: r.unit, to });
       r.unit = to;

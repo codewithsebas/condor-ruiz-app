@@ -211,6 +211,7 @@ export type Database = {
           channel: string
           created_at: string
           export_token: string
+          extra_units: number[]
           id: string
           import_url: string | null
           label: string
@@ -229,6 +230,7 @@ export type Database = {
           channel?: string
           created_at?: string
           export_token?: string
+          extra_units?: number[]
           id?: string
           import_url?: string | null
           label?: string
@@ -247,6 +249,7 @@ export type Database = {
           channel?: string
           created_at?: string
           export_token?: string
+          extra_units?: number[]
           id?: string
           import_url?: string | null
           label?: string

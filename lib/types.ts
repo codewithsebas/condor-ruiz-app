@@ -191,6 +191,9 @@ export type ChannelCalendar = {
   label: string;
   cabinTypeId: CabinTypeId;
   unit: number;
+  // Cabañas de la app que cubre este tipo de Booking (la primera es `unit`). Booking vende una por noche: se cierra allá
+  // cuando todas están ocupadas, y cada reserva suya ocupa una libre.
+  units: number[];
   importUrl: string | null;
   exportUrl: string;
   lastSyncedAt: string | null;
@@ -212,7 +215,7 @@ export type Beds24Room = { id: number; propertyId: number; propertyName: string;
 export type ChannelStay = { id: string; calendarId: string; cabinTypeId: CabinTypeId; unit: number; checkIn: string; checkOut: string; summary: string; firstSeenAt: string; removedAt: string | null };
 
 // Cuerpo de PUT /admin/channels: enlaza (o desenlaza, con importUrl vacío) una unidad con un tipo de Booking.
-export type ChannelCalendarInput = { cabinTypeId: string; unit: number; label: string; importUrl: string; beds24RoomId?: number | null };
+export type ChannelCalendarInput = { cabinTypeId: string; unit: number; units?: number[]; label: string; importUrl: string; beds24RoomId?: number | null };
 // Resultado de una sincronización (por calendario).
 export type ChannelSyncResult = { calendarId: string; ok: boolean; events: number; added: number; removed: number; moved: string[]; conflicts: string[]; error?: string };
 

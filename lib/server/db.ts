@@ -4,7 +4,7 @@ import { ACTIVE_STATUSES, channelBlocks, type Occupancy, type Units } from "@/li
 import type { Database, Tables } from "@/lib/supabase/database.types";
 import type {
   AdminNotification, Beds24Status, Block, CabinType, ChannelCalendar, ChannelStay, ClientEntry, ClientProfile, DocType, EmailKind, EmailRecord, EmailStatus, NotificationKind, PaymentKind, PaymentProof, PaymentProvider, PaymentRecord,
-  PaymentStatus, ProofStatus, PublicPayment, PublicReservation, Quote, RateSeason, Reservation, Severity, Trust,
+  PaymentStatus, ProofStatus, PublicPayment, PublicReservation, Quote, RateSeason, Reservation, ReservationSource, Severity, Trust,
 } from "@/lib/types";
 import { addDays, todayISO } from "@/lib/format";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -240,6 +240,8 @@ export function toReservation(r: ReservationRow & { reservation_notes?: { text: 
     specialRequests: r.special_requests,
     consents: r.consents as Reservation["consents"],
     createdAt: r.created_at,
+    source: r.source as ReservationSource,
+    payToken: r.pay_token,
     clientKey: r.client_key ?? `${r.guest_doc_type}:${r.guest_doc_number.toUpperCase()}`,
     notes: (r.reservation_notes ?? []).sort((a, b) => (a.created_at < b.created_at ? -1 : 1)).map((n) => ({ at: n.created_at, text: n.text })),
   };

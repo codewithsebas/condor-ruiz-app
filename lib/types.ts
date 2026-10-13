@@ -46,6 +46,8 @@ export type Quote = {
   extraPerNight: number;
   nights: number;
   seasonNights?: number; // noches con tarifa de temporada
+  // Precio especial acordado por el equipo (reservas del panel): total = base + extraAmount + adjustment (negativo = descuento).
+  adjustment?: number;
 };
 
 export type AvailabilityOption = {
@@ -84,6 +86,9 @@ export type ReservationInput = {
 };
 
 export type Note = { at: string; text: string };
+
+// De dónde vino la reserva: el sitio (el huésped) o el panel (el equipo, por WhatsApp, teléfono o en persona).
+export type ReservationSource = "web" | "panel";
 
 // Pagos en línea (Wompi; "simulado" en desarrollo) o registrados por el equipo ("manual").
 // deposit: abono (confirma) · full: pago total (confirma y salda) · balance: saldo (antes de llegar o en la hora siguiente al check-in).
@@ -156,8 +161,30 @@ export type Reservation = ReservationInput & {
   balanceDueAt: string | null; // check-in + 1 hora: límite para pagar el saldo (lo fija la base de datos)
   balanceOverdueAt: string | null; // cuándo se registró que el saldo venció sin pagarse
   clientKey: string; // "CC:12345678": tipo y número de documento
+  source?: ReservationSource; // sin valor: "web" (reservas anteriores)
+  payToken?: string | null; // enlace de pago /pagar/<token> (reservas del panel o enlaces enviados por el equipo)
   demo?: boolean;
 };
+
+// Cuerpo de POST /admin/reservations: reserva tomada por el equipo. Queda retenida hasta que el huésped pague por el
+// enlace (holdMinutes, como máximo hasta el día de llegada) o el equipo registre el pago.
+export type ManualReservationInput = {
+  cabinTypeId: CabinTypeId;
+  unit: number | null; // null: la primera libre (como en la web)
+  checkIn: string;
+  checkOut: string;
+  adults: number;
+  children: number;
+  pet: { hasPet: boolean; smallBreedConfirmed: boolean };
+  guest: Guest;
+  estimatedArrival: string; // "HH:MM" o "" (inicio del check-in)
+  specialRequests: string;
+  total: number | null; // precio especial; null = tarifa vigente
+  holdMinutes: number;
+};
+
+// Respuesta: la reserva creada y el enlace de pago para enviarle al huésped.
+export type ManualReservationResult = { reservation: Reservation; payUrl: string };
 
 // Lo que ve el huésped. `payments`: sus intentos de pago, del más reciente al más antiguo.
 // `liveKey`: nombra el canal de avisos en tiempo real de la reserva (solo con código y correo, o con la referencia del pago).
@@ -165,7 +192,7 @@ export type Reservation = ReservationInput & {
 export type PublicReservation = Pick<
   Reservation,
   "code" | "status" | "checkIn" | "checkOut" | "cabinTypeId" | "quote" | "depositDueAt" | "depositPaidAt" | "balancePaidAt" | "paid" | "checkedInAt" | "balanceDueAt" | "balanceOverdueAt"
-> & { guestFirstName?: string; payments?: PublicPayment[]; liveKey?: string; serverNow?: string };
+> & { guestFirstName?: string; payments?: PublicPayment[]; liveKey?: string; serverNow?: string; termsAccepted?: boolean };
 
 // Respuesta al abrir un pago: a dónde llevar al huésped.
 export type PaymentStart = { reference: string; checkoutUrl: string; expiresAt: string | null; provider: PaymentProvider };
@@ -300,6 +327,8 @@ export type AdminAction =
   // Pago recibido por fuera de la pasarela (efectivo o transferencia): "confirm" = abono, "balance" = saldo.
   | { code: string; action: "confirm" | "balance"; note?: string; full?: boolean }
   | { code: string; action: "reschedule"; checkIn: string; checkOut: string }
+  // Enlace de pago con un plazo nuevo: amplía (o reactiva, si venció) la retención de una reserva sin abono.
+  | { code: string; action: "payment_link"; holdMinutes: number }
   | { code: string; action: "note"; text: string };
 
 export type ProofReview = { id: string; decision: "approve" | "reject"; note: string; confirmReservation: boolean };

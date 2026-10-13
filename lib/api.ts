@@ -4,7 +4,7 @@ import { mockRequest } from "./mock-server";
 import { sleep } from "./format";
 import type {
   AdminAction, AdminData, AdminNotification, ApiResult, Availability, Beds24Room, Beds24Status, Block, BlockInput, CabinInput, CabinType, ChannelCalendar, ChannelCalendarInput, ChannelStay, ChannelSyncResult, ClientProfile, ClientProfileInput,
-  EmailRecord, FieldErrors, PaymentKind, PaymentProof, PaymentStart, PaymentState, ProofReview, PublicReservation, RateSeason, Rates, Reservation, ReservationInput, SeasonInput, SiteInput,
+  EmailRecord, FieldErrors, ManualReservationInput, ManualReservationResult, PaymentKind, PaymentProof, PaymentStart, PaymentState, ProofReview, PublicReservation, RateSeason, Rates, Reservation, ReservationInput, SeasonInput, SiteInput,
 } from "./types";
 import type { NotificationGroup } from "./notification-groups";
 import type { SiteContent, SiteService } from "./site";
@@ -101,9 +101,9 @@ export const api = {
   calendar: (q: { cabinTypeId: CabinTypeId; from: string; to: string }) => request<{ unavailableDates: string[] }>("GET", "/availability/calendar", { query: q }),
   createReservation: (body: ReservationInput) =>
     request<PublicReservation | ValidationError>("POST", "/reservations", { body, headers: { "Idempotency-Key": idemKey() } }),
-  lookup: (q: { code: string; email: string }) => request<PublicReservation>("GET", "/reservations/lookup", { query: q }),
+  lookup: (q: { code: string; email: string } | { token: string }) => request<PublicReservation>("GET", "/reservations/lookup", { query: q }),
   // Abre un intento de pago (abono o saldo) y devuelve a dónde llevar al huésped. Sin reintento automático: lo decide quien llama.
-  startPayment: (b: ({ code: string; email: string } | { ref: string }) & { kind?: PaymentKind }) => request<PaymentStart | ApiError>("POST", "/payments", { body: b }),
+  startPayment: (b: ({ code: string; email: string } | { ref: string } | { token: string; accept?: boolean }) & { kind?: PaymentKind }) => request<PaymentStart | ApiError>("POST", "/payments", { body: b }),
   paymentStatus: (q: { ref: string; id?: string }) => request<PaymentState>("GET", "/payments/status", { query: q }),
   simulatePayment: (b: { ref: string; outcome: "approve" | "decline" | "pending" | "error" }) => request<PaymentState | ApiError>("POST", "/payments/simulate", { body: b }),
   admin: {
@@ -111,6 +111,7 @@ export const api = {
     logout: () => request<object>("POST", "/admin/logout"),
     data: () => request<AdminData>("GET", "/admin/data"),
     action: (b: AdminAction) => request<Reservation>("POST", "/admin/action", { body: b }),
+    createReservation: (b: ManualReservationInput) => request<ManualReservationResult | ValidationError | ApiError>("POST", "/admin/reservations", { body: b }),
     addBlock: (b: BlockInput) => request<Block[]>("POST", "/admin/blocks", { body: b }),
     updateBlock: (b: BlockInput & { id: string }) => request<Block[]>("PUT", "/admin/blocks", { body: b }),
     deleteBlock: (id: string) => request<Block[]>("DELETE", "/admin/blocks", { query: { id } }),

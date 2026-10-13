@@ -7,6 +7,34 @@ export const HOLD_MINUTES = 30;
 // Minutos para pagar el saldo después del check-in. La base de datos fija balance_due_at con este mismo valor (1 hora).
 export const BALANCE_MINUTES = 60;
 
+/* ───────────── Reservas del panel: enlace de pago con plazo ───────────── */
+
+// Plazos que el equipo puede dar para pagar por el enlace (minutos).
+export const HOLD_OPTIONS: { value: number; label: string }[] = [
+  { value: 60, label: "1 hora" },
+  { value: 180, label: "3 horas" },
+  { value: 360, label: "6 horas" },
+  { value: 720, label: "12 horas" },
+  { value: 1440, label: "24 horas" },
+  { value: 2880, label: "48 horas" },
+];
+export const DEFAULT_HOLD = 1440;
+// Plazo mínimo útil: start_payment no abre un pago a menos de 1 minuto del vencimiento.
+export const MIN_HOLD_MS = 10 * 6e4;
+
+// Fecha límite para pagar por el enlace: ahora + el plazo elegido, pero nunca después del día de llegada (23:59, hora de
+// Colombia): las fechas no se retienen más allá de la estadía. `capped`: el plazo se acortó por eso.
+export function manualDueAt(checkIn: string, minutes: number, now = Date.now()) {
+  const limit = Date.parse(`${checkIn}T23:59:00-05:00`);
+  const wanted = now + minutes * 6e4;
+  const due = Math.min(wanted, limit);
+  return { dueAt: new Date(due).toISOString(), capped: due < wanted, tooShort: due - now < MIN_HOLD_MS };
+}
+
+// Ruta pública del enlace de pago.
+export const payPath = (token: string) => `/pagar/${token}`;
+export const PAY_TOKEN = /^[A-Za-z0-9_-]{20,64}$/;
+
 type Money = { quote: Quote; paid?: number; depositPaidAt?: string | null };
 
 // Total, lo pagado y lo que falta. Antes del abono, el saldo es el total menos el abono esperado.
@@ -94,4 +122,5 @@ export const START_ERRORS: Record<string, string> = {
   NOT_PAYABLE: "Esta reserva no admite pagos en su estado actual.",
   PAYMENTS_NOT_CONFIGURED: "Los pagos en línea no están disponibles en este momento. Escríbenos por WhatsApp.",
   NOT_FOUND: "No encontramos la reserva.",
+  TERMS_REQUIRED: "Acepta las políticas de reserva y el tratamiento de datos para continuar.",
 };

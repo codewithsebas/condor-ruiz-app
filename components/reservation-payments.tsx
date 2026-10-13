@@ -5,11 +5,12 @@
 // cuando un plazo llega a cero se vuelve a consultar la API, que es la que decide.
 import { useEffect, useRef, useState } from "react";
 import { api, type ApiError } from "@/lib/api";
-import { cop, fmtClock, fmtDateTime, wa } from "@/lib/format";
+import { cop, dateOf, fmtClock, fmtDate, fmtDateTime, todayISO, wa } from "@/lib/format";
 import { BALANCE_MINUTES, PAYMENT_STATUS, START_ERRORS, kindLabel, latestConfirming, latestPayment, methodLabel, moneyOf, stageOf, type Stage } from "@/lib/payments";
 import type { PaymentKind, PaymentStart, PublicPayment, PublicReservation } from "@/lib/types";
 import { CheckIcon, ClockIcon, WhatsAppIcon } from "./icons";
 import { useSite } from "./site-provider";
+import { CheckOption } from "./ui/choice";
 
 /* ───────────── Hora del servidor ───────────── */
 
@@ -40,7 +41,7 @@ export function fmtLeft(ms: number) {
 
 /* ───────────── Abrir un pago ───────────── */
 
-export type PayAccess = { code: string; email: string } | { ref: string };
+export type PayAccess = { code: string; email: string } | { ref: string } | { token: string; accept?: boolean };
 
 // Abre la pasarela. Si la API responde con un error de negocio (plazo vencido, pago en proceso…), se muestra y se refresca.
 export function usePay(access: PayAccess | null, onStale: () => void) {
@@ -123,9 +124,9 @@ function Declined({ p }: { p: PublicPayment | null }) {
 
 export const payLabel = (kind: PaymentKind, amount: number) => (kind === "deposit" ? `Pagar abono de ${cop(amount)}` : kind === "full" ? `Pagar el total: ${cop(amount)}` : `Pagar saldo de ${cop(amount)}`);
 
-function PayButton({ kind, amount, busy, onPay }: { kind: PaymentKind; amount: number; busy: PaymentKind | null; onPay: (k: PaymentKind) => void }) {
+function PayButton({ kind, amount, busy, onPay, blocked }: { kind: PaymentKind; amount: number; busy: PaymentKind | null; onPay: (k: PaymentKind) => void; blocked?: boolean }) {
   return (
-    <button type="button" onClick={() => onPay(kind)} disabled={!!busy} aria-busy={busy === kind} className="btn btn-highlight min-h-14 self-start px-7 text-[1.02rem] disabled:opacity-60">
+    <button type="button" onClick={() => onPay(kind)} disabled={!!busy || blocked} aria-busy={busy === kind} className="btn btn-highlight min-h-14 self-start px-7 text-[1.02rem] disabled:opacity-60">
       {busy === kind && <Spinner />}
       {busy === kind ? "Abriendo el pago…" : payLabel(kind, amount)}
     </button>
@@ -178,7 +179,8 @@ export function PlanChoice({ value, onChange, deposit, total, pct, disabled, wid
  * Lo que el huésped debe saber y hacer ahora. `access`: con qué se identifica para pagar (null: solo lectura).
  * `onRefresh`: volver a consultar la API (al vencer un plazo o cuando la API rechaza un pago por estado).
  */
-export function PaymentStage({ r, access, onRefresh }: { r: PublicReservation; access: PayAccess | null; onRefresh: () => void }) {
+// `terms`: casilla de políticas antes de pagar (enlace de pago de una reserva tomada por el equipo, que el huésped aún no aceptó).
+export function PaymentStage({ r, access, onRefresh, terms }: { r: PublicReservation; access: PayAccess | null; onRefresh: () => void; terms?: { accepted: boolean; onChange: (v: boolean) => void } }) {
   const { c } = useSite();
   const stage0 = stageOf(r);
   const live = stage0 === "awaiting_deposit" || stage0 === "balance_due";
@@ -216,7 +218,9 @@ export function PaymentStage({ r, access, onRefresh }: { r: PublicReservation; a
       return (
         <Panel t="wait" eyebrow="Pago pendiente · reserva sin confirmar" title="Paga para confirmar tu reserva">
           <p className="font-semibold">
-            Tus fechas quedan apartadas hasta las <strong>{fmtClock(r.depositDueAt)}</strong>{" "}
+            {/* Las retenciones de la web duran minutos; las del enlace que envía el equipo, hasta 48 horas: si no es hoy, también el día. */}
+            Tus fechas quedan apartadas hasta {dateOf(r.depositDueAt) === todayISO() ? "las " : `el ${fmtDate(dateOf(r.depositDueAt))} a las `}
+            <strong>{fmtClock(r.depositDueAt)}</strong>{" "}
             <span className="inline-flex items-center gap-1 rounded-full bg-card px-2.5 py-0.5 text-[.88rem] font-extrabold tabular-nums" role="timer" aria-live="off">
               <ClockIcon size={14} />
               {fmtLeft(Date.parse(r.depositDueAt) - now)}
@@ -227,7 +231,20 @@ export function PaymentStage({ r, access, onRefresh }: { r: PublicReservation; a
             <>
               <PlanChoice value={plan} onChange={setPlan} deposit={m.deposit} total={m.total} pct={c.depositPct} disabled={!!busy} />
               <Declined p={confirming} />
-              <PayButton kind={plan} amount={plan === "full" ? m.total : m.deposit} busy={busy} onPay={pay} />
+              {terms && (
+                <CheckOption card checked={terms.accepted} onChange={terms.onChange} note="Obligatorio para pagar">
+                  Acepto las{" "}
+                  <a href="/politicas" target="_blank" rel="noopener" className="underline underline-offset-2">
+                    políticas de reserva
+                  </a>{" "}
+                  y autorizo el{" "}
+                  <a href="/privacidad" target="_blank" rel="noopener" className="underline underline-offset-2">
+                    tratamiento de mis datos
+                  </a>
+                  .
+                </CheckOption>
+              )}
+              <PayButton kind={plan} amount={plan === "full" ? m.total : m.deposit} busy={busy} onPay={pay} blocked={!!terms && !terms.accepted} />
             </>
           ) : (
             <Amounts rows={[{ k: "Valor total", v: m.total }, { k: `Abono para confirmar (${c.depositPct} %)`, v: m.deposit, strong: true }]} />

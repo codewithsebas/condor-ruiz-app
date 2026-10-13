@@ -3,20 +3,21 @@
 // Página de una reserva (/admin/reservas/[codigo]): acciones, pagos, correos, comprobantes, notas, cliente y datos de la estadía.
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { AlertIcon, CheckIcon, FileTextIcon, ListIcon, LockIcon, MailIcon, NoteIcon, RefreshIcon, UsersIcon, WalletIcon, WhatsAppIcon } from "@/components/icons";
+import { AlertIcon, CheckIcon, ClockIcon, FileTextIcon, LinkIcon, ListIcon, LockIcon, MailIcon, NoteIcon, RefreshIcon, UsersIcon, WalletIcon, WhatsAppIcon } from "@/components/icons";
 import { KeyValues, StatusPill } from "@/components/status-pill";
 import { balanceDue, buildClients, typeMarks } from "@/lib/admin-metrics";
 import { api } from "@/lib/api";
 import { channelBlocks } from "@/lib/booking";
 import { config } from "@/lib/config";
 import { addDays, cop, countdown, dateOf, fmtClock, fmtDate, fmtDateTime, nightsBetween, plural, timeAgo, waTo } from "@/lib/format";
-import { BALANCE_MINUTES, PAYMENT_STATUS, kindLabel, methodLabel } from "@/lib/payments";
+import { BALANCE_MINUTES, DEFAULT_HOLD, HOLD_OPTIONS, PAYMENT_STATUS, kindLabel, manualDueAt, methodLabel } from "@/lib/payments";
 import type { EmailRecord, PaymentRecord, Reservation } from "@/lib/types";
 import { useAdmin } from "./context";
 import { ProofCard } from "./proofs";
+import { PayLinkShare, fmtDeadline, payUrlOf } from "./pay-link-share";
 import { paths } from "./routes";
 import { TRUST, type ConfirmCfg, adminInput } from "./shared";
-import { Badge, Button, Card, CardHeader, EmptyState, Field, PageHeader, Stars, buttonClass } from "./ui";
+import { Badge, Button, Card, CardHeader, EmptyState, Field, FieldError, PageHeader, Segmented, Stars, buttonClass } from "./ui";
 
 const OCC: Record<string, string> = { aniversario: "Aniversario", cumpleanos: "Cumpleaños", propuesta: "Propuesta", otra: "Otra" };
 
@@ -159,6 +160,7 @@ export function ReservationDetail({ code }: { code: string }) {
       >
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <StatusPill status={r.status} size="sm" />
+          {r.source === "panel" && <Badge tone="neutral">Creada por el equipo</Badge>}
           {pendingProof && (
             <Badge tone="info" icon={<FileTextIcon size={12} />}>
               Comprobante por revisar
@@ -176,6 +178,7 @@ export function ReservationDetail({ code }: { code: string }) {
 
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex min-w-0 flex-col gap-4">
+          {(r.status === "pending_deposit" || r.status === "expired") && !processing && <PayLinkCard r={r} />}
           <PaymentSummary r={r} payments={payments} />
           <EmailsCard emails={emails} />
           {proofs.length > 0 && (
@@ -241,6 +244,91 @@ function DetailCard({ id, title, rows }: { id: string; title: string; rows: { k:
         {title}
       </h2>
       <KeyValues rows={rows} variant="plain" />
+    </Card>
+  );
+}
+
+// Enlace de pago para el huésped: compartirlo, darle un plazo nuevo o, si la retención venció, reactivarla con un plazo.
+function PayLinkCard({ r }: { r: Reservation }) {
+  const { setData, toast, onAuthError, now } = useAdmin();
+  const [hold, setHold] = useState(DEFAULT_HOLD);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [editing, setEditing] = useState(false);
+  const expired = r.status === "expired" || Date.parse(r.depositDueAt) <= now;
+  const due = manualDueAt(r.checkIn, hold, now);
+  const url = r.payToken ? payUrlOf(r.payToken) : null;
+
+  async function apply() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await api.admin.action({ code: r.code, action: "payment_link", holdMinutes: hold });
+      if (res.status === 401 || res.status === 403) return onAuthError();
+      if (res.status !== 200 || !res.data) {
+        const code = (res.data as { error?: string } | null)?.error;
+        setError(
+          code === "HOLD_TOO_SHORT"
+            ? "Ya no queda tiempo antes de la llegada: registra el pago manualmente."
+            : res.status === 409
+              ? "Esas fechas ya no están libres: la reserva no se puede reactivar."
+              : code === "CHANNEL_UNAVAILABLE"
+                ? "No se pudo retener la cabaña en Booking.com (Beds24 no respondió). Inténtalo en un momento."
+                : "No se pudo actualizar el enlace. Inténtalo de nuevo.",
+        );
+        return;
+      }
+      const updated = res.data;
+      setData((d) => ({ ...d, reservations: d.reservations.map((x) => (x.code === updated.code ? updated : x)) }));
+      setEditing(false);
+      toast(r.status === "expired" ? "Reserva reactivada: envía el enlace al huésped" : `Nuevo plazo: hasta el ${fmtDeadline(updated.depositDueAt)}`);
+    } catch {
+      setError("Error de conexión. Inténtalo de nuevo.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const picker = (
+    <div className="flex flex-col gap-2 rounded-xl bg-canvas p-3">
+      <Segmented label="Plazo para pagar" size="sm" value={String(hold)} onChange={(v) => setHold(Number(v))} options={HOLD_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))} className="flex-wrap" />
+      <p className="text-[12.5px] text-ink-muted">{due.tooShort ? "Ya no queda tiempo antes de la llegada." : `Vencerá el ${fmtDeadline(due.dueAt)}${due.capped ? " (no puede pasar del día de llegada)" : ""}`}</p>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="primary" size="sm" loading={busy} disabled={due.tooShort} onClick={apply}>
+          {r.status === "expired" ? "Reactivar y crear enlace" : url ? "Aplicar nuevo plazo" : "Crear enlace de pago"}
+        </Button>
+        {editing && (
+          <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+            Cancelar
+          </Button>
+        )}
+      </div>
+      {error && <FieldError>{error}</FieldError>}
+    </div>
+  );
+
+  return (
+    <Card aria-labelledby="dt-paylink" className="flex flex-col gap-3 p-4 sm:p-5">
+      <CardHeader
+        id="dt-paylink"
+        icon={<LinkIcon size={18} />}
+        title="Enlace de pago"
+        subtitle={
+          r.status === "expired"
+            ? "La retención venció sin pago y las fechas se liberaron. Si siguen libres, puedes reactivarla con un plazo nuevo."
+            : "El huésped paga el abono o el total con Wompi sin escribir código ni correo. Al pagar, la reserva se confirma sola."
+        }
+        actions={
+          url && r.status === "pending_deposit" && !editing ? (
+            <Button size="sm" variant="ghost" icon={<ClockIcon size={14} />} onClick={() => setEditing(true)}>
+              Cambiar plazo
+            </Button>
+          ) : undefined
+        }
+      />
+      {url && r.status === "pending_deposit" && !expired && <PayLinkShare r={r} url={url} compact />}
+      {(!url || r.status === "expired" || editing || expired) && picker}
     </Card>
   );
 }

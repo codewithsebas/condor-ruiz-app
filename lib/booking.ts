@@ -1,8 +1,8 @@
 // Reglas de reserva compartidas por el servidor (Supabase) y el modo simulado.
 import { config, type CabinTypeId } from "./config";
-import { HOLD_MINUTES } from "./payments";
+import { HOLD_MINUTES, HOLD_OPTIONS } from "./payments";
 import { addDays, isISO, nightsBetween } from "./format";
-import type { Availability, Block, CabinType, FieldErrors, Quote, RateSeason, ReservationInput, ReservationStatus } from "./types";
+import type { Availability, Block, CabinType, FieldErrors, ManualReservationInput, Quote, RateSeason, ReservationInput, ReservationStatus } from "./types";
 
 export const ACTIVE_STATUSES: ReservationStatus[] = ["pending_deposit", "confirmed", "rescheduled", "checked_in"];
 
@@ -45,6 +45,51 @@ export function computeQuote(t: Priced, checkIn: string, checkOut: string, guest
     pricePerNight: nights ? Math.round(base / nights) : t.precioPareja,
     extraPerNight: nights && extraGuests ? Math.round(extraAmount / (nights * extraGuests)) : t.personaAdicional,
   };
+}
+
+// Precio especial acordado por el equipo: el total cambia, el abono se recalcula con el mismo porcentaje y la diferencia
+// con la tarifa queda en `adjustment` (negativo = descuento).
+export function withTotal(q: Quote, total: number): Quote {
+  const deposit = Math.round((total * config.depositPct) / 100);
+  return { ...q, total, deposit, balance: total - deposit, adjustment: total - (q.base + q.extraAmount) };
+}
+
+// Celular con indicativo: "300 123 4567" → "+573001234567" (Colombia por defecto); "+1 555…" se conserva.
+export function normalizePhone(p: string) {
+  const digits = String(p || "").replace(/\D/g, "");
+  if (/^3\d{9}$/.test(digits)) return "+57" + digits;
+  if (String(p || "").trim().startsWith("+") || /^57\d{10}$/.test(digits)) return "+" + digits;
+  return digits ? "+" + digits : "";
+}
+
+export const SPECIAL_TOTAL = { min: 10_000, max: 100_000_000 };
+
+// Reserva tomada por el equipo: los datos del huésped que exige la base de datos (nombre, documento, correo y celular)
+// y el plazo del enlace de pago. No pide casilla de políticas: el huésped las acepta en la página del enlace antes de pagar.
+export function validateManualReservation(b: ManualReservationInput, types: CabinType[], units: Partial<Record<string, number>>, today: string): FieldErrors {
+  const f: FieldErrors = {};
+  const g = b.guest ?? ({} as ManualReservationInput["guest"]);
+  if (!isISO(b.checkIn) || !isISO(b.checkOut) || b.checkOut <= b.checkIn) f.checkIn = "Elige la llegada y la salida.";
+  else if (b.checkIn < today) f.checkIn = "La fecha de llegada ya pasó.";
+  else if (nightsBetween(b.checkIn, b.checkOut) > 30) f.checkIn = "La estadía máxima es de 30 noches.";
+  const t = types.find((x) => x.id === b.cabinTypeId);
+  if (!t) f.cabinTypeId = "Elige la cabaña.";
+  else if (b.unit !== null && (!Number.isInteger(b.unit) || b.unit < 1 || b.unit > (units[t.id] ?? 0))) f.cabinTypeId = "Esa unidad no existe.";
+  const adults = Number(b.adults);
+  const children = Number(b.children);
+  if (!Number.isInteger(adults) || adults < 1 || !Number.isInteger(children) || children < 0) f.adults = "Número de huéspedes no válido.";
+  else if (t && adults + children > t.maxPersonas) f.adults = `Máximo ${t.maxPersonas} personas en esta cabaña.`;
+  if (!g.fullName || g.fullName.trim().length < 3 || g.fullName.length > 120) f["guest.fullName"] = "Escribe el nombre completo.";
+  if (!["CC", "CE", "Pasaporte", "PPT"].includes(g.docType)) f["guest.docType"] = "Elige el tipo de documento.";
+  if (!g.docNumber || !/^[A-Za-z0-9]{5,15}$/.test(g.docNumber.trim())) f["guest.docNumber"] = "Escribe el número de documento (sin puntos).";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((g.email || "").trim()) || g.email.length > 160) f["guest.email"] = "Escribe un correo válido: ahí le llega la confirmación.";
+  if (!/^\+\d{8,15}$/.test(normalizePhone(g.phone))) f["guest.phone"] = "Escribe el celular (WhatsApp) con indicativo si no es de Colombia.";
+  if ((g.city ?? "").length > 80) f["guest.city"] = "La ciudad es demasiado larga.";
+  if (b.estimatedArrival && !/^\d{2}:\d{2}$/.test(b.estimatedArrival)) f.estimatedArrival = "Hora de llegada no válida.";
+  if ((b.specialRequests ?? "").length > 1000) f.specialRequests = "El texto es demasiado largo.";
+  if (b.total !== null && (!Number.isInteger(b.total) || b.total < SPECIAL_TOTAL.min || b.total > SPECIAL_TOTAL.max)) f.total = "Escribe un precio válido.";
+  if (!HOLD_OPTIONS.some((o) => o.value === b.holdMinutes)) f.holdMinutes = "Elige el plazo para pagar.";
+  return f;
 }
 
 // Unidades libres de un tipo la noche `date` (las reservas ocupan [checkIn, checkOut); los bloqueos incluyen `to`).

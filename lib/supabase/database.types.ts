@@ -812,8 +812,10 @@ export type Database = {
           guest_phone: string
           idempotency_key: string | null
           live_key: string
+          pay_token: string | null
           pet: Json
           quote: Json
+          source: string
           special_requests: string
           status: Database["public"]["Enums"]["reservation_status"]
           unit: number
@@ -846,8 +848,10 @@ export type Database = {
           guest_phone: string
           idempotency_key?: string | null
           live_key?: string
+          pay_token?: string | null
           pet?: Json
           quote: Json
+          source?: string
           special_requests?: string
           status?: Database["public"]["Enums"]["reservation_status"]
           unit: number
@@ -880,8 +884,10 @@ export type Database = {
           guest_phone?: string
           idempotency_key?: string | null
           live_key?: string
+          pay_token?: string | null
           pet?: Json
           quote?: Json
+          source?: string
           special_requests?: string
           status?: Database["public"]["Enums"]["reservation_status"]
           unit?: number

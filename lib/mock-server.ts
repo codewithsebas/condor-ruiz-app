@@ -1,14 +1,16 @@
 // Adaptador simulado: implementa el contrato de la API sobre localStorage.
 // Se activa con NEXT_PUBLIC_USE_MOCK_API=1 (demos sin backend). Solo corre en el navegador.
-import { availability, channelBlocks, clashingReservations, computeQuote, depositDueAt, findUnit, newReservationCode, slugify, unavailableDates, validateReservation, webFirst } from "./booking";
+import {
+  availability, channelBlocks, clashingReservations, computeQuote, depositDueAt, findUnit, newReservationCode, normalizePhone, slugify, unavailableDates, unitFree, validateManualReservation, validateReservation, webFirst, withTotal,
+} from "./booking";
 import { config } from "./config";
 import { addDays, sleep, todayISO } from "./format";
-import { BALANCE_MINUTES } from "./payments";
+import { BALANCE_MINUTES, HOLD_OPTIONS, manualDueAt, payPath } from "./payments";
 import { defaultContent, defaultTexts, mergeTexts, type SiteContent, type SiteService } from "./site";
 import { mergeTheme } from "./theme";
 import type {
   AdminNotification, ApiResult, Block, BlockInput, CabinInput, CabinType, ChannelCalendar, ChannelCalendarInput, ChannelStay, ClientProfile, EmailRecord, NotificationKind, PaymentKind, PaymentRecord, PaymentStatus, PublicReservation, RateSeason, Rates, Reservation,
-  ReservationInput, SeasonInput, SiteInput,
+  ManualReservationInput, ReservationInput, SeasonInput, SiteInput,
 } from "./types";
 
 export type MockSettings = { post: "success" | "409" | "422" | "429" | "network" | "slow" };
@@ -121,6 +123,8 @@ function seed(): Db {
   return db;
 }
 
+// Secreto del enlace de pago simulado (24 caracteres base64url, como en el servidor).
+const mockToken = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(18)))).replace(/\+/g, "-").replace(/\//g, "_");
 const randomTail = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[b % 32]).join("");
 
 function mockPayment(r: Reservation, kind: PaymentKind, status: PaymentStatus, provider: "simulado" | "manual", at = new Date().toISOString(), amount?: number): PaymentRecord {
@@ -279,10 +283,16 @@ export async function mockRequest(method: string, path: string, opts: MockReques
 
   // ----- Pagos (pasarela simulada; mismas reglas que start_payment y settle_payment) -----
   if (method === "POST" && path === "/payments") {
-    const b = (opts.body || {}) as { code?: string; email?: string; ref?: string; kind?: PaymentKind };
+    const b = (opts.body || {}) as { code?: string; email?: string; ref?: string; token?: string; accept?: boolean; kind?: PaymentKind };
     const byRef = b.ref ? db.payments.find((p) => p.reference === String(b.ref).toUpperCase())?.reservationCode : undefined;
-    const r = db.reservations.find((x) => (byRef ? x.code === byRef : x.code === String(b.code || "").toUpperCase() && x.guest.email.toLowerCase() === String(b.email || "").trim().toLowerCase()));
+    const r = b.token
+      ? db.reservations.find((x) => x.payToken === b.token)
+      : db.reservations.find((x) => (byRef ? x.code === byRef : x.code === String(b.code || "").toUpperCase() && x.guest.email.toLowerCase() === String(b.email || "").trim().toLowerCase()));
     if (!r) return { status: 404, data: { error: "NOT_FOUND" } };
+    if (b.token && !(r.consents.policies && r.consents.dataProcessing)) {
+      if (b.accept !== true) return { status: 422, data: { error: "TERMS_REQUIRED" } };
+      r.consents = { ...r.consents, policies: true, dataProcessing: true };
+    }
     const kind: PaymentKind = b.kind ?? (r.status === "pending_deposit" ? "deposit" : "balance");
     const err = (status: number, error: string) => ({ status, data: { error } });
     const sameStage = (k: PaymentKind) => (kind === "balance" ? k === "balance" : k !== "balance");
@@ -328,6 +338,10 @@ export async function mockRequest(method: string, path: string, opts: MockReques
   }
 
   if (method === "GET" && path === "/reservations/lookup") {
+    if (q.token) {
+      const r = db.reservations.find((x) => x.payToken === q.token);
+      return r ? ok({ ...pub(db, r), termsAccepted: !!(r.consents.policies && r.consents.dataProcessing) }) : { status: 404, data: { error: "NOT_FOUND" } };
+    }
     const r = db.reservations.find(
       (x) => x.code.toUpperCase() === String(q.code || "").trim().toUpperCase() && x.guest.email.toLowerCase() === String(q.email || "").trim().toLowerCase(),
     );
@@ -375,11 +389,53 @@ export async function mockRequest(method: string, path: string, opts: MockReques
   }
   if (path === "/admin/photos" || path === "/admin/cabins/photos" || path === "/admin/proofs" || path === "/admin/push") return { status: 501, data: { error: "NOT_AVAILABLE_IN_MOCK" } };
 
+  // Reserva tomada por el equipo: mismas reglas que POST /api/admin/reservations (en modo simulado, solo en este navegador).
+  if (method === "POST" && path === "/admin/reservations") {
+    const raw = opts.body as ManualReservationInput;
+    const b: ManualReservationInput = { ...raw, unit: raw.unit ?? null, total: raw.total ?? null, guest: { ...raw.guest, phone: normalizePhone(raw.guest?.phone ?? "") } };
+    const f = validateManualReservation(b, activeTypes(db), unitsOf(db), todayISO());
+    const due = manualDueAt(b.checkIn, b.holdMinutes);
+    if (!f.checkIn && !f.holdMinutes && due.tooShort) f.holdMinutes = "Ya no queda tiempo para pagar antes de la llegada: registra el pago manualmente.";
+    if (Object.keys(f).length) return invalid(f);
+    const units = unitsOf(db)[b.cabinTypeId] ?? 0;
+    const o = occ(db);
+    const unit = b.unit
+      ? unitFree(o, units, b.cabinTypeId, b.unit, b.checkIn, b.checkOut) ? b.unit : 0
+      : findUnit(o, units, b.cabinTypeId, b.checkIn, b.checkOut, undefined, webFirst(units, channelsOf(db).calendars.filter((c) => c.cabinTypeId === b.cabinTypeId && c.importUrl).flatMap((c) => c.units ?? [c.unit])));
+    if (!unit) return { status: 409, data: { error: "DATES_UNAVAILABLE" } };
+    const quote = quoteFor(db, b.cabinTypeId, b.checkIn, b.checkOut, b.adults + b.children);
+    const token = mockToken();
+    const r: Reservation = {
+      cabinTypeId: b.cabinTypeId, checkIn: b.checkIn, checkOut: b.checkOut, adults: b.adults, children: b.children,
+      pet: { hasPet: !!b.pet?.hasPet, smallBreedConfirmed: !!b.pet?.hasPet }, decoration: { requested: false, occasion: "", notes: "" },
+      estimatedArrival: b.estimatedArrival || siteOf(db).settings.checkInStart,
+      guest: { ...b.guest, fullName: b.guest.fullName.trim(), docNumber: b.guest.docNumber.trim().toUpperCase(), email: b.guest.email.trim(), city: (b.guest.city ?? "").trim() },
+      specialRequests: (b.specialRequests ?? "").trim(), consents: { policies: false, dataProcessing: false, marketing: false },
+      code: newReservationCode(), unit, status: "pending_deposit", quote: b.total ? withTotal(quote, b.total) : quote, depositDueAt: due.dueAt, createdAt: new Date().toISOString(),
+      notes: [], depositPaidAt: null, balancePaidAt: null, clientKey: "", paid: 0, checkedInAt: null, balanceDueAt: null, balanceOverdueAt: null, source: "panel", payToken: token,
+    };
+    r.clientKey = keyOf(r);
+    db.reservations.push(r);
+    save(db);
+    return { status: 201, data: { reservation: r, payUrl: location.origin + payPath(token) } };
+  }
+
   if (method === "POST" && path === "/admin/action") {
     const r = db.reservations.find((x) => x.code === body.code);
     if (!r) return { status: 404, data: {} };
     const map: Record<string, Reservation["status"]> = { cancel: "cancelled", checkin: "checked_in", checkout: "completed" };
     const now = new Date().toISOString();
+    if (body.action === "payment_link") {
+      if (r.status !== "pending_deposit" && r.status !== "expired") return { status: 422, data: { error: "INVALID_TRANSITION" } };
+      const minutes = Number((opts.body as { holdMinutes?: number }).holdMinutes);
+      if (!HOLD_OPTIONS.some((o) => o.value === minutes)) return { status: 400, data: { error: "INVALID_BODY" } };
+      const due = manualDueAt(r.checkIn, minutes);
+      if (due.tooShort) return { status: 422, data: { error: "HOLD_TOO_SHORT" } };
+      if (r.status === "expired" && !unitFree(occ(db), unitsOf(db)[r.cabinTypeId] ?? 0, r.cabinTypeId, r.unit, r.checkIn, r.checkOut, r.code)) return { status: 409, data: { error: "DATES_UNAVAILABLE" } };
+      Object.assign(r, { status: "pending_deposit", depositDueAt: due.dueAt, payToken: r.payToken ?? mockToken() });
+      save(db);
+      return ok(r);
+    }
     if (body.action === "confirm" || body.action === "balance") {
       const kind: PaymentKind = body.action === "balance" ? "balance" : (opts.body as { full?: boolean }).full ? "full" : "deposit";
       const p = mockPayment(r, kind, "approved", "manual", undefined, kind === "full" ? r.quote.total - r.paid : undefined);

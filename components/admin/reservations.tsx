@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronRightIcon, CloseIcon, FileTextIcon, SearchIcon } from "@/components/icons";
+import { ChevronRightIcon, CloseIcon, FileTextIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { StatusPill } from "@/components/status-pill";
 import { paymentState } from "@/lib/admin-metrics";
 import { STATUS, isISO, plural } from "@/lib/format";
@@ -10,6 +10,7 @@ import type { Reservation } from "@/lib/types";
 import { Combobox } from "@/components/ui/combobox";
 import { useAdmin, useParam } from "./context";
 import { DateRangePicker } from "./date-picker";
+import { NewReservationDialog } from "./new-reservation";
 import { MODULES, paths } from "./routes";
 import { adminInput, norm, rowOf } from "./shared";
 import { Badge, Button, Card, EmptyState, Field, PageHeader, Segmented } from "./ui";
@@ -29,6 +30,7 @@ export function ReservationsView() {
   const [toP, setTo] = useParam("hasta", "");
   const [sort, setSort] = useParam<Sort>("orden", "llegada-desc");
   const [limit, setLimit] = useState(PAGE);
+  const [creating, setCreating] = useState(false);
   const from = isISO(fromP) ? fromP : null;
   const to = isISO(toP) ? toP : null;
 
@@ -69,7 +71,16 @@ export function ReservationsView() {
 
   return (
     <>
-      <PageHeader title={MODULES.reservas.label} description={MODULES.reservas.description} />
+      <PageHeader
+        title={MODULES.reservas.label}
+        description={MODULES.reservas.description}
+        actions={
+          <Button variant="primary" icon={<PlusIcon size={14} />} onClick={() => setCreating(true)}>
+            Nueva reserva
+          </Button>
+        }
+      />
+      {creating && <NewReservationDialog draft={{}} onClose={() => setCreating(false)} />}
       <Segmented
         label="Filtro rápido"
         value={quick}

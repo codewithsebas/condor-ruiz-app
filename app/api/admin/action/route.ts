@@ -7,11 +7,26 @@ import { fail, json, readJson, requireAdmin, route } from "@/lib/server/http";
 import { processOutbox } from "@/lib/server/mailer";
 import { dispatchPush } from "@/lib/server/push";
 import { businessError, siteUrl } from "@/lib/server/payments";
+import { newPayToken } from "@/lib/server/reservations";
+import { HOLD_OPTIONS, manualDueAt } from "@/lib/payments";
 import type { Tables } from "@/lib/supabase/database.types";
 import type { AdminAction, Quote, ReservationStatus } from "@/lib/types";
 
 // Lo que Beds24 necesita de una reserva para retener su cabaña (si se vende en Booking).
 const holdOf = (r: Tables<"reservations">) => ({ source: "reservation" as const, sourceId: r.code, cabinTypeId: r.cabin_type_id, label: `Web ${r.code}`, adults: r.adults, children: r.children });
+
+// Reactivar una retención vencida (pagarla o darle un plazo nuevo) vuelve a ocupar sus noches: si la cabaña se vende en
+// Booking por Beds24, se retiene allá antes. Las demás no necesitan retener nada.
+async function reclaim(r: Tables<"reservations">): Promise<{ hold: Hold } | { error: Response }> {
+  if (r.status !== "expired") return { hold: { commit: async () => {}, release: async () => {} } };
+  try {
+    const h = await holdRoom({ ...holdOf(r), checkIn: r.check_in, checkOut: r.check_out, unit: r.unit });
+    return h ? { hold: h } : { error: fail(409, "CHANNEL_CONFLICT") };
+  } catch (e) {
+    console.error(e);
+    return { error: fail(503, "CHANNEL_UNAVAILABLE") };
+  }
+}
 
 const TRANSITIONS: Record<string, { from: ReservationStatus[]; to?: ReservationStatus }> = {
   confirm: { from: ["pending_deposit", "expired"] },
@@ -20,12 +35,14 @@ const TRANSITIONS: Record<string, { from: ReservationStatus[]; to?: ReservationS
   checkout: { from: ["checked_in"], to: "completed" },
   cancel: { from: ["pending_deposit", "confirmed", "rescheduled"], to: "cancelled" },
   reschedule: { from: ["pending_deposit", "confirmed", "rescheduled"] },
+  payment_link: { from: ["pending_deposit", "expired"] },
   note: { from: ["pending_deposit", "confirmed", "cancelled", "expired", "rescheduled", "checked_in", "completed"] },
 };
 
 // POST /api/admin/action { code, action, ... } → cambia el estado, registra un pago, reprograma o agrega una nota.
 // confirm / balance: pago recibido por fuera de la pasarela (efectivo o transferencia), con las mismas reglas que un pago en línea.
 // confirm con full: el huésped pagó el total (confirma y salda).
+// payment_link: plazo nuevo (y enlace) para pagar el abono o el total por el enlace de pago.
 // checkin: la base de datos abre la hora para pagar el saldo. checkout: solo con el saldo pagado (la base de datos lo exige).
 export const POST = route(async (req: NextRequest) => {
   const { sb, error } = await requireAdmin();
@@ -43,20 +60,28 @@ export const POST = route(async (req: NextRequest) => {
       const text = String(b.text ?? "").trim().slice(0, 2000);
       if (!text) return fail(400, "INVALID_BODY");
       await sb.from("reservation_notes").insert({ reservation_code: current.code, text }).throwOnError();
+    } else if (b.action === "payment_link") {
+      // Plazo nuevo para pagar por el enlace (y el enlace, si la reserva aún no tenía): amplía la retención o, si venció,
+      // la reactiva. El plazo nunca pasa del día de llegada.
+      if (!HOLD_OPTIONS.some((o) => o.value === b.holdMinutes)) return fail(400, "INVALID_BODY");
+      const due = manualDueAt(current.check_in, b.holdMinutes);
+      if (due.tooShort) return fail(422, "HOLD_TOO_SHORT");
+      const held = await reclaim(current);
+      if ("error" in held) return held.error;
+      const { error: upErr } = await sb
+        .from("reservations")
+        .update({ status: "pending_deposit", deposit_due_at: due.dueAt, pay_token: current.pay_token ?? newPayToken() })
+        .eq("code", current.code);
+      if (upErr) {
+        await held.hold.release();
+        throw upErr;
+      }
+      await held.hold.commit();
     } else if (b.action === "confirm" || b.action === "balance") {
       const kind = b.action === "balance" ? "balance" : b.full ? "full" : "deposit";
-      // Confirmar una retención vencida vuelve a ocupar sus noches: si la cabaña se vende en Booking, se retiene antes.
-      let hold: Hold = { commit: async () => {}, release: async () => {} };
-      if (current.status === "expired") {
-        try {
-          const h = await holdRoom({ ...holdOf(current), checkIn: current.check_in, checkOut: current.check_out, unit: current.unit });
-          if (!h) return fail(409, "CHANNEL_CONFLICT");
-          hold = h;
-        } catch (e) {
-          console.error(e);
-          return fail(503, "CHANNEL_UNAVAILABLE");
-        }
-      }
+      const held = await reclaim(current);
+      if ("error" in held) return held.error;
+      const { hold } = held;
       const { error: payErr } = await sb.rpc("register_manual_payment", { p_code: current.code, p_kind: kind, p_note: String(b.note ?? "").slice(0, 300) });
       if (payErr) {
         await hold.release();

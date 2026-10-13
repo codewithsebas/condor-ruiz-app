@@ -5,6 +5,7 @@ import { config } from "./config";
 import { addDays, sleep, todayISO } from "./format";
 import { BALANCE_MINUTES } from "./payments";
 import { defaultContent, defaultTexts, mergeTexts, type SiteContent, type SiteService } from "./site";
+import { mergeTheme } from "./theme";
 import type {
   AdminNotification, ApiResult, Block, BlockInput, CabinInput, CabinType, ChannelCalendar, ChannelCalendarInput, ChannelStay, ClientProfile, EmailRecord, NotificationKind, PaymentKind, PaymentRecord, PaymentStatus, PublicReservation, RateSeason, Rates, Reservation,
   ReservationInput, SeasonInput, SiteInput,
@@ -172,8 +173,8 @@ const channelsOf = (d: Db) => {
   return { calendars: c.channelCalendars, stays: c.channelStays };
 };
 
-// Contenido del sitio simulado; los datos guardados antes de existir los servicios toman los de por defecto.
-const siteOf = (d: Db): SiteContent => ({ ...defaultContent, ...d.site, services: d.site?.services ?? defaultContent.services });
+// Contenido del sitio simulado; los datos guardados antes de existir los servicios o los colores toman los de por defecto.
+const siteOf = (d: Db): SiteContent => ({ ...defaultContent, ...d.site, services: d.site?.services ?? defaultContent.services, theme: mergeTheme(d.site?.theme) });
 
 function save(d: Db) {
   try {
@@ -354,7 +355,7 @@ export async function mockRequest(method: string, path: string, opts: MockReques
   // En modo simulado el contenido se guarda solo en este navegador y no cambia las páginas públicas.
   if (method === "PUT" && path === "/admin/site") {
     const b = opts.body as SiteInput;
-    db.site = { settings: b.settings, policies: b.policies, photos: {}, texts: mergeTexts(b.content ?? defaultTexts), services: siteOf(db).services };
+    db.site = { settings: b.settings, policies: b.policies, photos: {}, texts: mergeTexts(b.content ?? defaultTexts), services: siteOf(db).services, theme: mergeTheme(b.theme) };
     save(db);
     return ok(db.site);
   }

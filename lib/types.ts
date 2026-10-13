@@ -1,5 +1,6 @@
 import type { CabinTypeId } from "./config";
 import type { SiteContent, SitePolicy, SiteSettings, SiteTexts } from "./site";
+import type { SiteTheme } from "./theme";
 
 // Contrato de la API pública y de los endpoints del panel.
 
@@ -277,7 +278,7 @@ export type AdminData = {
 };
 
 // Cuerpo de PUT /admin/site.
-export type SiteInput = { settings: SiteSettings; policies: SitePolicy[]; content: SiteTexts };
+export type SiteInput = { settings: SiteSettings; policies: SitePolicy[]; content: SiteTexts; theme: SiteTheme };
 
 export type CabinInput = {
   id?: string; // solo al crear; si falta se genera a partir del nombre

@@ -9,6 +9,7 @@ import { SERVICE_ICONS, SERVICE_ICON_KEYS, serviceIconPath } from "@/lib/service
 import { SERVICE_LIMITS, type SiteService } from "@/lib/site";
 import { useAdmin } from "./context";
 import { adminInput } from "./shared";
+import { themeStyle } from "./theme";
 import { Badge, Button, Callout, Card, CardHeader, EmptyState, Field, IconButton, Modal, Switch } from "./ui";
 
 // Servicios de «Servicios incluidos»: crear, editar, mostrar u ocultar, ordenar y eliminar. Cada cambio se publica
@@ -135,7 +136,7 @@ export function ServicesManager() {
             <CheckIcon size={14} />
             Así se ven en el sitio
           </h3>
-          <ul aria-hidden="true" className="grid max-h-[70dvh] grid-cols-2 gap-2.5 overflow-y-auto rounded-2xl bg-bg p-3 text-on-dark">
+          <ul aria-hidden="true" style={themeStyle(data.site.theme)} className="grid max-h-[70dvh] grid-cols-2 gap-2.5 overflow-y-auto rounded-2xl bg-bg p-3 text-on-dark">
             {visible.map((s, i) => (
               <li key={s.id}>
                 <ServiceCard s={s} index={i} />
@@ -162,6 +163,7 @@ export function ServicesManager() {
 }
 
 function ServiceEditor({ draft, onClose, onSaved, onAuthError }: { draft: Draft; onClose: () => void; onSaved: (list: SiteService[], title: string, isNew: boolean) => void; onAuthError: () => void }) {
+  const theme = useAdmin().data.site.theme;
   const [d, setD] = useState<Draft>(draft);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -231,7 +233,7 @@ function ServiceEditor({ draft, onClose, onSaved, onAuthError }: { draft: Draft;
 
         <div className="flex flex-col gap-2 md:pt-10">
           <p className="text-[13px] font-semibold text-ink-muted">Vista previa</p>
-          <div aria-hidden="true" className="rounded-2xl bg-bg p-3 text-on-dark">
+          <div aria-hidden="true" style={themeStyle(theme)} className="rounded-2xl bg-bg p-3 text-on-dark">
             <ServiceCard s={{ ...d, title: d.title.trim() || "Nombre del servicio" }} />
           </div>
           <p className="text-[12px] text-ink-muted">Pasa el mouse por la tarjeta para ver la animación.</p>

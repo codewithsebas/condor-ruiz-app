@@ -14,6 +14,7 @@ import { useAdmin } from "./context";
 import { MODULES, paths } from "./routes";
 import { useTip } from "@/components/ui/floating";
 import { adminInput } from "./shared";
+import { themeStyle } from "./theme";
 import { Badge, Button, Callout, Card, CardHeader, EmptyState, Field, IconButton, MoneyInput, PageHeader, SaveBar, Spinner, Stepper, Switch, buttonClass } from "./ui";
 
 const SUGGESTED = ["Jacuzzi", "Chimenea", "Vista al nevado", "Vista a la cascada", "Cama doble premium", "Baño privado con agua caliente", "Altillo", "Malla catamarán", "Desayuno incluido", "Zona de fogata", "Parqueadero", "Pet friendly"];
@@ -483,13 +484,14 @@ function PhotoManager({ c }: { c: CabinType }) {
 
 // Réplica de la tarjeta de la portada (mismos estilos del sitio) para ver el resultado antes de guardar.
 function Preview({ v, photo }: { v: CabinInput; photo?: string }) {
+  const { data } = useAdmin();
   return (
     <section aria-labelledby="cb-prev" className="flex flex-col gap-2">
       <h2 id="cb-prev" className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-muted">
         <CheckIcon size={14} />
         Así se verá en el sitio
       </h2>
-      <article aria-hidden="true" className="pointer-events-none flex flex-col gap-3 rounded-lg bg-card p-2.5 text-on-light">
+      <article aria-hidden="true" style={themeStyle(data.site.theme)} className="pointer-events-none flex flex-col gap-3 rounded-lg bg-card p-2.5 text-on-light">
         <div className="relative aspect-4/3 overflow-hidden rounded-md bg-card-muted">
           {photo ? <Image src={photo} alt="" fill sizes="400px" className="object-cover" /> : <div className="absolute inset-0 grid place-items-center text-[12px] opacity-60">Sin foto de portada</div>}
           {v.badge && <span className="absolute top-2.5 left-2.5 rounded-full bg-highlight px-3 py-1 text-[.72rem] font-extrabold">{v.badge}</span>}

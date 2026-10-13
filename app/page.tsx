@@ -13,6 +13,7 @@ import { PhotoLightbox } from "@/components/landing/photo-lightbox";
 import { PhotoSlot } from "@/components/photo-slot";
 import { ServiceCard } from "@/components/service-card";
 import { SiteFooter } from "@/components/site-footer";
+import { SiteTheme, siteViewport } from "@/components/site-theme";
 import {
   ArrowDownIcon, ArrowRightIcon, DottedPath, LoginIcon, LogoMark, LogoutIcon, MountainIcon, PawTrail, PhoneIcon, PinIcon, SparkleIcon, WhatsAppFabIcon, WhatsAppIcon,
 } from "@/components/icons";
@@ -35,6 +36,10 @@ export const metadata: Metadata = {
 
 // Página estática que se regenera cada hora o al guardar tarifas en el panel.
 export const revalidate = 3600;
+
+export function generateViewport() {
+  return siteViewport();
+}
 
 // Todas las fotos del sitio para la galería, en el orden en que aparecen en la portada (sin repetir ni marcadores vacíos).
 function galleryOf(photos: Record<string, string>, cabins: Cabin[]): string[] {
@@ -103,6 +108,7 @@ export default async function HomePage() {
   return (
     // --header-h: alto del encabezado de la portada; la portada ocupa el resto de la primera pantalla.
     <div id="top" className="@container relative overflow-x-clip [--header-h:82px]">
+      <SiteTheme />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd(cabins, site)).replace(/</g, "\\u003c") }} />
       <LandingHeader />
       <CenteredAnchors />

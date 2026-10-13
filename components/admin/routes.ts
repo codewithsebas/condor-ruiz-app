@@ -18,7 +18,7 @@ export const MODULES: Record<ModuleId, Module> = {
   finanzas: { label: "Finanzas", href: "/admin/finanzas", icon: TrendIcon, group: "Negocio", description: "Ingresos, ocupación y su evolución por periodo." },
   cabanas: { label: "Cabañas", href: "/admin/cabanas", icon: HomeIcon, group: "Sitio web", description: "Cabañas que se ofrecen en el sitio: información, capacidad y fotos." },
   tarifas: { label: "Tarifas", href: "/admin/tarifas", icon: TagIcon, group: "Sitio web", description: "Precio base por cabaña y temporadas con precio especial." },
-  contenido: { label: "Contenido del sitio", href: "/admin/contenido/portada", icon: FileTextIcon, group: "Sitio web", description: "Textos, imágenes y datos que ven los huéspedes en el sitio." },
+  contenido: { label: "Contenido del sitio", href: "/admin/contenido/portada", icon: FileTextIcon, group: "Sitio web", description: "Textos, imágenes, colores y datos que ven los huéspedes en el sitio." },
   notificaciones: { label: "Notificaciones", href: "/admin/notificaciones", icon: BellIcon, group: "Sistema", description: "Historial de avisos del panel." },
   configuracion: { label: "Configuración", href: "/admin/configuracion", icon: SlidersIcon, group: "Sistema", description: "Sonido, tiempo real, preferencias del panel y sesión." },
 };
@@ -35,7 +35,7 @@ export function moduleOf(pathname: string): ModuleId | null {
 
 /* ───────────── Contenido del sitio: una ruta por zona ───────────── */
 
-export type ContentSectionId = "portada" | "experiencias" | "servicios" | "horarios" | "politicas" | "contacto" | "pagos" | "redes";
+export type ContentSectionId = "portada" | "experiencias" | "servicios" | "horarios" | "politicas" | "contacto" | "pagos" | "redes" | "colores";
 
 export const CONTENT_SECTIONS: { id: ContentSectionId; label: string; where: string; href: string }[] = [
   { id: "portada", label: "Portada", where: "Lo primero que ven los visitantes: título, descripción y fotos principales.", href: "/#top" },
@@ -46,6 +46,7 @@ export const CONTENT_SECTIONS: { id: ContentSectionId; label: string; where: str
   { id: "contacto", label: "Contacto y ubicación", where: "Botones de WhatsApp, teléfonos del pie de página y secciones «Ubicación» y «Contacto».", href: "/#contacto" },
   { id: "pagos", label: "Pagos", where: "Página de confirmación de la reserva: cómo pagar el abono.", href: "/reservar" },
   { id: "redes", label: "Redes y datos legales", where: "Pie de página: redes sociales y número de RNT.", href: "/#contacto" },
+  { id: "colores", label: "Colores", where: "Todo el sitio público: portada, secciones, cabañas, formulario de reserva, consulta de reservas y pie de página. El panel conserva sus colores.", href: "/" },
 ];
 
 export const isContentSection = (s: string): s is ContentSectionId => CONTENT_SECTIONS.some((x) => x.id === s);

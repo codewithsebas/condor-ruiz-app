@@ -988,6 +988,7 @@ export type Database = {
           id: boolean
           phones: string[]
           rnt: string
+          theme: Json
           updated_at: string
           whatsapp: string
         }
@@ -999,6 +1000,7 @@ export type Database = {
           id?: boolean
           phones: string[]
           rnt?: string
+          theme?: Json
           updated_at?: string
           whatsapp: string
         }
@@ -1010,6 +1012,7 @@ export type Database = {
           id?: boolean
           phones?: string[]
           rnt?: string
+          theme?: Json
           updated_at?: string
           whatsapp?: string
         }

@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { defaultContent, mergeSite, mergeTexts, type SiteContent } from "@/lib/site";
+import { mergeTheme } from "@/lib/theme";
 import { createServiceClient, hasServiceConfig } from "@/lib/supabase/server";
 import type { Db } from "./db";
 
@@ -30,6 +31,7 @@ export async function loadSiteContent(sb: Db): Promise<SiteContent> {
     texts: mergeTexts(s?.content),
     // Todos, también los ocultos (el panel los necesita); las páginas públicas muestran solo los visibles.
     services,
+    theme: mergeTheme(s?.theme),
   };
 }
 

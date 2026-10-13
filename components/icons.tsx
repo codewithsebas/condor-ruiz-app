@@ -185,4 +185,12 @@ export const MoonIcon = (p: IconProps) => <Stroke stroke={2} {...p}><path d="M12
 export const LayersIcon = (p: IconProps) => <Stroke stroke={2} {...p}><path d="m12 2 10 5-10 5L2 7zM2 17l10 5 10-5M2 12l10 5 10-5" /></Stroke>;
 export const StarOutlineIcon = (p: IconProps) => <Stroke stroke={2} {...p}><path d="M12 2l3 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.3 5.8 20.6l1.4-6.8L2.1 9.1 9 8.3z" /></Stroke>;
 export const GiftIcon = (p: IconProps) => <Stroke stroke={2} {...p}><path d="M20 12v9H4v-9M2 7h20v5H2zM12 21V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" /></Stroke>;
+export const PaletteIcon = (p: IconProps) => (
+  <Stroke stroke={2} {...p}>
+    <path d="M12 3a9 9 0 0 0 0 18c1 0 1.7-.8 1.7-1.7 0-.4-.2-.8-.4-1.1-.3-.3-.5-.7-.5-1.2 0-1 .8-1.7 1.7-1.7H17a4 4 0 0 0 4-4c0-4.6-4-8.3-9-8.3z" />
+    <circle cx="7.5" cy="11.5" r="1" fill="currentColor" />
+    <circle cx="10" cy="7.5" r="1" fill="currentColor" />
+    <circle cx="15" cy="7.5" r="1" fill="currentColor" />
+  </Stroke>
+);
 export const ShieldIcon = (p: IconProps) => <Stroke stroke={2} {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></Stroke>;

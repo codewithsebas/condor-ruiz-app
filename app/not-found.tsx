@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { SiteTheme } from "@/components/site-theme";
 
 export const metadata: Metadata = {
   title: "Página no encontrada",
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
 export default function NotFound() {
   return (
     <div className="flex min-h-screen flex-col">
+      <SiteTheme />
       <SiteHeader />
       <main className="gutter-1000 flex flex-1 flex-col items-start gap-[18px] pt-12 pb-20">
         <p className="-rotate-3 font-script text-[1.8rem]">Te perdiste en el sendero</p>

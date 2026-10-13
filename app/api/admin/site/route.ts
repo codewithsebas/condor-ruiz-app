@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { fail, json, readJson, requireAdmin, route } from "@/lib/server/http";
 import { loadSiteContent } from "@/lib/server/site";
 import { TEXT_LIMITS, mergeTexts } from "@/lib/site";
+import { THEME_KEYS, mergeTheme, normalizeHex } from "@/lib/theme";
 import type { SiteInput } from "@/lib/types";
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -10,7 +11,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const URL_OK = /^https:\/\/[^\s]+$/;
 
-// PUT /api/admin/site { settings, policies, content } → horarios, contacto, RNT, políticas y textos. Regenera todo el sitio.
+// PUT /api/admin/site { settings, policies, content, theme } → horarios, contacto, RNT, políticas, textos y colores. Regenera todo el sitio.
 export const PUT = route(async (req: NextRequest) => {
   const { sb, error } = await requireAdmin();
   if (error) return error;
@@ -55,11 +56,16 @@ export const PUT = route(async (req: NextRequest) => {
   if (texts.location.note.length > TEXT_LIMITS.note) errors.location = "La nota de ubicación es demasiado larga.";
   if (texts.payment.instructions.length > TEXT_LIMITS.instructions) errors.payment = "Las instrucciones de pago son demasiado largas.";
   if (Object.values(texts.social).some((u) => u && (!URL_OK.test(u) || u.length > TEXT_LIMITS.url))) errors.social = "Las redes sociales deben ser enlaces completos que empiecen por https://";
+  // Colores: cada clave conocida debe ser un color #rrggbb (el contraste se advierte en el panel, no se bloquea).
+  // Sin `theme` (un panel abierto antes de existir los colores) se conservan los guardados.
+  const rawTheme = (b.theme && typeof b.theme === "object" ? b.theme : {}) as Record<string, unknown>;
+  if (THEME_KEYS.some((k) => k in rawTheme && !normalizeHex(rawTheme[k]))) errors.theme = "Los colores deben tener el formato #RRGGBB.";
+  const theme = mergeTheme(rawTheme);
   if (Object.keys(errors).length) return fail(422, "VALIDATION_ERROR", { fields: errors });
 
   await sb
     .from("site_settings")
-    .upsert({ id: true, check_in_start: s.checkInStart, check_in_end: s.checkInEnd, check_out_time: s.checkOutTime, phones, whatsapp, rnt: String(s.rnt ?? "").trim(), content: texts })
+    .upsert({ id: true, check_in_start: s.checkInStart, check_in_end: s.checkInEnd, check_out_time: s.checkOutTime, phones, whatsapp, rnt: String(s.rnt ?? "").trim(), content: texts, ...(b.theme !== undefined && { theme }) })
     .throwOnError();
   // Primero se guardan las políticas y luego se borran las que ya no están: nunca queda la lista vacía.
   await sb.from("site_policies").upsert(policies).throwOnError();

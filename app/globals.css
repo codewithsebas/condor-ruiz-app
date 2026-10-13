@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
-/* Paleta "Bosque" del diseño. `static` porque varios colores (estados) se usan desde JS. */
+/* Paleta "Bosque" del diseño. `static` porque varios colores (estados) se usan desde JS.
+   Los colores del sitio público (fondos, tarjetas, textos, acentos y botón principal) se pueden cambiar desde el panel:
+   lib/theme.ts los vuelve a declarar en :root de las páginas públicas (components/site-theme.tsx). */
 @theme static {
   --color-bg: #163a2a;
   --color-surface: #1d4633;

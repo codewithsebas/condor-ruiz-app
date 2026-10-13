@@ -1,6 +1,7 @@
 // Contenido editable del sitio (horarios, contacto, políticas, imágenes). Lo usan servidor y navegador.
 import { config, type Policy } from "./config";
 import { DEFAULT_SERVICES } from "./content";
+import { DEFAULT_THEME, type SiteTheme } from "./theme";
 
 export type SiteSettings = {
   checkInStart: string; // "HH:MM"
@@ -33,6 +34,7 @@ export type SiteContent = {
   photos: Record<string, string>; // slot → URL pública
   texts: SiteTexts;
   services: SiteService[]; // en el orden en que se muestran
+  theme: SiteTheme; // colores del sitio público
 };
 
 // Configuración del negocio con los campos editables ya aplicados (misma forma que `config`).
@@ -136,4 +138,5 @@ export const defaultContent: SiteContent = {
   photos: {},
   texts: defaultTexts,
   services: DEFAULT_SERVICES.map((x, i) => ({ id: `default-${i}`, title: x.title, description: "", icon: x.icon, note: x.note ?? "", visible: true })),
+  theme: DEFAULT_THEME,
 };

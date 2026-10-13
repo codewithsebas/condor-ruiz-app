@@ -4,17 +4,19 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import {
-  ArrowDownIcon, ArrowUpIcon, CheckIcon, ClockIcon, CloseIcon, ExternalLinkIcon, FileTextIcon, HomeIcon, ImageIcon, PhoneIcon, PinIcon, PlusIcon, ShieldIcon, TrashIcon, UploadIcon, WalletIcon, WarningIcon,
+  ArrowDownIcon, ArrowUpIcon, CheckIcon, ClockIcon, CloseIcon, ExternalLinkIcon, FileTextIcon, HomeIcon, ImageIcon, PaletteIcon, PhoneIcon, PinIcon, PlusIcon, ShieldIcon, TrashIcon, UploadIcon, WalletIcon, WarningIcon,
 } from "@/components/icons";
 import { api } from "@/lib/api";
 import { config, isMockApi } from "@/lib/config";
 import { resizeImage, type Crop } from "@/lib/image-resize";
 import { PHOTO_SLOTS, TEXT_LIMITS, fmtTime, type PhotoSlotDef, type SitePolicy, type SiteSettings, type SiteTexts } from "@/lib/site";
+import { themeIssues, type SiteTheme } from "@/lib/theme";
 import { Combobox } from "@/components/ui/combobox";
 import { useAdmin } from "./context";
 import { CONTENT_SECTIONS, MODULES, isContentSection, paths, type ContentSectionId } from "./routes";
 import { PhotoCropper } from "./photo-cropper";
 import { ServicesManager } from "./services";
+import { ThemeEditor, themeStyle } from "./theme";
 import { adminInput } from "./shared";
 import { Button, Callout, Card, CardHeader, Field, FieldError, IconButton, NavTabs, PageHeader, SaveBar, Spinner } from "./ui";
 
@@ -29,6 +31,7 @@ const ICONS: Record<ContentSectionId, ReactNode> = {
   contacto: <PhoneIcon size={15} />,
   pagos: <WalletIcon size={15} />,
   redes: <ShieldIcon size={15} />,
+  colores: <PaletteIcon size={15} />,
 };
 // Zonas que solo tienen fotos (se publican al subirlas): no muestran la barra de guardado.
 // Servicios también se publica al instante (cada cambio va directo al servidor).
@@ -45,7 +48,7 @@ function timeOptions(current: string) {
   return out.sort().map((v) => ({ value: v, label: fmtTime(v), keywords: v }));
 }
 
-type Form = { s: SiteSettings; policies: SitePolicy[]; t: SiteTexts };
+type Form = { s: SiteSettings; policies: SitePolicy[]; t: SiteTexts; theme: SiteTheme };
 
 // Errores por campo, con la sección en la que se corrigen.
 function validate({ s, policies, t }: Form) {
@@ -68,11 +71,13 @@ function validate({ s, policies, t }: Form) {
 
 type FormCtx = {
   f: Form;
+  saved: Form;
   errors: ReturnType<typeof validate>;
   err: (k: string) => string | undefined;
   setS: (p: Partial<SiteSettings>) => void;
   setT: <K extends keyof SiteTexts>(k: K, p: Partial<SiteTexts[K]>) => void;
   setPolicies: (fn: (p: SitePolicy[]) => SitePolicy[]) => void;
+  setTheme: (t: SiteTheme) => void;
 };
 const Ctx = createContext<FormCtx | null>(null);
 
@@ -83,18 +88,20 @@ export function ContentLayout({ children }: { children: ReactNode }) {
   const seg = usePathname().split("/")[3] ?? "";
   const section = isContentSection(seg) ? seg : null;
   const meta = CONTENT_SECTIONS.find((x) => x.id === section);
-  const saved: Form = { s: data.site.settings, policies: data.site.policies, t: data.site.texts };
+  const saved: Form = { s: data.site.settings, policies: data.site.policies, t: data.site.texts, theme: data.site.theme };
   const [f, setF] = useState<Form>(saved);
   const [errors, setErrors] = useState<ReturnType<typeof validate>>({});
   const dirty = JSON.stringify(f) !== JSON.stringify(saved);
 
   const ctx: FormCtx = {
     f,
+    saved,
     errors,
     err: (k) => errors[k]?.msg,
     setS: (p) => setF((x) => ({ ...x, s: { ...x.s, ...p } })),
     setT: (k, p) => setF((x) => ({ ...x, t: { ...x.t, [k]: { ...x.t[k], ...p } } })),
     setPolicies: (fn) => setF((x) => ({ ...x, policies: fn(x.policies) })),
+    setTheme: (theme) => setF((x) => ({ ...x, theme })),
   };
 
   const save = () => {
@@ -110,8 +117,11 @@ export function ContentLayout({ children }: { children: ReactNode }) {
       settings: { ...f.s, phones: f.s.phones.map((p) => p.trim()).filter(Boolean), whatsapp: f.s.whatsapp.replace(/\D/g, "") },
       policies: f.policies.map((p) => ({ ...p, q: p.q.trim(), a: p.a.trim() })),
       content: f.t,
+      theme: f.theme,
     };
-    ask({ title: "Publicar cambios del sitio", text: "Los textos, horarios, contactos y políticas se actualizan en todo el sitio.", okLabel: "Publicar", done: "Cambios publicados en el sitio", run: () => api.admin.saveSite(body) });
+    const issues = themeIssues(f.theme).length;
+    const text = `Los textos, horarios, contactos, políticas y colores se actualizan en todo el sitio.${issues ? ` Ojo: ${issues === 1 ? "una combinación de colores tiene poco contraste y puede costar leerla" : `${issues} combinaciones de colores tienen poco contraste y puede costar leerlas`}.` : ""}`;
+    ask({ title: "Publicar cambios del sitio", text, okLabel: "Publicar", done: "Cambios publicados en el sitio", run: () => api.admin.saveSite(body) });
   };
 
   const counts = Object.values(errors).reduce<Record<string, number>>((m, x) => ({ ...m, [x.tab]: (m[x.tab] ?? 0) + 1 }), {});
@@ -152,7 +162,7 @@ export function ContentLayout({ children }: { children: ReactNode }) {
 
 // app/admin/contenido/[seccion]/page.tsx: los campos de una zona del sitio.
 export function ContentSection({ id }: { id: ContentSectionId }) {
-  const { f, errors, err, setS, setT, setPolicies } = useContext(Ctx)!;
+  const { f, saved, errors, err, setS, setT, setPolicies, setTheme } = useContext(Ctx)!;
   return (
     <>
         {id === "portada" && (
@@ -182,13 +192,15 @@ export function ContentSection({ id }: { id: ContentSectionId }) {
                   {(p) => <textarea {...p} rows={3} maxLength={TEXT_LIMITS.description} value={f.t.hero.description} onChange={(e) => setT("hero", { description: e.target.value })} className={`${adminInput} resize-y leading-relaxed`} />}
                 </Field>
               </div>
-              <HeroPreview t={f.t} />
+              <HeroPreview t={f.t} theme={f.theme} />
             </Card>
             <PhotoGroups groups={["Portada · banner grande", "Portada · banners pequeños"]} />
           </>
         )}
 
         {id === "experiencias" && <PhotoGroups groups={["Alta montaña frente al nevado"]} />}
+
+        {id === "colores" && <ThemeEditor theme={f.theme} saved={saved.theme} texts={f.t} onChange={setTheme} />}
 
         {id === "servicios" && <ServicesManager />}
 
@@ -362,15 +374,15 @@ const swap = <T,>(a: T[], i: number, j: number) => {
   return n;
 };
 
-// Vista previa de la portada con los estilos reales del sitio.
-function HeroPreview({ t }: { t: SiteTexts }) {
+// Vista previa de la portada con los estilos y los colores (aún sin publicar) del sitio.
+function HeroPreview({ t, theme }: { t: SiteTexts; theme: SiteTheme }) {
   return (
     <section aria-labelledby="ct-prev" className="flex flex-col gap-2">
       <h3 id="ct-prev" className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-muted">
         <CheckIcon size={14} />
         Vista previa
       </h3>
-      <div aria-hidden="true" className="flex flex-col gap-4 rounded-lg bg-surface p-5 text-on-dark">
+      <div aria-hidden="true" style={themeStyle(theme)} className="flex flex-col gap-4 rounded-lg bg-surface p-5 text-on-dark">
         <p className="display text-[2.6rem] leading-[.9]">
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>{t.hero.title || "Título"}</span>
@@ -379,7 +391,7 @@ function HeroPreview({ t }: { t: SiteTexts }) {
           {t.hero.highlight && <span className="block text-accent">{t.hero.highlight}</span>}
         </p>
         <p className="text-[.85rem] text-on-dark-muted">{t.hero.description}</p>
-        <span className="btn btn-cta min-h-10 self-start px-4 text-[.8rem]">Reservar por WhatsApp</span>
+        <span className="btn btn-cta min-h-10 self-start px-4 text-[.8rem]">Reservar ahora</span>
       </div>
     </section>
   );

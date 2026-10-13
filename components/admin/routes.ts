@@ -37,16 +37,20 @@ export function moduleOf(pathname: string): ModuleId | null {
 
 export type ContentSectionId = "portada" | "experiencias" | "servicios" | "horarios" | "politicas" | "contacto" | "pagos" | "redes" | "colores";
 
-export const CONTENT_SECTIONS: { id: ContentSectionId; label: string; where: string; href: string }[] = [
-  { id: "portada", label: "Portada", where: "Lo primero que ven los visitantes: título, descripción y fotos principales.", href: "/#top" },
-  { id: "experiencias", label: "Experiencias", where: "Sección «Alta montaña frente al nevado», con una foto por experiencia.", href: "/#experiencias" },
-  { id: "servicios", label: "Servicios", where: "Sección «Servicios incluidos» de la página de inicio.", href: "/#servicios" },
-  { id: "horarios", label: "Horarios", where: "Sección «Antes de venir» (horarios), el pie de página y las horas de llegada del formulario de reserva.", href: "/#antes-de-venir" },
-  { id: "politicas", label: "Políticas y preguntas", where: "Sección «Reservas y políticas», la página de políticas y el resumen antes de enviar una reserva.", href: "/politicas" },
-  { id: "contacto", label: "Contacto y ubicación", where: "Botones de WhatsApp, teléfonos del pie de página y secciones «Ubicación» y «Contacto».", href: "/#contacto" },
-  { id: "pagos", label: "Pagos", where: "Página de confirmación de la reserva: cómo pagar el abono.", href: "/reservar" },
-  { id: "redes", label: "Redes y datos legales", where: "Pie de página: redes sociales y número de RNT.", href: "/#contacto" },
-  { id: "colores", label: "Colores", where: "Todo el sitio público: portada, secciones, cabañas, formulario de reserva, consulta de reservas y pie de página. Este panel usa los mismos colores.", href: "/" },
+// Las zonas van agrupadas por lo que son, y así se muestran en las pestañas: lo que se ve en la página de inicio, lo que
+// el huésped necesita saber para reservar y quedarse, los datos del negocio y la apariencia.
+export const CONTENT_GROUPS = ["Página de inicio", "Reservas y estadía", "Datos del negocio", "Apariencia"] as const;
+
+export const CONTENT_SECTIONS: { id: ContentSectionId; label: string; group: (typeof CONTENT_GROUPS)[number]; where: string; href: string }[] = [
+  { id: "portada", label: "Portada", group: "Página de inicio", where: "Lo primero que ven los visitantes: título, descripción y fotos principales.", href: "/#top" },
+  { id: "experiencias", label: "Experiencias", group: "Página de inicio", where: "Sección «Alta montaña frente al nevado», con una foto por experiencia.", href: "/#experiencias" },
+  { id: "servicios", label: "Servicios", group: "Página de inicio", where: "Sección «Servicios incluidos» de la página de inicio.", href: "/#servicios" },
+  { id: "horarios", label: "Horarios", group: "Reservas y estadía", where: "Sección «Antes de venir» (horarios), el pie de página y las horas de llegada del formulario de reserva.", href: "/#antes-de-venir" },
+  { id: "politicas", label: "Políticas y preguntas", group: "Reservas y estadía", where: "Sección «Reservas y políticas», la página de políticas y el resumen antes de enviar una reserva.", href: "/politicas" },
+  { id: "pagos", label: "Pagos", group: "Reservas y estadía", where: "Página de confirmación de la reserva: cómo pagar el abono.", href: "/reservar" },
+  { id: "contacto", label: "Contacto y ubicación", group: "Datos del negocio", where: "Botones de WhatsApp, teléfonos del pie de página y secciones «Ubicación» y «Contacto».", href: "/#contacto" },
+  { id: "redes", label: "Redes y datos legales", group: "Datos del negocio", where: "Pie de página: redes sociales y número de RNT.", href: "/#contacto" },
+  { id: "colores", label: "Colores", group: "Apariencia", where: "Todo el sitio público: portada, secciones, cabañas, formulario de reserva, consulta de reservas y pie de página. Este panel usa los mismos colores.", href: "/" },
 ];
 
 export const isContentSection = (s: string): s is ContentSectionId => CONTENT_SECTIONS.some((x) => x.id === s);

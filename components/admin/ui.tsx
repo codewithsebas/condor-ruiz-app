@@ -477,26 +477,45 @@ export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs:
   );
 }
 
-// Pestañas que son rutas (secciones de un módulo): enlaces con aria-current, mismo aspecto que Tabs.
-export function NavTabs({ tabs, current, label }: { tabs: { href: string; id: string; label: ReactNode; icon?: ReactNode; count?: number }[]; current: string; label: string }) {
+// Secciones de un módulo agrupadas por tema: cada grupo, con su rótulo, es un bloque de pestañas (rutas). En pantallas
+// anchas los grupos van uno al lado del otro y bajan de línea si no caben; en el celular, en una fila que se desplaza
+// con la pestaña actual a la vista.
+export function GroupedNavTabs({ groups, current, label }: { groups: { label: string; tabs: { href: string; id: string; label: ReactNode; icon?: ReactNode; count?: number }[] }[]; current: string; label: string }) {
+  const uid = useId();
+  const nav = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = nav.current;
+    const on = el?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!el || !on) return;
+    const [a, b] = [el.getBoundingClientRect(), on.getBoundingClientRect()];
+    el.scrollLeft += b.left - a.left - (a.width - b.width) / 2;
+  }, [current]);
   return (
-    <nav aria-label={label} className="no-scrollbar -mx-4 flex gap-1 overflow-x-auto border-b border-line px-4 lg:mx-0 lg:px-0">
-      {tabs.map((t) => {
-        const on = t.id === current;
-        return (
-          <Link
-            key={t.id}
-            href={t.href}
-            aria-current={on ? "page" : undefined}
-            className={`relative inline-flex h-10 flex-none items-center gap-1.5 rounded-t-lg px-3 text-[13.5px] font-semibold whitespace-nowrap transition-colors ${on ? "text-ink" : "text-ink-muted hover:text-ink"}`}
-          >
-            {t.icon}
-            {t.label}
-            {t.count !== undefined && t.count > 0 && <span className="rounded-full bg-highlight px-1.5 text-[11px] text-on-light tabular-nums">{t.count}</span>}
-            <span aria-hidden="true" className={`absolute inset-x-2 -bottom-px h-0.5 rounded-full transition-colors ${on ? "bg-ink" : "bg-transparent"}`} />
-          </Link>
-        );
-      })}
+    <nav ref={nav} aria-label={label} className="no-scrollbar -mx-4 flex gap-x-4 gap-y-3 overflow-x-auto px-4 lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0">
+      {groups.map((g, i) => (
+        <div key={g.label} role="group" aria-labelledby={`${uid}-${i}`} className="flex flex-none flex-col gap-1.5">
+          <p id={`${uid}-${i}`} className="px-1 text-[11px] font-bold tracking-[.08em] text-ink-muted uppercase">
+            {g.label}
+          </p>
+          <div className="flex gap-0.5 rounded-xl bg-ink/6 p-0.5">
+            {g.tabs.map((t) => {
+              const on = t.id === current;
+              return (
+                <Link
+                  key={t.id}
+                  href={t.href}
+                  aria-current={on ? "page" : undefined}
+                  className={`inline-flex h-8 flex-none items-center gap-1.5 rounded-[10px] px-2.5 text-[13px] font-semibold whitespace-nowrap transition-[background-color,color,box-shadow] duration-150 pointer-coarse:h-9 ${on ? "bg-panel text-ink shadow-panel" : "text-ink-muted hover:text-ink"}`}
+                >
+                  {t.icon}
+                  {t.label}
+                  {t.count !== undefined && t.count > 0 && <span className="rounded-full bg-highlight px-1.5 text-[11px] text-on-light tabular-nums">{t.count}</span>}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </nav>
   );
 }

@@ -13,12 +13,12 @@ import { PHOTO_SLOTS, TEXT_LIMITS, fmtTime, type PhotoSlotDef, type SitePolicy, 
 import { themeIssues, type SiteTheme } from "@/lib/theme";
 import { Combobox } from "@/components/ui/combobox";
 import { useAdmin } from "./context";
-import { CONTENT_SECTIONS, MODULES, isContentSection, paths, type ContentSectionId } from "./routes";
+import { CONTENT_GROUPS, CONTENT_SECTIONS, MODULES, isContentSection, paths, type ContentSectionId } from "./routes";
 import { PhotoCropper } from "./photo-cropper";
 import { ServicesManager } from "./services";
 import { ThemeEditor, themeStyle } from "./theme";
 import { adminInput } from "./shared";
-import { Button, Callout, Card, CardHeader, Field, FieldError, IconButton, NavTabs, PageHeader, SaveBar, Spinner } from "./ui";
+import { Button, Callout, Card, CardHeader, Field, FieldError, GroupedNavTabs, IconButton, PageHeader, SaveBar, Spinner } from "./ui";
 
 /* ───────────── Una ruta por zona del sitio, un solo formulario ───────────── */
 
@@ -81,7 +81,7 @@ type FormCtx = {
 };
 const Ctx = createContext<FormCtx | null>(null);
 
-// app/admin/contenido/layout.tsx: encabezado, pestañas (rutas), «dónde aparece» y barra de guardado.
+// app/admin/contenido/layout.tsx: encabezado, pestañas por grupos (rutas), «dónde aparece» y barra de guardado.
 // El formulario vive aquí: al cambiar de sección se conservan los cambios sin guardar y se publican juntos.
 export function ContentLayout({ children }: { children: ReactNode }) {
   const { data, go, ask } = useAdmin();
@@ -129,7 +129,11 @@ export function ContentLayout({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={ctx}>
       <PageHeader title={MODULES.contenido.label} description="Organizado por las secciones del sitio. Las fotos se publican al subirlas; los textos, al guardar." />
-      <NavTabs label="Secciones del sitio" current={section ?? ""} tabs={CONTENT_SECTIONS.map((x) => ({ id: x.id, href: paths.contenido(x.id), label: x.label, icon: ICONS[x.id], count: counts[x.id] }))} />
+      <GroupedNavTabs
+        label="Secciones del sitio"
+        current={section ?? ""}
+        groups={CONTENT_GROUPS.map((g) => ({ label: g, tabs: CONTENT_SECTIONS.filter((x) => x.group === g).map((x) => ({ id: x.id, href: paths.contenido(x.id), label: x.label, icon: ICONS[x.id], count: counts[x.id] })) }))}
+      />
       {meta && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-panel/60 px-4 py-3 text-[13.5px] text-ink-muted">
           <p>

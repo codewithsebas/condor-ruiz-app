@@ -46,7 +46,7 @@ export const CONTENT_SECTIONS: { id: ContentSectionId; label: string; where: str
   { id: "contacto", label: "Contacto y ubicación", where: "Botones de WhatsApp, teléfonos del pie de página y secciones «Ubicación» y «Contacto».", href: "/#contacto" },
   { id: "pagos", label: "Pagos", where: "Página de confirmación de la reserva: cómo pagar el abono.", href: "/reservar" },
   { id: "redes", label: "Redes y datos legales", where: "Pie de página: redes sociales y número de RNT.", href: "/#contacto" },
-  { id: "colores", label: "Colores", where: "Todo el sitio público: portada, secciones, cabañas, formulario de reserva, consulta de reservas y pie de página. El panel conserva sus colores.", href: "/" },
+  { id: "colores", label: "Colores", where: "Todo el sitio público: portada, secciones, cabañas, formulario de reserva, consulta de reservas y pie de página. Este panel usa los mismos colores.", href: "/" },
 ];
 
 export const isContentSection = (s: string): s is ContentSectionId => CONTENT_SECTIONS.some((x) => x.id === s);

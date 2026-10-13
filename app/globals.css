@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
 /* Paleta "Bosque" del diseño. `static` porque varios colores (estados) se usan desde JS.
-   Los colores del sitio público (fondos, tarjetas, textos, acentos y botón principal) se pueden cambiar desde el panel:
-   lib/theme.ts los vuelve a declarar en :root de las páginas públicas (components/site-theme.tsx). */
+   Los colores del sitio (fondos, tarjetas, textos, acentos y botón principal) se pueden cambiar desde el panel:
+   lib/theme.ts los vuelve a declarar en :root, en las páginas públicas (components/site-theme.tsx) y en el panel
+   (PanelTheme, components/admin/shell.tsx), que además deriva de ellos su zona de trabajo. */
 @theme static {
   --color-bg: #163a2a;
   --color-surface: #1d4633;
@@ -40,19 +41,21 @@
   --shadow-card: 0 22px 44px -20px rgb(0 0 0 / 0.55);
   --shadow-pop: 0 30px 60px -24px rgb(0 0 0 / 0.6), 0 0 0 1px #e6dcbe;
 
-  /* Panel de administración: superficie clara para trabajar con datos; la marca queda en la barra lateral. */
+  /* Panel de administración: superficie clara para trabajar con datos; la marca queda en la barra lateral.
+     Del lienzo a las series, los valores salen de la paleta del sitio: son los que da panelVars() (lib/theme.ts) con
+     "Bosque"; con otra paleta, el panel los vuelve a declarar. Los colores de estado (éxito, aviso, error) son fijos. */
   --color-canvas: #f5f3ec;
   --color-panel: #ffffff;
-  --color-line: #e5e0d3;
-  --color-line-strong: #cdc6b4;
+  --color-line: #e5e0d1;
+  --color-line-strong: #cdc6b1;
   --color-ink: #163a2a;
-  --color-ink-muted: #5d6b63;
-  --color-ink-subtle: #8b968f;
-  --color-focus: #2f7d52;
-  --color-chart: #3b8c5e;
-  /* Dos series validadas (contraste ≥ 3:1, separación para daltonismo ΔE ≥ 8): abonos y saldos. */
-  --color-series-1: #2f7d52;
-  --color-series-2: #bf7d22;
+  --color-ink-muted: #5d6b65;
+  --color-ink-subtle: #8a9590;
+  --color-focus: #0f7f58;
+  --color-chart: #278d65;
+  /* Dos series (abonos y saldos): contraste ≥ 3:1 sobre blanco y separadas también con daltonismo (ΔE ≥ 8). */
+  --color-series-1: #0f7f58;
+  --color-series-2: #b5820f;
   --color-success: #2f7d52;
   --color-success-soft: #e5f1e8;
   --color-warning: #8a5a00;
@@ -61,8 +64,8 @@
   --color-info: #2c5566;
   --color-info-soft: #e6eef2;
 
-  --shadow-panel: 0 1px 2px rgb(22 58 42 / 0.05), 0 1px 1px rgb(22 58 42 / 0.03);
-  --shadow-overlay: 0 24px 48px -12px rgb(22 58 42 / 0.3), 0 0 0 1px rgb(22 58 42 / 0.06);
+  --shadow-panel: 0 1px 2px color-mix(in srgb, var(--color-ink) 5%, transparent), 0 1px 1px color-mix(in srgb, var(--color-ink) 3%, transparent);
+  --shadow-overlay: 0 24px 48px -12px color-mix(in srgb, var(--color-ink) 30%, transparent), 0 0 0 1px color-mix(in srgb, var(--color-ink) 6%, transparent);
 
   --animate-pulse-soft: ec-pulse 1.2s ease-in-out infinite;
   --animate-spin-fast: ec-spin 0.8s linear infinite;

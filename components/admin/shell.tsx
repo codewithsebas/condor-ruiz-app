@@ -7,9 +7,11 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Brand } from "@/components/brand";
 import { ExternalLinkIcon, InfoIcon, LogoutIcon, MenuIcon, RefreshIcon, WarningIcon, CloseIcon } from "@/components/icons";
+import { useSite } from "@/components/site-provider";
 import { api } from "@/lib/api";
 import { config } from "@/lib/config";
 import { todayISO } from "@/lib/format";
+import { panelCss, type SiteTheme } from "@/lib/theme";
 import type { AdminData } from "@/lib/types";
 import { AdminProvider, type AdminCtx } from "./context";
 import { DateRangePicker } from "./date-picker";
@@ -20,12 +22,32 @@ import { CONTENT_SECTIONS, MODULES, MODULE_IDS, NAV_GROUPS, clientKeyOf, legacyP
 import { type Ask, type ConfirmCfg, adminInput } from "./shared";
 import { Breadcrumbs, Button, Callout, CountBadge, ErrorState, Field, FieldError, IconButton, Modal, PageSkeleton, Toasts, type Crumb, type ToastMsg } from "./ui";
 
+/* ───────────── Colores ───────────── */
+
+// El panel usa la paleta del sitio (Contenido del sitio → Colores): la barra lateral, los botones y las etiquetas la
+// toman tal cual y la zona de trabajo se deriva de ella (lib/theme.ts). La hoja se va con el panel al volver al sitio.
+function PanelTheme({ theme }: { theme: SiteTheme }) {
+  return <style dangerouslySetInnerHTML={{ __html: panelCss(theme) }} />;
+}
+
 /* ───────────── Acceso ───────────── */
 
 type Gate = { status: "checking" } | { status: "login" } | { status: "error" } | { status: "app"; data: AdminData };
 
 // La sesión la valida el servidor: si /admin/data responde 200 hay sesión de administrador.
 export function AdminShell({ children }: { children: ReactNode }) {
+  // Antes de entrar (carga, ingreso), los colores publicados que trae el sitio; dentro, los de los datos del panel,
+  // que cambian apenas se publica otra paleta.
+  const { theme } = useSite();
+  return (
+    <>
+      <PanelTheme theme={theme} />
+      <Gated>{children}</Gated>
+    </>
+  );
+}
+
+function Gated({ children }: { children: ReactNode }) {
   const [gate, setGate] = useState<Gate>({ status: "checking" });
   const check = useCallback(
     () =>
@@ -403,6 +425,7 @@ function Panel({ initialData, onLoggedOut, children }: { initialData: AdminData;
 
   return (
     <AdminProvider value={ctx}>
+      <PanelTheme theme={data.site.theme} />
       <TipProvider>
         <Suspense fallback={null}>
           <LegacyRedirect />

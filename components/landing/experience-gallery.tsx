@@ -31,7 +31,8 @@ export function ExperienceGallery({ items }: { items: Item[] }) {
     <div
       ref={ref}
       role="list"
-      className="group/gal no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 min-[900px]:h-[clamp(400px,40vw,580px)] min-[900px]:gap-3 min-[900px]:overflow-visible"
+      // En pantallas anchas el alto depende también del de la ventana: la sección de experiencias ocupa una pantalla.
+      className="group/gal no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 min-[900px]:h-[clamp(320px,min(40vw,64svh),620px)] min-[900px]:gap-3 min-[900px]:overflow-visible"
     >
       {items.map((e, i) => {
         const on = i === active;
@@ -49,7 +50,7 @@ export function ExperienceGallery({ items }: { items: Item[] }) {
           >
             {/* Foto: la activa a todo color y asentada; las plegadas, más oscuras y un poco ampliadas. */}
             <div className={`absolute inset-0 transition-[transform,filter] duration-[1.4s] ease-out ${on ? "scale-100" : "min-[900px]:scale-110 min-[900px]:brightness-[.62] min-[900px]:saturate-[.7]"}`}>
-              <PhotoSlot id={`exp-${e.id}`} src={e.src} sizes="(min-width: 900px) 60vw, 240px" />
+              <PhotoSlot id={`exp-${e.id}`} src={e.src} sizes="(min-width: 900px) 60vw, 240px" zoom />
             </div>
             <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-3/5 bg-linear-to-t from-black/75 via-black/25 to-transparent" />
 

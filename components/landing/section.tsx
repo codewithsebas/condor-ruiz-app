@@ -9,8 +9,11 @@ import { SparkleIcon } from "../icons";
 
 export type SectionTone = "base" | "deep" | "light";
 
-// Espaciado vertical común: generoso en escritorio, contenido en el celular.
-const SPACE = "py-[clamp(56px,7vw,112px)]";
+// Espaciado vertical común: generoso en escritorio, contenido en el celular y en pantallas bajas (también depende del alto).
+const SPACE = "py-[clamp(56px,min(7vw,12svh),112px)]";
+// Secciones de pantalla completa (fit): ocupan al menos el alto de la ventana, con el contenido centrado y un margen
+// que depende del alto, para que todo quepa en una pantalla.
+const FIT_SPACE = "flex min-h-svh flex-col justify-center py-[clamp(24px,5svh,72px)]";
 
 const TONE: Record<SectionTone, string> = {
   base: "text-on-dark",
@@ -33,19 +36,20 @@ type SectionProps = {
   tone?: SectionTone;
   labelledBy?: string;
   className?: string; // composición propia del contenido (flex, grid…)
+  fit?: boolean; // pantalla completa: al menos el alto de la ventana, con el contenido centrado (usar con SectionHeader fit)
   children: ReactNode;
 };
 
-export function Section({ id, tone = "base", labelledBy, className = "", children }: SectionProps) {
+export function Section({ id, tone = "base", labelledBy, className = "", fit = false, children }: SectionProps) {
   return (
-    <section id={id} aria-labelledby={labelledBy} className={`relative scroll-mt-4 ${SPACE} ${TONE[tone]} ${tone === "light" ? "my-[clamp(16px,3vw,40px)]" : ""}`}>
+    <section id={id} aria-labelledby={labelledBy} className={`relative scroll-mt-4 ${fit ? FIT_SPACE : SPACE} ${TONE[tone]} ${tone === "light" ? "my-[clamp(16px,3vw,40px)]" : ""}`}>
       {tone === "light" && (
         <>
           <Ridge at="top" />
           <Ridge at="bottom" />
         </>
       )}
-      <div className={`gutter-1360 relative ${className}`}>{children}</div>
+      <div className={`gutter-1360 relative ${fit ? "w-full" : ""} ${className}`}>{children}</div>
     </section>
   );
 }
@@ -60,24 +64,25 @@ type HeaderProps = {
   layout?: "split" | "stack";
   tone?: SectionTone;
   breakTitle?: boolean; // la parte en verde en su propia línea
+  fit?: boolean; // en una sección de pantalla completa: título y márgenes según el alto de la ventana
   children?: ReactNode; // acciones junto al subtítulo
 };
 
 // Encabezado común: frase manuscrita, título grande con su parte en verde y un subtítulo que da contexto.
-export function SectionHeader({ id, kicker, title, accent, subtitle, layout = "split", tone = "base", breakTitle = false, children }: HeaderProps) {
+export function SectionHeader({ id, kicker, title, accent, subtitle, layout = "split", tone = "base", breakTitle = false, fit = false, children }: HeaderProps) {
   const light = tone === "light";
   return (
     // Aparece en dos tiempos al llegar con el scroll: la frase y el título, y después el subtítulo (que queda más abajo:
     // al pie del título en escritorio, debajo en el celular).
     <header
-      className={`mb-[clamp(28px,4vw,52px)] grid gap-x-12 gap-y-4 ${layout === "split" ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-end" : ""}`}
+      className={`${fit ? "mb-[clamp(16px,3.5svh,44px)] gap-y-3" : "mb-[clamp(28px,4vw,52px)] gap-y-4"} grid gap-x-12 ${layout === "split" ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-end" : ""}`}
     >
-      <div className="reveal-on-scroll flex min-w-0 flex-col gap-4">
+      <div className={`reveal-on-scroll flex min-w-0 flex-col ${fit ? "gap-[clamp(6px,1.5svh,16px)]" : "gap-4"}`}>
         <p className={`kicker pb-1 ${light ? "text-on-light" : ""}`}>
           <SparkleIcon className="motion-safe:animate-twinkle" />
           {kicker}
         </p>
-        <h2 id={id} className="display-xl text-balance">
+        <h2 id={id} className={`display-xl text-balance ${fit ? "text-[clamp(2.4rem,min(5.6cqi,8.5svh),5.6rem)]" : ""}`}>
           <span className={breakTitle ? "block" : ""}>{title}</span>
           {accent && (
             <>

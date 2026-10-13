@@ -112,6 +112,43 @@
   --animate-fog-drift: ec-fog-drift 46s ease-in-out infinite alternate;
   --animate-fog-drift-back: ec-fog-drift 64s ease-in-out infinite alternate-reverse;
   --animate-land-rise: ec-land-rise 1.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-photo-open: ec-photo-open 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-photo-in-next: ec-photo-in-next 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-photo-in-prev: ec-photo-in-prev 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-photo-out-next: ec-photo-out-next 0.45s cubic-bezier(0.4, 0, 0.6, 1) both;
+  --animate-photo-out-prev: ec-photo-out-prev 0.45s cubic-bezier(0.4, 0, 0.6, 1) both;
+
+  /* Galería de fotos: la foto entra desde el lado hacia el que se avanza y la anterior sale por el otro. */
+  @keyframes ec-photo-open {
+    from {
+      opacity: 0;
+      transform: scale(0.94);
+    }
+  }
+  @keyframes ec-photo-in-next {
+    from {
+      opacity: 0;
+      transform: translateX(9%) scale(0.96);
+    }
+  }
+  @keyframes ec-photo-in-prev {
+    from {
+      opacity: 0;
+      transform: translateX(-9%) scale(0.96);
+    }
+  }
+  @keyframes ec-photo-out-next {
+    to {
+      opacity: 0;
+      transform: translateX(-9%) scale(0.96);
+    }
+  }
+  @keyframes ec-photo-out-prev {
+    to {
+      opacity: 0;
+      transform: translateX(9%) scale(0.96);
+    }
+  }
 
   /* Capas de un paisaje que suben a su lugar al cargar (ingreso al panel): la cordillera y, detrás, el nevado. */
   @keyframes ec-land-rise {

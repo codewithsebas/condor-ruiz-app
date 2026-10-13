@@ -6,6 +6,7 @@ import { flushSync } from "react-dom";
 import { useSite } from "../site-provider";
 import { dirHref, tel } from "@/lib/format";
 import { Brand } from "../brand";
+import { scrollToSection } from "./centered-anchors";
 import { CloseIcon, LoginIcon, LogoMark, MenuIcon, PhoneIcon, PinIcon, SparkleIcon } from "../icons";
 
 const SECTIONS = [
@@ -45,7 +46,8 @@ export function LandingHeader() {
   const goTo = (e: MouseEvent<HTMLAnchorElement>, id: string) => {
     e.preventDefault();
     flushSync(close);
-    document.getElementById(id)?.scrollIntoView();
+    const el = document.getElementById(id);
+    if (el) scrollToSection(el);
     history.pushState(null, "", `#${id}`);
   };
   const closeRef = useRef(close);
@@ -83,7 +85,8 @@ export function LandingHeader() {
 
   return (
     <>
-      <header className="gutter-1360 flex items-center gap-4 py-4">
+      {/* Alto fijo (--header-h, definido en la portada): la portada ocupa exactamente el resto de la pantalla. */}
+      <header className="gutter-1360 flex h-(--header-h,82px) items-center gap-4">
         <a href="#top" aria-label={`${c.name}, inicio`} className="flex min-h-11 min-w-0 items-center gap-3 text-on-dark no-underline">
           <Brand circle={50} mark={38} snow wordSize="1.5rem" eyebrowSize=".66rem" />
         </a>
@@ -145,7 +148,7 @@ export function LandingHeader() {
           </p>
           <div className="mt-auto flex flex-col gap-2.5 motion-safe:animate-menu-item" style={item(SECTIONS.length + 2)}>
             <a href="#reserva" onClick={(e) => goTo(e, "reserva")} className="btn btn-card min-h-14">
-              Reservar por WhatsApp
+              Reservar ahora
             </a>
             {/* Acceso del equipo: el panel pide iniciar sesión. */}
             <Link href="/admin" className="btn min-h-14 gap-2 border-2 border-on-dark/35 font-bold text-on-dark transition-colors hover:border-on-dark">

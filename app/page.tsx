@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { BookingProvider, BookingWidget, CabinReserveButton } from "@/components/landing/booking";
+import { CenteredAnchors } from "@/components/landing/centered-anchors";
 import { CopyButton } from "@/components/landing/copy-button";
 import { ExperienceGallery } from "@/components/landing/experience-gallery";
 import { HeroParallax, RotatingWords } from "@/components/landing/hero-motion";
@@ -8,6 +9,7 @@ import { LandingHeader } from "@/components/landing/landing-header";
 import { PoliciesAccordion } from "@/components/landing/policies-accordion";
 import { Section, SectionHeader } from "@/components/landing/section";
 import { SoaringCondor } from "@/components/landing/soaring-condor";
+import { PhotoLightbox } from "@/components/landing/photo-lightbox";
 import { PhotoSlot } from "@/components/photo-slot";
 import { ServiceCard } from "@/components/service-card";
 import { SiteFooter } from "@/components/site-footer";
@@ -33,6 +35,17 @@ export const metadata: Metadata = {
 
 // Página estática que se regenera cada hora o al guardar tarifas en el panel.
 export const revalidate = 3600;
+
+// Todas las fotos del sitio para la galería, en el orden en que aparecen en la portada (sin repetir ni marcadores vacíos).
+function galleryOf(photos: Record<string, string>, cabins: Cabin[]): string[] {
+  const all = [
+    ...["hero-main", "hero-thumb-1", "hero-thumb-2", "hero-thumb-3", "hero-thumb-4"].map((id) => photos[id]),
+    ...cabins.flatMap((c) => c.photos),
+    ...EXPERIENCES.map((e) => photos[`exp-${e.id}`]),
+    photos.contact,
+  ];
+  return [...new Set(all.filter(Boolean))];
+}
 
 function jsonLd(cabins: Cabin[], site: SiteConfig) {
   const prices = cabins.length ? cabins.map((c) => c.couple) : [0];
@@ -64,14 +77,21 @@ function WazeIcon() {
   );
 }
 
+// Cabaña tipo A (techo hasta el suelo, fachada de vidrio triangular y baranda del balcón) frente a un solo nevado.
 function HeroCabinArt() {
   return (
     <svg aria-hidden="true" width="76" height="56" viewBox="0 0 76 56" className="flex-none">
-      <path d="M4 54 L30 12 L40 24 L48 16 L74 54 Z" className="fill-accent" />
-      <path d="M30 12 L37 21.5 L33.5 21 L30 18.5 L26 23 Z M48 16 L54.5 25 L51 24.5 L48 22 L45 25.5 L42.5 22.5 Z" className="fill-card" />
-      <path d="M22 54 V38 L34 26 L46 38 V54 Z" className="fill-highlight" />
-      <path d="M19 39 L34 23.5 L49 39" fill="none" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" className="stroke-card" />
-      <path d="M30 54 V44 H38 V54 Z" className="fill-bg" />
+      {/* Nevado y su cumbre */}
+      <path d="M4 54 L46 6 L76 54 Z" className="fill-accent" />
+      <path d="M46 6 L51.6 15 L49.4 14 L47.4 16.8 L45.4 14.3 L43 16.6 L40.8 14.1 L38.1 15 Z" className="fill-card" />
+      {/* Cabaña: techo, marco oscuro y vidrio */}
+      <path d="M9 54 L29 13 L49 54 Z" className="fill-highlight" />
+      <path d="M16 54 L29 27.5 L42 54 Z" className="fill-bg" />
+      <path d="M16 54 L29 27.5 L42 54" fill="none" strokeWidth="1.6" strokeLinejoin="round" className="stroke-card/60" />
+      <path d="M29 32 V54 M22 46 H36" fill="none" strokeWidth="1" className="stroke-card/35" />
+      {/* Baranda del balcón */}
+      <path d="M12 47.5 H46" fill="none" strokeWidth="2.4" strokeLinecap="round" className="stroke-card" />
+      <path d="M16 48 V53 M22 48 V53 M29 48 V53 M36 48 V53 M42 48 V53" fill="none" strokeWidth="1.2" className="stroke-card/80" />
       <path d="M0 53 H76 V56 H0 Z" className="fill-card" />
     </svg>
   );
@@ -81,20 +101,24 @@ export default async function HomePage() {
   const [cabins, { c: site, photos, texts, services: allServices }] = await Promise.all([getSiteCabins(), getSite()]);
   const services = allServices.filter((s) => s.visible);
   return (
-    <div id="top" className="@container relative overflow-x-clip">
+    // --header-h: alto del encabezado de la portada; la portada ocupa el resto de la primera pantalla.
+    <div id="top" className="@container relative overflow-x-clip [--header-h:82px]">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd(cabins, site)).replace(/</g, "\\u003c") }} />
       <LandingHeader />
+      <CenteredAnchors />
 
       <main>
         <BookingProvider cabins={cabins}>
           {/* Portada */}
           {/* Portada viva: el cóndor llega y planea en círculos, el título sube palabra por palabra y su segunda línea
-              alterna frases; la foto respira (zoom lento) y, con mouse, todo se desplaza un poco en profundidad. */}
-          <HeroParallax aria-label="Presentación" className="gutter-1360 relative flex flex-wrap-reverse gap-4">
+              alterna frases; la foto respira (zoom lento) y, con mouse, todo se desplaza un poco en profundidad.
+              Ocupa toda la primera pantalla junto con el encabezado (como mínimo: si el contenido no cabe, crece). El título,
+              los espacios y las miniaturas también dependen del alto de la ventana, para que quepan en pantallas bajas. */}
+          <HeroParallax aria-label="Presentación" className="gutter-1360 relative flex min-h-[calc(100svh-var(--header-h))] flex-wrap-reverse gap-4 pb-4">
             <SoaringCondor id="condor-portada" arrive className="absolute top-8 left-[40%] z-3 w-[clamp(160px,26cqi,380px)]" opacity={0.24} />
-            <div className="relative flex min-w-0 flex-[1_1_560px] flex-col justify-between gap-10 overflow-hidden rounded-lg bg-surface p-[calc(24px_+_1.5cqi)]">
+            <div className="relative flex min-w-0 flex-[1_1_560px] flex-col justify-between gap-[clamp(20px,4svh,40px)] overflow-hidden rounded-lg bg-surface px-[calc(24px_+_1.5cqi)] py-[min(calc(24px_+_1.5cqi),5svh)]">
               <DottedPath d="M10 210 C 90 170, 20 90, 120 70 S 250 80, 240 8" width={260} height={220} className="-right-5 bottom-[120px] stroke-on-dark/45 motion-safe:[&_path]:animate-dash-march" />
-              <h1 className="display relative text-[clamp(3.6rem,7.4cqi,7.8rem)] leading-[.9] tracking-[.005em]">
+              <h1 className="display relative text-[clamp(4rem,min(7.8cqi,calc(16svh-30px)),6.6rem)] leading-[.9] tracking-[.005em]">
                 <span className="flex flex-wrap items-center gap-x-[.3em] gap-y-[.15em]">
                   <span>
                     {texts.hero.title.split(" ").map((w, i, all) => (
@@ -111,7 +135,7 @@ export default async function HomePage() {
                   </span>
                 </span>
                 {texts.hero.highlight && (
-                  <span className="block text-accent">
+                  <span className="block text-accent pt-4">
                     {/* Los lectores de pantalla leen siempre la frase del panel; las que se alternan son decorativas. */}
                     <span className="sr-only">{texts.hero.highlight}</span>
                     <span aria-hidden="true">
@@ -121,9 +145,9 @@ export default async function HomePage() {
                 )}
               </h1>
               <div className="relative flex flex-wrap items-center justify-between gap-6 motion-safe:animate-rise [animation-delay:700ms]">
-                <p className="max-w-[40ch] text-pretty text-on-dark-muted">{texts.hero.description}</p>
+                <p className="max-w-[47ch] text-pretty text-on-dark-muted">{texts.hero.description}</p>
                 <a href="#reserva" className="group btn btn-cta min-h-14 gap-3.5 py-1.5 pr-1.5 pl-[26px] font-bold whitespace-nowrap">
-                  Reservar por WhatsApp
+                  Reservar ahora
                   <span className="grid size-11 place-items-center rounded-full bg-card text-on-light transition-transform duration-300 group-hover:scale-110">
                     <ArrowRightIcon className="motion-safe:animate-nudge" />
                   </span>
@@ -134,16 +158,17 @@ export default async function HomePage() {
                   <div
                     key={id}
                     style={{ animationDelay: `${850 + i * 110}ms` }}
-                    className="relative aspect-[1/1.1] overflow-hidden rounded-md bg-bg transition-transform duration-500 hover:-translate-y-1 motion-safe:animate-rise [&_img]:transition-transform [&_img]:duration-700 hover:[&_img]:scale-110"
+                    className="relative aspect-[1/1.1] max-h-[12svh] w-full overflow-hidden rounded-md bg-bg transition-transform duration-500 hover:-translate-y-1 motion-safe:animate-rise [&_img]:transition-transform [&_img]:duration-700 hover:[&_img]:scale-110"
                   >
-                    <PhotoSlot id={id} src={photos[id]} sizes="(min-width: 1088px) 200px, 25vw" eager />
+                    <PhotoSlot id={id} src={photos[id]} sizes="(min-width: 1088px) 200px, 25vw" eager zoom />
                   </div>
                 ))}
               </div>
             </div>
-            <div className="relative min-h-[clamp(320px,46cqi,700px)] min-w-0 flex-[1_1_480px] overflow-hidden rounded-lg bg-surface">
+            {/* Alto mínimo solo para cuando va encima del texto (pantallas angostas): al lado, se estira al alto de la portada. */}
+            <div className="relative min-h-[clamp(320px,min(46cqi,60svh),700px)] min-w-0 flex-[1_1_480px] overflow-hidden rounded-lg bg-surface">
               <div className="absolute inset-0 transition-[translate] duration-1000 ease-out motion-safe:animate-ken-burns" style={{ translate: "calc(var(--hx, 0) * 14px) calc(var(--hy, 0) * 10px)" }}>
-                <PhotoSlot id="hero-main" src={photos["hero-main"]} sizes="(min-width: 1392px) 720px, (min-width: 1088px) 50vw, 100vw" preload />
+                <PhotoSlot id="hero-main" src={photos["hero-main"]} sizes="(min-width: 1392px) 720px, (min-width: 1088px) 50vw, 100vw" preload zoom />
               </div>
               {/* Otro cóndor, lejos, sobre el cielo de la foto. */}
               <SoaringCondor id="condor-lejano" className="absolute top-[9%] right-[22%] z-2 w-[clamp(54px,6cqi,92px)]" opacity={0.55} depth={0.5} offset={0.45} slow={1.6} />
@@ -160,23 +185,37 @@ export default async function HomePage() {
           </div>
 
           {/* Cabañas */}
-          <Section id="cabanas" tone="deep" labelledBy="cabanas-title">
+          {/* Pantalla completa: la foto de cada cabaña y los textos se ajustan al alto de la ventana para que la sección
+              quepa en una pantalla (como mínimo; con muchas cabañas o textos largos, crece). */}
+          <Section id="cabanas" tone="deep" labelledBy="cabanas-title" fit>
             <DottedPath d="M-10 150 C 60 140, 30 60, 110 60 S 190 20, 170 0" width={200} height={160} className="-top-14 left-0 stroke-on-dark/30" />
-            <SectionHeader id="cabanas-title" kicker="Elige la tuya" title="Nuestras cabañas" accent="tipo chalet" subtitle="Cabañas tipo chalet con vista al Nevado del Ruiz. Compara y elige la que mejor se ajusta a tu grupo: el precio se calcula al instante con tus fechas." />
+            <SectionHeader
+              id="cabanas-title"
+              fit
+              kicker="Elige la tuya"
+              title="Nuestras cabañas"
+              accent="tipo chalet"
+              subtitle="Cabañas tipo chalet con vista al Nevado del Ruiz. Compara y elige la que mejor se ajusta a tu grupo: el precio se calcula al instante con tus fechas."
+            >
+              <a href="#servicios" className="group btn btn-surface min-h-11 px-[20px] text-[.92rem] font-bold">
+                Todas las cabañas incluyen
+                <ArrowDownIcon className="transition-transform duration-300 group-hover:translate-y-0.5" />
+              </a>
+            </SectionHeader>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,420px),1fr))] gap-4">
               {/* Cada tarjeta aparece al llegar con el scroll (la de al lado, un instante después); al pasar el mouse se
                   eleva y su foto se acerca despacio. */}
               {cabins.map((c, i) => {
                 return (
-                  <article key={c.id} className={`reveal-on-scroll reveal-tall group flex flex-col gap-4 rounded-lg bg-card p-3 text-on-light transition duration-250 hover:-translate-y-1.5 hover:shadow-card ${i % 2 ? "[--reveal-after:64px]" : ""}`}>
-                    <div className="relative aspect-4/3 overflow-hidden rounded-md bg-card-muted">
+                  <article key={c.id} className={`reveal-on-scroll reveal-tall group flex flex-col gap-[clamp(10px,2svh,16px)] rounded-lg bg-card p-3 text-on-light transition duration-250 hover:-translate-y-1.5 hover:shadow-card ${i % 2 ? "[--reveal-after:64px]" : ""}`}>
+                    <div className="relative aspect-4/3 max-h-[26svh] w-full overflow-hidden rounded-md bg-card-muted">
                       <div className="absolute inset-0 transition-transform duration-[1.4s] ease-out group-hover:scale-[1.04]">
-                        <PhotoSlot src={c.photos[0]} alt={c.full} placeholder={`Foto real: ${c.full.toLowerCase()}`} sizes="(min-width: 1392px) 660px, (min-width: 888px) 50vw, 100vw" />
+                        <PhotoSlot src={c.photos[0]} alt={c.full} placeholder={`Foto real: ${c.full.toLowerCase()}`} sizes="(min-width: 1392px) 660px, (min-width: 888px) 50vw, 100vw" zoom />
                       </div>
                       {c.badge && <span className="pointer-events-none absolute top-3 left-3 rounded-full bg-highlight px-3.5 py-[7px] text-[.8rem] font-extrabold text-on-light">{c.badge}</span>}
                     </div>
-                    <div className="flex flex-col gap-3 px-2 pb-2">
-                      <h3 className="display text-[2.4rem] leading-none">{c.full}</h3>
+                    <div className="flex flex-col gap-[clamp(8px,1.6svh,12px)] px-2 pb-2">
+                      <h3 className="display text-[clamp(1.9rem,4.6svh,2.4rem)] leading-none">{c.full}</h3>
                       {c.description && <p className="max-w-[60ch] text-[.95rem] text-pretty">{c.description}</p>}
                       {c.features.length > 0 && (
                         <ul aria-label={`Características de ${c.full}`} className="flex flex-wrap gap-1.5">
@@ -203,10 +242,6 @@ export default async function HomePage() {
                 );
               })}
             </div>
-            <a href="#servicios" className="group btn btn-surface mt-6 min-h-12 px-[22px] font-bold">
-              Todas las cabañas incluyen
-              <ArrowDownIcon className="transition-transform duration-300 group-hover:translate-y-0.5" />
-            </a>
           </Section>
         </BookingProvider>
 
@@ -224,8 +259,8 @@ export default async function HomePage() {
         </Section>
 
         {/* Experiencias: composición abierta, la galería a todo el ancho del contenido. */}
-        <Section id="experiencias" labelledBy="experiencias-title">
-          <SectionHeader id="experiencias-title" kicker="Lo que te espera" title="Alta montaña" accent="frente al nevado" subtitle="Naturaleza de alta montaña alrededor de tu cabaña: el nevado, la cascada, las aves y el fuego de la noche." />
+        <Section id="experiencias" labelledBy="experiencias-title" fit>
+          <SectionHeader id="experiencias-title" fit kicker="Lo que te espera" title="Alta montaña" accent="frente al nevado" subtitle="Naturaleza de alta montaña alrededor de tu cabaña: el nevado, la cascada, las aves y el fuego de la noche." />
           <ExperienceGallery items={EXPERIENCES.map((e) => ({ ...e, src: photos[`exp-${e.id}`] }))} />
         </Section>
 
@@ -233,11 +268,11 @@ export default async function HomePage() {
         <Horizon />
 
         {/* Ubicación */}
-        <Section id="ubicacion" tone="deep" labelledBy="ubicacion-title">
-          <SectionHeader id="ubicacion-title" kicker="Así se llega" title="En Murillo" accent="el pueblo más alto del Tolima" breakTitle subtitle="Abre la ruta en Google Maps o Waze desde donde estés, o copia la dirección para compartirla." />
+        <Section id="ubicacion" tone="deep" labelledBy="ubicacion-title" fit>
+          <SectionHeader id="ubicacion-title" fit kicker="Así se llega" title="En Murillo" accent="el pueblo más alto del Tolima" breakTitle subtitle="Abre la ruta en Google Maps o Waze desde donde estés, o copia la dirección para compartirla." />
           <div className="flex flex-wrap gap-4">
             {/* Mapa con etiquetas flotantes */}
-            <div className="reveal-on-scroll relative min-h-[320px] min-w-0 flex-[1.4_1_480px] sm:min-h-[460px] overflow-hidden rounded-lg bg-surface ring-1 ring-on-dark/10">
+            <div className="reveal-on-scroll relative min-h-[320px] min-w-0 flex-[1.4_1_480px] overflow-hidden rounded-lg bg-surface ring-1 ring-on-dark/10 sm:min-h-[clamp(320px,50svh,460px)]">
               <iframe
                 title={`Mapa de ubicación de ${config.name}`}
                 src={`https://maps.google.com/maps?q=${config.lat},${config.lng}&z=15&output=embed`}
@@ -258,8 +293,9 @@ export default async function HomePage() {
             </div>
 
             {/* Tarjeta de ruta: la ilustración se dibuja al llegar con el scroll y un punto recorre el camino. */}
-            <div className="reveal-on-scroll flex min-w-0 flex-[1_1_360px] flex-col gap-5 overflow-hidden rounded-lg bg-card text-on-light">
-              <svg viewBox="0 0 400 170" aria-hidden="true" className="block h-auto w-full">
+            <div className="reveal-on-scroll flex min-w-0 flex-[1_1_360px] flex-col gap-[clamp(12px,2.4svh,20px)] overflow-hidden rounded-lg bg-card text-on-light">
+              {/* En pantallas bajas la ilustración se recorta por arriba (cielo) para que la sección quepa. */}
+              <svg viewBox="0 0 400 170" preserveAspectRatio="xMidYMax slice" aria-hidden="true" className="block aspect-[400/170] max-h-[20svh] w-full">
                 <rect width="400" height="170" className="fill-card-muted" />
                 <path d="M0 170V112l48-30 34 18 46-46 40 34 30-18 52 50 38-36 46 32 30-22 36 30v46z" className="fill-accent/35" />
                 <path d="M228 170 282 64q8-10 18-12h16q10 2 18 12l52 106z" className="fill-accent/60" />
@@ -286,7 +322,7 @@ export default async function HomePage() {
                   <circle cy="-24" r="5" className="fill-card" />
                 </g>
               </svg>
-              <div className="flex flex-1 flex-col gap-5 px-7 pb-7">
+              <div className="flex flex-1 flex-col gap-[clamp(12px,2.4svh,20px)] px-7 pb-[clamp(18px,3.5svh,28px)]">
                 <div className="flex items-start gap-3.5">
                   <span aria-hidden="true" className="grid size-12 flex-none place-items-center rounded-full bg-cta text-cta-text">
                     <PinIcon size={22} stroke={2} />
@@ -360,7 +396,7 @@ export default async function HomePage() {
 
             <figure className="group relative min-h-[260px] overflow-hidden rounded-md bg-bg md:min-h-[400px]">
               <div className="absolute inset-0 transition-transform duration-[1.6s] ease-out group-hover:scale-[1.04]">
-                <PhotoSlot id="contact" src={photos.contact} sizes="(min-width: 1392px) 620px, (min-width: 768px) 45vw, 100vw" />
+                <PhotoSlot id="contact" src={photos.contact} sizes="(min-width: 1392px) 620px, (min-width: 768px) 45vw, 100vw" zoom />
               </div>
               <span aria-hidden="true" className="absolute inset-0 bg-linear-to-t from-black/55 via-black/5 to-transparent" />
               <figcaption className="absolute inset-x-4 bottom-4 flex items-center gap-3 rounded-xl bg-bg/55 px-4 py-3 ring-1 ring-card/15 backdrop-blur-md">
@@ -412,6 +448,7 @@ export default async function HomePage() {
           </div>
         </Section>
       </main>
+      <PhotoLightbox photos={galleryOf(photos, cabins)} />
 
       <SiteFooter />
 

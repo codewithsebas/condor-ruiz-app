@@ -179,14 +179,17 @@ export function BookingWidget() {
 
   useEffect(() => {
     if (!s.open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) set({ open: null });
+    // Un toque o clic en cualquier parte fuera del desplegable abierto y de su campo lo cierra (también dentro de la
+    // tarjeta). Llegada y Salida comparten el calendario: tocar la otra fecha no lo cierra, cambia de fecha.
+    const onDoc = (e: PointerEvent) => {
+      const root = (e.target as Element | null)?.closest?.("[data-popover-root]");
+      if (root?.getAttribute("data-popover-root") !== s.open) set({ open: null });
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && set({ open: null });
-    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("pointerdown", onDoc);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("pointerdown", onDoc);
       document.removeEventListener("keydown", onKey);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -249,7 +252,8 @@ export function BookingWidget() {
   const datesFocused = s.open === "dates";
 
   return (
-    <section id="reserva" aria-labelledby="reserva-title" className="gutter-1360 relative z-5 mt-4">
+    // scroll-mt: al llegar con «Reservar ahora» (#reserva), el módulo queda con aire arriba en vez de pegado al borde.
+    <section id="reserva" aria-labelledby="reserva-title" className="gutter-1360 relative z-5 mt-4 scroll-mt-[clamp(20px,4svh,40px)]">
       <div ref={ref} className="flex flex-col gap-5 rounded-lg bg-card p-[calc(16px_+_1cqi)] text-on-light shadow-card">
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 px-1">
           <h2 id="reserva-title" className="display text-[2.2rem] leading-[.95]">
@@ -259,7 +263,7 @@ export function BookingWidget() {
         </div>
 
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,330px),1fr))] gap-3">
-          <div className="relative flex">
+          <div data-popover-root="dates" className="relative flex">
             <PillField
               label="Llegada"
               value={s.checkIn ? fmtDate(s.checkIn) : "Elegir fecha"}
@@ -311,7 +315,7 @@ export function BookingWidget() {
             )}
           </div>
 
-          <div className="relative flex">
+          <div data-popover-root="dates" className="relative flex">
             <PillField
               label="Salida"
               value={s.checkOut ? fmtDate(s.checkOut) : "Elegir fecha"}
@@ -323,7 +327,7 @@ export function BookingWidget() {
             />
           </div>
 
-          <div className="relative flex">
+          <div data-popover-root="type" className="relative flex">
             <PillField label="Tipo de cabaña" value={cab.name} focused={s.open === "type"} filled popup="listbox" icon={<HomeIcon />} onClick={() => set({ open: s.open === "type" ? null : "type" })} />
             {s.open === "type" && (
               <div role="listbox" aria-label="Tipo de cabaña" className={`${popover} right-0 flex min-w-[min(320px,calc(100cqi-32px))] flex-col gap-1.5 p-2.5`}>
@@ -352,7 +356,7 @@ export function BookingWidget() {
             )}
           </div>
 
-          <div className="relative flex">
+          <div data-popover-root="guests" className="relative flex">
             <PillField label="Huéspedes" value={guestsTxt} focused={s.open === "guests"} filled popup="dialog" icon={<UsersIcon />} onClick={() => set({ open: s.open === "guests" ? null : "guests" })} />
             {s.open === "guests" && (
               <div role="dialog" aria-label="Número de huéspedes" className={`${popover} right-0 flex flex-col gap-3 p-4`}>

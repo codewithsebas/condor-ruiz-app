@@ -96,6 +96,42 @@ export const THEME_PRESETS: { id: string; label: string; description: string; th
     description: "Azul noche con dorado de estrellas.",
     theme: { bg: "#1a1f3a", surface: "#252b4d", deep: "#141830", night: "#080a16", card: "#f3eee2", cardMuted: "#e3dccb", onDark: "#f3eee2", onLight: "#1a1f3a", accent: "#9aa8e0", highlight: "#e6b450", cta: "#1a1f3a", ctaText: "#f3eee2" },
   },
+  {
+    id: "cascada",
+    label: "Cascada",
+    description: "Verde azulado de agua de montaña con blanco de espuma.",
+    theme: { bg: "#0f3d3e", surface: "#165052", deep: "#0a2f30", night: "#041516", card: "#ecf4f0", cardMuted: "#d6e6df", onDark: "#ecf4f0", onLight: "#0f3d3e", accent: "#7cc4bd", highlight: "#e7b74c", cta: "#0f3d3e", ctaText: "#ecf4f0" },
+  },
+  {
+    id: "niebla",
+    label: "Niebla",
+    description: "Gris pizarra, sobrio, con blanco de neblina.",
+    theme: { bg: "#2c3b40", surface: "#384b51", deep: "#212d31", night: "#0d1214", card: "#f0f3f1", cardMuted: "#dde4e0", onDark: "#f0f3f1", onLight: "#2c3b40", accent: "#a5c4c0", highlight: "#dcb45c", cta: "#2c3b40", ctaText: "#f0f3f1" },
+  },
+  {
+    id: "orquidea",
+    label: "Orquídea",
+    description: "Morado profundo con lila, como la flor.",
+    theme: { bg: "#33204a", surface: "#42295f", deep: "#27173a", night: "#100917", card: "#f4eef6", cardMuted: "#e4d9ea", onDark: "#f4eef6", onLight: "#33204a", accent: "#c6a5e3", highlight: "#e9b85a", cta: "#33204a", ctaText: "#f4eef6" },
+  },
+  {
+    id: "atardecer",
+    label: "Atardecer",
+    description: "Vino tinto, durazno y dorado del sol que cae.",
+    theme: { bg: "#4a1d2b", surface: "#5d2838", deep: "#3a1520", night: "#17080d", card: "#f7eadf", cardMuted: "#ecd8c8", onDark: "#f7eadf", onLight: "#4a1d2b", accent: "#e9a48c", highlight: "#f0b64e", cta: "#4a1d2b", ctaText: "#f7eadf" },
+  },
+  {
+    id: "arcilla",
+    label: "Arcilla",
+    description: "Terracota, arena y ocre de los caminos.",
+    theme: { bg: "#6b2f1d", surface: "#7d3a25", deep: "#552415", night: "#220d07", card: "#f6ebdc", cardMuted: "#ead9c2", onDark: "#f6ebdc", onLight: "#6b2f1d", accent: "#e6b48a", highlight: "#f0bd4f", cta: "#6b2f1d", ctaText: "#f6ebdc" },
+  },
+  {
+    id: "volcan",
+    label: "Volcán",
+    description: "Roca oscura, ceniza y naranja de lava.",
+    theme: { bg: "#2b2a2c", surface: "#39373a", deep: "#201f21", night: "#0c0b0c", card: "#f2ede6", cardMuted: "#e2d9cc", onDark: "#f2ede6", onLight: "#2b2a2c", accent: "#d9a88a", highlight: "#ee7b3c", cta: "#2b2a2c", ctaText: "#f2ede6" },
+  },
 ];
 
 export const DEFAULT_THEME: SiteTheme = THEME_PRESETS[0].theme;

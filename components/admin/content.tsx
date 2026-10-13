@@ -200,7 +200,7 @@ export function ContentSection({ id }: { id: ContentSectionId }) {
 
         {id === "experiencias" && <PhotoGroups groups={["Alta montaña frente al nevado"]} />}
 
-        {id === "colores" && <ThemeEditor theme={f.theme} saved={saved.theme} texts={f.t} onChange={setTheme} />}
+        {id === "colores" && <ThemeEditor theme={f.theme} saved={saved.theme} onChange={setTheme} />}
 
         {id === "servicios" && <ServicesManager />}
 

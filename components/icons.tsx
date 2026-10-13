@@ -200,3 +200,5 @@ export const PaletteIcon = (p: IconProps) => (
   </Stroke>
 );
 export const ShieldIcon = (p: IconProps) => <Stroke stroke={2} {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></Stroke>;
+export const MonitorIcon = (p: IconProps) => <Stroke stroke={2} {...p}><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></Stroke>;
+export const SmartphoneIcon = (p: IconProps) => <Stroke stroke={2} {...p}><rect x="6.5" y="2" width="11" height="20" rx="2.5" /><path d="M11 18.5h2" /></Stroke>;

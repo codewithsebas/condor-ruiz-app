@@ -80,7 +80,7 @@ export function FinanceView() {
 
 /* ───────────── Ingresos en el tiempo (columnas apiladas: abonos + saldos) ───────────── */
 
-function RevenueChart({ buckets }: { buckets: ReturnType<typeof finance>["buckets"] }) {
+export function RevenueChart({ buckets }: { buckets: ReturnType<typeof finance>["buckets"] }) {
   const tip = useTip();
   const max = Math.max(1, ...buckets.map((b) => b.deposit + b.balance));
   const top = buckets.reduce((m, b, i) => (b.deposit + b.balance > buckets[m].deposit + buckets[m].balance ? i : m), 0);
@@ -168,7 +168,7 @@ function RevenueChart({ buckets }: { buckets: ReturnType<typeof finance>["bucket
 
 /* ───────────── Cobro de las estadías del periodo ───────────── */
 
-function StaysMeter({ stays }: { stays: ReturnType<typeof finance>["stays"] }) {
+export function StaysMeter({ stays }: { stays: ReturnType<typeof finance>["stays"] }) {
   const pct = stays.value ? Math.round((stays.received / stays.value) * 100) : 0;
   return (
     <Card aria-labelledby="fi-stays" className="flex flex-col gap-3 p-4 sm:p-5">
@@ -181,13 +181,11 @@ function StaysMeter({ stays }: { stays: ReturnType<typeof finance>["stays"] }) {
           </div>
           <dl className="grid grid-cols-3 gap-2 text-[12.5px]">
             <div>
-              <dt className="flex items-center gap-1.5 text-ink-muted">
+              <dt className="flex items-center gap-1.5 whitespace-nowrap text-ink-muted">
                 <span aria-hidden="true" className="size-2 rounded-[2px] bg-series-1" />
-                Cobrado
+                Cobrado · {pct} %
               </dt>
-              <dd className="font-semibold text-ink tabular-nums">
-                {cop(stays.received)} <span className="font-normal text-ink-muted">· {pct} %</span>
-              </dd>
+              <dd className="font-semibold text-ink tabular-nums">{cop(stays.received)}</dd>
             </div>
             <div>
               <dt className="flex items-center gap-1.5 text-ink-muted">
@@ -211,7 +209,7 @@ function StaysMeter({ stays }: { stays: ReturnType<typeof finance>["stays"] }) {
 
 /* ───────────── Listas con barra (ranking) ───────────── */
 
-function BarList({ id, title, subtitle, rows, total }: { id: string; title: string; subtitle: string; rows: { id: string; label: string; value: number }[]; total: number }) {
+export function BarList({ id, title, subtitle, rows, total }: { id: string; title: string; subtitle: string; rows: { id: string; label: string; value: number }[]; total: number }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
     <Card aria-labelledby={id} className="flex flex-col gap-3 p-4 sm:p-5">

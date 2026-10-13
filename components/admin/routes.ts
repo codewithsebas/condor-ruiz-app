@@ -8,7 +8,7 @@ export type ModuleId = "dashboard" | "calendario" | "reservas" | "pagos" | "clie
 type Module = { label: string; href: string; icon: ComponentType<{ size?: number; className?: string }>; group: string; description: string };
 
 export const MODULES: Record<ModuleId, Module> = {
-  dashboard: { label: "Dashboard", href: "/admin", icon: GridIcon, group: "General", description: "Lo que pasa hoy: llegadas, salidas, abonos pendientes y ocupación." },
+  dashboard: { label: "Dashboard", href: "/admin", icon: GridIcon, group: "General", description: "Lo que pasa hoy, cómo viene la semana y las cifras del negocio." },
   calendario: { label: "Calendario", href: "/admin/calendario", icon: CalendarIcon, group: "Operación", description: "Ocupación por cabaña y por día." },
   reservas: { label: "Reservas", href: "/admin/reservas", icon: ListIcon, group: "Operación", description: "Busca, filtra y gestiona cualquier reserva." },
   pagos: { label: "Pagos", href: "/admin/pagos", icon: ReceiptIcon, group: "Operación", description: "Transacciones en línea, pagos recibidos y lo que falta por cobrar." },

@@ -74,7 +74,7 @@ function Ranges({ className = "" }: { className?: string }) {
         d="M0 260v-55l120-30 90 20 110-35 110 40 110-30 110 35 110-25 100 30 120-25 120 25 110-32 120 27 110-20v75z"
         className="fill-[color-mix(in_srgb,var(--color-deep)_55%,var(--color-night))]"
       />
-      <path d="M0 260v-30c120-15 240 10 380-4s260 10 400-2 280 14 420 2 180 6 240 2v32z" className="fill-night" />
+      <path d="M0 260v-30c120-15 240 10 380-4s260 10 400-2 280 14 420 2 180 6 240 2v32z" fill="#5b6b4d" />
     </svg>
   );
 }
@@ -237,18 +237,19 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
         />
       </div>
 
-      <div className="relative flex-none bg-night">
-        <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4 gutter-1360 pt-3 pb-[88px] text-[.85rem] text-on-dark-muted sm:items-center sm:pb-[clamp(12px,2.4vh,24px)]">
+      {/* Franja final: el prado verde de la ilustración, con textos claros. */}
+      <div className="relative flex-none bg-[#5b6b4d]">
+        <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4 gutter-1360 pt-3 pb-[88px] text-[.85rem] text-[#e4e8d6] sm:items-center sm:pb-[clamp(12px,2.4vh,24px)]">
           <div className="flex max-w-[110ch] flex-col gap-1.5">
             <p>
               {c.name} rechaza la explotación y el abuso sexual de niños, niñas y adolescentes (Ley 679 de 2001). Denuncia al 141 del ICBF o a la línea 123.
             </p>
             <p>
               © {new Date().getFullYear()} {c.name}
-              {c.rnt && ` · RNT ${c.rnt}`} · Desarrollado en Murillo por <strong className="font-bold text-on-dark">Joab Giraldo</strong>
+              {c.rnt && ` · RNT ${c.rnt}`} · Desarrollado en Murillo por <strong className="font-bold text-[#fbf6ec]">Joab Giraldo</strong>
             </p>
           </div>
-          <a href="#" className="group flex min-h-11 items-center gap-2 font-bold text-on-dark transition-colors hover:text-accent sm:mr-20">
+          <a href="#" className="group flex min-h-11 items-center gap-2 font-bold text-[#fbf6ec] transition-colors hover:text-[#ffd27f] sm:mr-20">
             Volver arriba
             <span className="grid size-9 place-items-center rounded-full border-2 border-current transition-transform duration-300 group-hover:-translate-y-1">
               <ArrowUpIcon size={15} />

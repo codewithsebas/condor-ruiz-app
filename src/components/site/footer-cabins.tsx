@@ -3,7 +3,7 @@
 // Premium con su jacuzzi de madera humeando en el deck. Estilo plano y suave: techo de teja terracota en escamas, marco
 // oscuro, el gran ventanal triangular encendido con luz cálida, el listón de madera del costado, el balcón con su
 // pasamanos claro, un farolito bajo el caballete y, como las reales, la base metálica negra que las levanta del suelo.
-// Los colores de las cabañas, los pinos y el volcán son fijos; el prado sigue la paleta del sitio.
+// Los colores de las cabañas, los pinos, el volcán y el prado son fijos.
 // Un solo SVG: la cabaña y el pino son <symbol> y se repiten con <use>.
 
 // Lienzo de 1900 × 300: las cabañas a la izquierda y el Nevado a la derecha. Cada cabaña mide 180 × 234 y apoya en el
@@ -158,8 +158,8 @@ export function FooterCabins({ className = "" }: { className?: string }) {
         <path d="M1200 272C1300 252 1380 246 1460 250S1640 236 1740 246 1880 254 4000 254V272z" fill="#5b6b4d" />
       </g>
 
-      {/* Prado: una loma suave que sigue la paleta del sitio; se extiende fuera del lienzo */}
-      <path d="M-3000 300V262C0 262 600 236 950 240S1900 258 4900 262V300z" className="fill-night" />
+      {/* Prado verde (el mismo de la franja final del pie); se extiende fuera del lienzo */}
+      <path d="M-3000 300V262C0 262 600 236 950 240S1900 258 4900 262V300z" fill="#5b6b4d" />
       <path d="M0 268C400 250 700 246 950 248S1600 262 1900 264" fill="none" className="stroke-card/15" strokeWidth="2" />
 
       {PINES.map((p) => (

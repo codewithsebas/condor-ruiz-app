@@ -1055,7 +1055,7 @@ export function MoneyInput({ id, "aria-label": ariaLabel, value, onChange, inval
 // Número pequeño con botones − / + (capacidad, unidades, huéspedes).
 export function Stepper({ id, value, onChange, min = 0, max = 99, unit, describedBy }: NumProps & { min?: number; max?: number; unit?: string }) {
   return (
-    <div className="flex h-[42px] items-center rounded-[14px] border border-line-strong bg-paper px-0.5 transition-[border-color,box-shadow] focus-within:border-focus focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-focus)_12%,transparent)] pointer-coarse:h-11">
+    <div className="flex h-[42px] items-center rounded-full border border-line-strong bg-paper px-0.5 transition-[border-color,box-shadow] focus-within:border-focus focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-focus)_12%,transparent)] pointer-coarse:h-11">
       <button
         type="button"
         aria-label="Restar"

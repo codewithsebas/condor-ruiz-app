@@ -888,6 +888,11 @@
       box-shadow 0.15s ease,
       background-color 0.15s ease;
   }
+  /* Desplegables y selectores (botones con forma de campo) en píldora, como los botones del panel. Los campos de texto
+     conservan el radio de 14 px. */
+  .field-input.field-compact:is(button, select) {
+    border-radius: 9999px;
+  }
   .field-input.field-compact::placeholder {
     color: var(--color-ink-subtle);
   }

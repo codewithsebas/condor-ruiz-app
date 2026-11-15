@@ -11,7 +11,7 @@ import { FooterCabins } from "@/components/site/footer-cabins";
 // cordilleras y el Nevado nevado. Todo lo que se mueve respeta «reducir movimiento».
 
 const heading = "mb-2 flex items-center gap-2 font-body text-[.78rem] font-extrabold uppercase tracking-[.12em] text-accent";
-const row = "flex min-h-11 items-center lg:min-h-8";
+const row = "flex min-h-11 items-center lg:min-h-10";
 // Subrayado que crece desde la izquierda al pasar el mouse o al enfocar.
 const link =
   "w-fit bg-linear-to-r from-accent to-accent bg-[length:0%_2px] bg-left-bottom bg-no-repeat pb-0.5 transition-[background-size,color] duration-300 hover:bg-[length:100%_2px] hover:text-card focus-visible:bg-[length:100%_2px]";
@@ -95,7 +95,7 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
     // resplandor sobre el horizonte y estrellas que aparecen a medida que oscurece.
     <footer
       data-zone="redes"
-      className="relative isolate flex min-h-svh flex-col overflow-hidden bg-[linear-gradient(to_bottom,var(--color-bg),var(--color-deep)_clamp(140px,16vw,300px),color-mix(in_srgb,var(--color-deep)_55%,var(--color-night))_70%,var(--color-night))] text-on-dark lg:h-svh"
+      className="relative isolate flex min-h-svh flex-col overflow-hidden bg-[linear-gradient(to_bottom,var(--color-bg),var(--color-deep)_clamp(140px,16vw,300px),color-mix(in_srgb,var(--color-deep)_55%,var(--color-night))_70%,var(--color-night))] text-on-dark"
     >
       <div
         aria-hidden="true"
@@ -122,10 +122,10 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
         slow={1.9}
       />
 
-      <div className="relative flex-none gutter-1360 pt-[clamp(20px,4vh,72px)]">
+      <div className="relative flex flex-1 flex-col justify-center gutter-1360 pt-[clamp(20px,4vh,72px)]">
         {/* Invitación final */}
-        <div className="reveal-on-scroll flex flex-wrap items-end justify-between gap-x-10 gap-y-6 border-b-2 border-dotted border-on-dark/20 pb-[clamp(14px,2.6vh,40px)]">
-          <p className="display max-w-[16ch] text-[clamp(2.2rem,min(5vw,7.5vh),4.4rem)] leading-[.9] lg:max-w-none">
+        <div className="reveal-on-scroll flex flex-wrap items-end justify-between gap-x-10 gap-y-6 border-b-2 border-dotted border-on-dark/20 pb-[clamp(16px,3.4vh,44px)]">
+          <p className="display max-w-[16ch] text-[clamp(2.2rem,min(5vw,9vh),5.2rem)] leading-[.9] lg:max-w-none">
             ¿Listo para despertar <span className="text-accent">frente al nevado?</span>
           </p>
           <div className="flex flex-wrap gap-3">
@@ -144,10 +144,10 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-6 gap-y-8 py-[clamp(14px,2.6vh,40px)] lg:grid-cols-4 lg:gap-x-10">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-8 py-[clamp(16px,3.4vh,44px)] lg:grid-cols-4 lg:gap-x-10">
           <div className="col-span-2 flex flex-col items-start gap-4 sm:col-span-1 lg:gap-2.5">
-            <Marca parte="logo" width={120} className="bg-on-dark" />
-            <p className="max-w-[28ch] text-on-dark-muted lg:text-[.9rem]">{c.tagline}</p>
+            <Marca parte="logo" width={150} className="bg-on-dark" />
+            <p className="max-w-[28ch] text-on-dark-muted">{c.tagline}</p>
             {c.rnt && <p className="text-[.85rem] font-bold">RNT {c.rnt}</p>}
             {social.length > 0 && (
               <ul aria-label="Redes sociales" className="flex flex-wrap gap-2">
@@ -215,15 +215,15 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
       </div>
 
       {/* El nombre se hunde detrás de las cordilleras y, delante, las cuatro cabañas en fila sobre el prado; un cóndor
-          pequeño cruza el cielo. En computador el pie mide lo mismo que la pantalla (todo a la vista) y la ilustración toma
-          el alto que quede libre; en celular el pie crece con su contenido. */}
-      <div aria-hidden="true" className="relative flex flex-1 flex-col lg:min-h-0">
+          pequeño cruza el cielo. El pie mide al menos lo mismo que la pantalla (en computador, todo a la vista): la ilustración tiene un
+          alto acotado y el espacio que sobra se lo lleva la parte de arriba; en celular el pie crece con su contenido. */}
+      <div aria-hidden="true" className="relative flex flex-none flex-col">
         {/* El nombre, entero y en color sólido (como la invitación de arriba), por encima de la ilustración. */}
-        <p className="display reveal-on-scroll flex-none gutter-1360 pt-[.1em] text-[clamp(2.6rem,min(7vw,9vh),7.5rem)] leading-[.86] whitespace-nowrap">
+        <p className="display reveal-on-scroll flex-none gutter-1360 pt-[.1em] text-[clamp(2.6rem,min(8vw,12vh),8.5rem)] leading-[.86] whitespace-nowrap">
           El Cóndor <span className="text-accent">del Ruiz</span>
         </p>
         {/* Cabañas y Nevado: ocupan el alto que deje libre la pantalla. */}
-        <div className="relative mt-[clamp(4px,1vh,12px)] min-h-[clamp(150px,26vh,320px)] flex-1 lg:min-h-[120px]">
+        <div className="relative mt-[clamp(4px,1vh,12px)] h-[clamp(130px,22vh,250px)]">
           <Ranges className="absolute inset-x-0 bottom-0 h-[48%]" />
           <FooterCabins className="absolute bottom-0 left-1/2 h-full w-auto max-w-full -translate-x-1/2" />
         </div>
@@ -238,7 +238,7 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
       </div>
 
       <div className="relative flex-none bg-night">
-        <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4 gutter-1360 pt-3 pb-[88px] text-[.8rem] text-on-dark-muted sm:items-center sm:pb-[clamp(12px,2.4vh,24px)]">
+        <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4 gutter-1360 pt-3 pb-[88px] text-[.85rem] text-on-dark-muted sm:items-center sm:pb-[clamp(12px,2.4vh,24px)]">
           <div className="flex max-w-[110ch] flex-col gap-1.5">
             <p>
               {c.name} rechaza la explotación y el abuso sexual de niños, niñas y adolescentes (Ley 679 de 2001). Denuncia al 141 del ICBF o a la línea 123.

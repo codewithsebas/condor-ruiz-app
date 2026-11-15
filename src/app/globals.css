@@ -1,27 +1,28 @@
 @import "tailwindcss";
 
-/* Paleta "Bosque" del diseño. `static` porque varios colores (estados) se usan desde JS.
+/* Paleta "Madera clara" del diseño. `static` porque varios colores (estados) se usan desde JS.
    Los colores del sitio (fondos, tarjetas, textos, acentos y botón principal) se guardan en site_settings.theme:
    lib/theme.ts los vuelve a declarar en :root en las páginas públicas (components/site/site-theme.tsx). El panel tiene
    su propio tema (components/admin/panel-theme.ts). */
 @theme static {
-  --color-bg: #163a2a;
-  --color-surface: #1d4633;
-  --color-card: #f2ebd3;
-  --color-card-muted: #e6dcbe;
-  --color-on-dark: #f2ebd3;
-  --color-on-dark-muted: color-mix(in srgb, #f2ebd3 85%, #163a2a);
-  --color-on-light: #163a2a;
-  --color-on-light-muted: color-mix(in srgb, #163a2a 75%, #e6dcbe);
-  --color-accent: #7fae84;
-  --color-highlight: #d9a441;
-  --color-cta: #163a2a;
-  --color-cta-text: #f2ebd3;
+  --color-bg: #dcc39c;
+  --color-surface: #e7d3b2;
+  --color-card: #fbf6ec;
+  --color-card-muted: #efe2c9;
+  --color-on-dark: #3a2817;
+  --color-on-dark-muted: color-mix(in srgb, #3a2817 85%, #dcc39c);
+  --color-on-light: #3a2817;
+  --color-on-light-muted: color-mix(in srgb, #3a2817 75%, #efe2c9);
+  --color-accent: #8a5a2b;
+  --color-highlight: #d4913c;
+  --color-cta: #5b3a21;
+  --color-cta-text: #fbf6ec;
   --color-error: #9b2c1a;
-  --color-footer: color-mix(in srgb, #163a2a 72%, #000);
-  /* Profundidad del mismo verde (de claro a oscuro): bg → deep (valles de las secciones) → night (pie de página). */
-  --color-deep: #11301f;
-  --color-night: #07140d;
+  --color-footer: color-mix(in srgb, #dcc39c 72%, #000);
+  /* Profundidad de la misma madera (de claro a oscuro): bg → deep (valles de las secciones) → night (pie de página).
+     Los nombres vienen de la paleta verde original: con madera clara el texto («on-dark») es el oscuro. */
+  --color-deep: #cfb187;
+  --color-night: #c4a274;
 
   --color-status-pending: #d9a441;
   --color-status-confirmed: #7fae84;

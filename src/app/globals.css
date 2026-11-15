@@ -975,10 +975,10 @@
   }
 }
 
-/* Fondo del panel: una mancha muy difuminada arriba a la derecha (verde en claro, azul en oscuro), fija al hacer scroll. Es un degradado y no
+/* Fondo del panel: una mancha muy difuminada arriba a la derecha (madera en claro, azul en oscuro), fija al hacer scroll. Es un degradado y no
    filter: blur(), así no le cuesta nada al navegador. El tono sale del token, por lo que se adapta a claro y oscuro. */
 .admin-root {
-  --glow: color-mix(in srgb, var(--color-green-deep) 38%, transparent);
+  --glow: color-mix(in srgb, #c4a274 45%, transparent);
   isolation: isolate;
 }
 :root[data-admin-theme="dark"] .admin-root {
@@ -1039,11 +1039,12 @@
 }
 
 /* Encabezado del panel: sin color propio, desenfoca lo que pasa por debajo. El desenfoque va en una capa que se desvanece
-   hacia abajo y hacia el menú lateral, para que no marque un corte recto sobre el contenido. */
+   hacia abajo y hacia el menú lateral, para que no marque un corte recto sobre el contenido. Baja 12 px, lo mismo que el
+   margen superior del contenido (pt-3 en shell.tsx): sin desplazar, no alcanza los botones de arriba de cada página. */
 .admin-header::before {
   content: "";
   position: absolute;
-  inset: 0 0 -24px;
+  inset: 0 0 -12px;
   z-index: -1;
   pointer-events: none;
   backdrop-filter: blur(24px);

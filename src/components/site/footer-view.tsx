@@ -64,13 +64,12 @@ const SOCIAL_ICONS = {
   ),
 } as const;
 
-// Cordilleras en capas (de lejos a cerca) con el Nevado del Ruiz y su casquete de nieve.
+// Cordilleras en capas, de lejos a cerca.
 function Ranges({ className = "" }: { className?: string }) {
   return (
     <svg aria-hidden="true" viewBox="0 0 1440 260" preserveAspectRatio="none" className={`pointer-events-none block w-full ${className}`}>
       <path d="M0 260V170l90-30 80 20 90-50 80 40 90-30 90 30 90-50 90 40 90-25 90 35 100-45 90 35 90-22 90 32 90-25 100 20v115z" className="fill-surface/70" />
-      <path d="M760 260 900 120q30-28 60-32h50q30 4 60 30l150 142z" className="fill-[color-mix(in_srgb,var(--color-deep)_70%,var(--color-bg))]" />
-      <path d="M900 120q30-28 60-32h50q30 4 60 30l-24 10-16-12-18 16-20-18-20 20-20-18-16 14-18-12z" className="fill-card/85" />
+      {/* El Nevado del Ruiz va en la ilustración de las cabañas (footer-cabins.tsx). */}
       <path
         d="M0 260v-55l120-30 90 20 110-35 110 40 110-30 110 35 110-25 100 30 120-25 120 25 110-32 120 27 110-20v75z"
         className="fill-[color-mix(in_srgb,var(--color-deep)_55%,var(--color-night))]"

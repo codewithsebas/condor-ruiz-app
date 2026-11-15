@@ -11,12 +11,12 @@ const X = {
   bg: "#F5F1E4", // fondo del panel
   card: "#FFFDF9", // tarjetas
   box: "#EFE9DD", // cajas de datos (las tarjetas arena del panel)
-  ink: "#163A2A",
+  ink: "#3A2817",
   muted: "#66615A",
   line: "#E2DACB",
   lineStrong: "#CEC5B3",
-  brand: "#163A2A", // botón principal y encabezado (verde bosque, como la barra lateral)
-  cream: "#F2EBD3",
+  brand: "#5B3A21", // botón principal y encabezado (nogal, como la barra lateral)
+  cream: "#FBF6EC",
   hl: "#FFFDF9", // botón secundario: blanco con borde
 };
 // Pasteles del dashboard: el código de reserva y la etiqueta toman el de cada correo.

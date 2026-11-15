@@ -216,13 +216,16 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
 
       {/* El nombre se hunde detrás de las cordilleras y, delante, las cuatro cabañas en fila sobre el prado; un cóndor
           pequeño cruza el cielo. Ocupa el alto que sobra: así el pie llena siempre la pantalla con todo a la vista. */}
-      <div aria-hidden="true" className="relative min-h-[clamp(190px,27vh,460px)] flex-1 lg:min-h-0">
-        <p className="display reveal-on-scroll bg-linear-to-b from-accent via-accent/80 to-accent/20 bg-clip-text gutter-1360 pt-[.14em] text-[clamp(3.2rem,min(11vw,16vh),10rem)] leading-[.82] whitespace-nowrap text-transparent">
-          El Cóndor del Ruiz
+      <div aria-hidden="true" className="relative flex min-h-[clamp(220px,30vh,460px)] flex-1 flex-col lg:min-h-0">
+        {/* El nombre, entero y en color sólido (como la invitación de arriba), por encima de la ilustración. */}
+        <p className="display reveal-on-scroll flex-none gutter-1360 pt-[.1em] text-[clamp(2.8rem,min(8vw,11vh),7.5rem)] leading-[.86] whitespace-nowrap">
+          El Cóndor <span className="text-accent">del Ruiz</span>
         </p>
-        <Ranges className="absolute inset-x-0 bottom-0 h-[42%]" />
-        {/* Las cabañas tapan la parte baja del nombre: van al frente, del alto que deje libre la pantalla. */}
-        <FooterCabins className="absolute bottom-0 left-1/2 h-[86%] w-auto max-w-full -translate-x-1/2" />
+        {/* Cabañas y Nevado: ocupan el alto que deje libre la pantalla. */}
+        <div className="relative mt-[clamp(4px,1vh,12px)] min-h-[120px] flex-1">
+          <Ranges className="absolute inset-x-0 bottom-0 h-[48%]" />
+          <FooterCabins className="absolute bottom-0 left-1/2 h-full w-auto max-w-full -translate-x-1/2" />
+        </div>
         <SoaringCondor
           id="condor-cordillera"
           className="absolute top-[38%] right-[6%] w-[clamp(40px,6vw,96px)]"
@@ -237,8 +240,7 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
         <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4 gutter-1360 pt-4 pb-[88px] text-[.82rem] text-on-dark-muted sm:items-center sm:pb-[clamp(16px,3vh,28px)]">
           <div className="flex max-w-[90ch] flex-col gap-2.5">
             <p>
-              En cumplimiento de la Ley 679 de 2001, {c.name} rechaza la explotación, la pornografía, el turismo sexual y cualquier forma de abuso sexual contra
-              niños, niñas y adolescentes. Denuncia al 141 del ICBF o en la línea 123.
+              {c.name} rechaza la explotación y el abuso sexual de niños, niñas y adolescentes (Ley 679 de 2001). Denuncia al 141 del ICBF o a la línea 123.
             </p>
             <p>
               © {new Date().getFullYear()} {c.name}

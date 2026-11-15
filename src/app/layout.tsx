@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
-import { Bebas_Neue, Caveat, Manrope } from "next/font/google";
+import localFont from "next/font/local";
 import { ServiceWorker } from "@/components/site/service-worker";
 import { SiteProvider } from "@/components/site/site-provider";
 import { config } from "@/lib/config";
@@ -8,9 +8,11 @@ import { getSiteCabins } from "@/lib/server/cabins";
 import { getSiteContent } from "@/lib/server/site";
 import "@/app/globals.css";
 
-const bebas = Bebas_Neue({ variable: "--font-bebas", weight: "400", subsets: ["latin"] });
-const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"] });
-const caveat = Caveat({ variable: "--font-caveat", weight: ["500", "600"], subsets: ["latin"] });
+// Fuentes en el repo (subconjunto latin de Google Fonts, app/fonts): la compilación no las descarga, así no depende de la
+// red del servidor de Hostinger, donde next/font/google falló al bajar Caveat.
+const bebas = localFont({ src: "./fonts/bebas-neue-400.woff2", variable: "--font-bebas", weight: "400" });
+const manrope = localFont({ src: "./fonts/manrope-variable.woff2", variable: "--font-manrope", weight: "200 800" });
+const caveat = localFont({ src: "./fonts/caveat-variable.woff2", variable: "--font-caveat", weight: "500 600" });
 
 // Las páginas se regeneran cada hora o al guardar contenido en el panel (revalidatePath).
 export const revalidate = 3600;

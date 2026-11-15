@@ -25,7 +25,7 @@ revoke all on public.push_subscriptions from anon, authenticated;
 
 alter table public.admin_notifications add column pushed_at timestamptz;
 -- Los avisos que ya existían no se envían.
-update public.admin_notifications set pushed_at = created_at;
+update public.admin_notifications set pushed_at = created_at where true;
 create index admin_notifications_unpushed_idx on public.admin_notifications (created_at) where pushed_at is null and read_at is null;
 
 create or replace function public.request_push_dispatch() returns trigger

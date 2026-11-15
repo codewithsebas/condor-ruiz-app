@@ -1,0 +1,1390 @@
+// Adaptador simulado: implementa el contrato de la API sobre localStorage.
+// Se activa con NEXT_PUBLIC_USE_MOCK_API=1 (demos sin backend). Solo corre en el navegador.
+import {
+  availability,
+  clashingReservations,
+  computeQuote,
+  cleanUnitLabels,
+  invalidPersonRates,
+  invalidUnitLabels,
+  depositDueAt,
+  findUnit,
+  importDocNumber,
+  invalidDayRates,
+  invalidImportRow,
+  newReservationCode,
+  normalizePhone,
+  slugify,
+  splitTotal,
+  unavailableDates,
+  validateExtraCabins,
+  unitFree,
+  validateGuest,
+  validateManualReservation,
+  validateReservation,
+  withTotal,
+  adjustedQuote,
+} from "@/lib/booking";
+import { config } from "@/lib/config";
+import { can, type Permission } from "@/lib/permissions";
+import { MOCK_DB_KEY } from "@/lib/mock/keys";
+import { groupMoney, groupOf } from "@/lib/groups";
+import { addDays, sleep, todayISO } from "@/lib/format";
+import { manualPaymentNote, unpaidUntil } from "@/lib/payments";
+import { defaultContent, defaultTexts, mergeTexts, type SiteContent, type SiteService } from "@/lib/site";
+import { mergeTheme } from "@/lib/theme";
+import type {
+  AdminNotification,
+  ApiResult,
+  Block,
+  BlockInput,
+  BookingInboxAction,
+  BookingInboxItem,
+  CabinInput,
+  CabinType,
+  ClientProfile,
+  Bathroom,
+  BathroomBlock,
+  BathroomBlockInput,
+  BathroomInput,
+  Employee,
+  EmployeeInput,
+  ImportRow,
+  ImportResult,
+  PanelUser,
+  EmailRecord,
+  NotificationKind,
+  PayMethod,
+  PaymentTerms,
+  PaymentKind,
+  PaymentRecord,
+  PaymentStatus,
+  PublicReservation,
+  RateSeason,
+  Rates,
+  Reservation,
+  ManualReservationInput,
+  ReservationInput,
+  SeasonInput,
+  SiteInput,
+} from "@/lib/types";
+
+type MockSettings = { post: "success" | "409" | "422" | "429" | "network" | "slow" };
+
+// Otras pestañas escuchan esta clave (evento storage) para simular la disponibilidad en tiempo real.
+const DBK = MOCK_DB_KEY;
+const SETTINGS_KEY = "vf-mock-settings";
+const AUTH_KEY = "vf-admin";
+
+type Db = {
+  reservations: Reservation[];
+  blocks: Block[];
+  cabins: CabinType[];
+  seasons: RateSeason[];
+  clients: Record<string, ClientProfile>;
+  notifications: AdminNotification[];
+  payments: PaymentRecord[];
+  emails: EmailRecord[];
+  idem: Record<string, string>;
+  site?: SiteContent;
+  // Se agregan al cargar si la base simulada se creó antes de existir.
+  bathrooms?: Bathroom[];
+  bathroomBlocks?: BathroomBlock[];
+  employees?: Employee[];
+  booking?: BookingInboxItem[];
+};
+
+// Escenarios de prueba para el envío: localStorage.setItem('vf-mock-settings', '{"post":"409"}')
+function mockSettings(): MockSettings {
+  try {
+    return { post: "success", ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") };
+  } catch {
+    return { post: "success" };
+  }
+}
+
+const seedCabins = (): CabinType[] =>
+  Object.values(config.cabins).map((c, i) => ({
+    id: c.id,
+    nombre: c.full,
+    precioPareja: c.couple,
+    personaAdicional: c.extra,
+    maxPersonas: c.max,
+    units: config.unidades[c.id] ?? 1,
+    badge: c.badge,
+    descripcion: c.description,
+    caracteristicas: c.features,
+    fotos: [],
+    activa: true,
+    sort: i + 1,
+  }));
+
+const activeTypes = (db: Db) => db.cabins.filter((c) => c.activa).sort((a, b) => a.sort - b.sort);
+const unitsOf = (db: Db) => Object.fromEntries(db.cabins.map((c) => [c.id, c.units])) as Record<string, number>;
+const quoteFor = (db: Db, typeId: string, ci: string, co: string, guests: number) =>
+  computeQuote(
+    db.cabins.find((t) => t.id === typeId)!,
+    ci,
+    co,
+    guests,
+    db.seasons,
+    siteOf(db).settings.depositPct ?? config.depositPct,
+  );
+const keyOf = (r: Pick<Reservation, "guest">) => `${r.guest.docType}:${r.guest.docNumber.toUpperCase()}`;
+
+function notify(db: Db, kind: NotificationKind, title: string, body: string, code: string | null, read = false) {
+  const id = (db.notifications[0]?.id ?? 0) + 1;
+  db.notifications.unshift({
+    id,
+    kind,
+    title,
+    body,
+    reservationCode: code,
+    readAt: read ? new Date().toISOString() : null,
+    createdAt: new Date().toISOString(),
+  });
+  db.notifications = db.notifications.slice(0, 150);
+}
+
+function seed(): Db {
+  const t = todayISO();
+  const now = Date.now();
+  const mk = (
+    code: string,
+    status: Reservation["status"],
+    type: string,
+    unit: number,
+    inOff: number,
+    n: number,
+    g: number,
+    name: string,
+    due: number,
+    doc: string,
+    createdDaysAgo: number,
+  ): Reservation => {
+    const ci = addDays(t, inOff);
+    const created = new Date(now - createdDaysAgo * 864e5).toISOString();
+    const paid = ["confirmed", "rescheduled", "checked_in", "completed", "cancelled"].includes(status) && code !== "ECR-D0106" ? created : null;
+    return {
+      code,
+      status,
+      cabinTypeId: type,
+      unit,
+      checkIn: ci,
+      checkOut: addDays(ci, n),
+      adults: g,
+      children: 0,
+      pet: { hasPet: false, smallBreedConfirmed: false },
+      decoration: { requested: false, occasion: "", notes: "" },
+      estimatedArrival: "16:00",
+      guest: {
+        fullName: name,
+        docType: "CC",
+        docNumber: doc,
+        email: code.toLowerCase() + "@ejemplo.com",
+        phone: "+57 300 000 00" + code.slice(-2),
+        city: "Ibagué",
+      },
+      specialRequests: "",
+      consents: { policies: true, dataProcessing: true, marketing: false },
+      quote: null as unknown as Reservation["quote"],
+      depositDueAt: new Date(now + due * 36e5).toISOString(),
+      createdAt: created,
+      notes: [],
+      demo: true,
+      depositPaidAt: paid,
+      balancePaidAt: status === "completed" ? addDays(ci, 0) + "T20:00:00.000Z" : null,
+      clientKey: "",
+      paid: 0,
+      checkedInAt: null,
+    };
+  };
+  const rs = [
+    mk("ECR-D0101", "confirmed", "estandar", 1, 0, 2, 2, "Ana Gómez", 0, "1010101010", 9),
+    mk("ECR-D0102", "checked_in", "premium", 1, -2, 2, 4, "Luis Martínez", 0, "2020202020", 14),
+    mk("ECR-D0103", "pending_deposit", "estandar", 1, 3, 2, 2, "Marta Rojas", 18, "3030303030", 1),
+    mk("ECR-D0104", "pending_deposit", "premium", 1, 6, 3, 2, "Jorge Silva", 3.5, "4040404040", 0),
+    mk("ECR-D0105", "confirmed", "estandar", 1, 8, 2, 2, "Ana Gómez", 0, "1010101010", 4),
+    mk("ECR-D0106", "cancelled", "estandar", 1, 9, 2, 2, "Pablo Ríos", 0, "6060606060", 6),
+    mk("ECR-D0107", "completed", "estandar", 1, -6, 2, 2, "Clara Vélez", 0, "7070707070", 25),
+    mk("ECR-D0108", "rescheduled", "premium", 1, 14, 2, 4, "Tomás Arango", 0, "8080808080", 20),
+    mk("ECR-D0109", "expired", "estandar", 1, 6, 1, 2, "Irene Cano", -2, "9090909090", 3),
+    mk("ECR-D0110", "completed", "premium", 1, -40, 3, 2, "Ana Gómez", 0, "1010101010", 60),
+    mk("ECR-D0111", "completed", "premium", 1, -25, 2, 4, "Luis Martínez", 0, "2020202020", 45),
+  ];
+  const db: Db = {
+    reservations: rs,
+    blocks: [{ id: "b1", cabinTypeId: "premium", unit: 1, from: addDays(t, 20), to: addDays(t, 22), reason: "Mantenimiento", notes: "Pintura del balcón" }],
+    cabins: seedCabins(),
+    seasons: [
+      {
+        id: "s1",
+        cabinTypeId: "premium",
+        nombre: "Temporada alta de fin de año",
+        from: `${t.slice(0, 4)}-12-15`,
+        to: `${Number(t.slice(0, 4)) + 1}-01-15`,
+        precioPareja: 550000,
+        personaAdicional: 60000,
+        activa: true,
+        dayRates: [
+          { weekdays: [5, 6], dates: [], precioPareja: 620000, personaAdicional: 70000 },
+          { weekdays: [], dates: [`${t.slice(0, 4)}-12-24`, `${t.slice(0, 4)}-12-31`], precioPareja: 700000, personaAdicional: 80000 },
+        ],
+      },
+    ],
+    clients: {
+      "CC:1010101010": {
+        clientKey: "CC:1010101010",
+        rating: 5,
+        trust: "alta",
+        tags: ["Paga puntual", "Celebra aniversario"],
+        preferences: "Prefiere la Cabaña Familiar con Vista.",
+        summary: "Huésped frecuente, muy cuidadosa.",
+        updatedAt: new Date().toISOString(),
+        entries: [],
+      },
+    },
+    notifications: [],
+    payments: [],
+    emails: [],
+    idem: {},
+  };
+  rs.forEach((r) => {
+    r.quote = quoteFor(db, r.cabinTypeId, r.checkIn, r.checkOut, r.adults + r.children);
+    r.clientKey = keyOf(r);
+    r.paid = (r.depositPaidAt ? r.quote.deposit : 0) + (r.balancePaidAt ? r.quote.balance : 0);
+    if (r.status === "checked_in" || r.status === "completed") r.checkedInAt = r.balancePaidAt ?? new Date(now - 20 * 6e4).toISOString();
+    if (r.depositPaidAt) db.payments.push(mockPayment(r, "deposit", "approved", r.depositPaidAt, r.quote.deposit));
+    if (r.balancePaidAt) db.payments.push(mockPayment(r, "balance", "approved", r.balancePaidAt, r.quote.balance));
+  });
+  // Las retenciones de la demo vencen en unas horas.
+  rs.filter((r) => r.status === "pending_deposit").forEach((r, i) => (r.depositDueAt = new Date(now + (5 - i * 2) * 36e5).toISOString()));
+  notify(db, "reservation_confirmed", "Nueva reserva confirmada · Ana Gómez", "Cabaña Doble · ECR-D0105", "ECR-D0105");
+  return db;
+}
+
+const randomTail = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[b % 32]).join("");
+
+function mockPayment(r: Reservation, kind: PaymentKind, status: PaymentStatus, at = new Date().toISOString(), amount?: number): PaymentRecord {
+  return {
+    id: crypto.randomUUID(),
+    reservationCode: r.code,
+    reference: `${r.code}-${kind === "deposit" ? "A" : kind === "full" ? "T" : "S"}-M${randomTail()}`,
+    kind,
+    status,
+    amount: amount ?? (kind === "deposit" ? r.quote.deposit : r.quote.total - r.paid),
+    provider: "manual",
+    method: "MANUAL",
+    detail: "Registrado por el equipo",
+    createdAt: at,
+    expiresAt: null,
+    approvedAt: status === "approved" ? at : null,
+  };
+}
+
+// Mismas reglas que register_manual_payment en la base de datos: cualquier pago confirma una reserva pendiente; el primero
+// es el abono (o el pago total, si cubre todo) y los demás, saldo; el saldo queda pagado cuando lo cobrado llega al total.
+function registerPayment(
+  db: Db,
+  r: Reservation,
+  amount: number,
+  detail: string,
+  quiet = false, // otra cabaña del grupo: avisa y escribe la principal
+): "ALREADY_PAID" | "NOT_APPLICABLE" | "INVALID_AMOUNT" | null {
+  const owed = r.quote.total - r.paid;
+  if (owed <= 0 || r.balancePaidAt) return "ALREADY_PAID";
+  const pending = r.status === "pending_deposit" || r.status === "expired";
+  if (!pending && !["confirmed", "rescheduled", "checked_in"].includes(r.status)) return "NOT_APPLICABLE";
+  if (!Number.isInteger(amount) || amount <= 0 || amount > owed) return "INVALID_AMOUNT";
+  const covered = amount >= owed;
+  const now = new Date().toISOString();
+  db.payments.push({ ...mockPayment(r, r.depositPaidAt ? "balance" : covered ? "full" : "deposit", "approved", now, amount), detail });
+  Object.assign(r, {
+    status: pending ? "confirmed" : r.status,
+    depositPaidAt: r.depositPaidAt ?? now,
+    paid: r.paid + amount,
+    ...(covered && { balancePaidAt: now }),
+  });
+  if (quiet) return null;
+  if (!pending) {
+    if (covered) notify(db, "balance_paid", `Saldo pagado · ${r.code}`, r.guest.fullName, r.code, true);
+  } else {
+    notify(
+      db,
+      "reservation_confirmed",
+      `Nueva reserva confirmada · ${r.guest.fullName}`,
+      `${db.cabins.find((c) => c.id === r.cabinTypeId)?.nombre ?? ""} · ${r.code}`,
+      r.code,
+      true,
+    );
+    if (!db.emails.some((e) => e.reservationCode === r.code && e.kind === "reservation_confirmed"))
+      db.emails.unshift({
+        id: crypto.randomUUID(),
+        kind: "reservation_confirmed",
+        reservationCode: r.code,
+        to: r.guest.email,
+        subject: `Reserva confirmada ${r.code}`,
+        status: "sent",
+        attempts: 1,
+        lastError: "",
+        sentAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+  }
+  return null;
+}
+
+// Pago de una reserva con varias cabañas: mismo reparto que register_manual_payment (abono de cada una, lo que debe cada
+// una o en proporción). La principal se registra al final: su aviso habla por el grupo.
+function registerGroupPayment(db: Db, rows: Reservation[], amount: number | null, kind: "deposit" | "full" | "balance", detail: string) {
+  const owed = rows.map((x) => Math.max(0, x.quote.total - x.paid));
+  const dep = rows.map((x, i) => Math.min(x.quote.deposit, owed[i]));
+  const totalOwed = owed.reduce((s, x) => s + x, 0);
+  if (totalOwed <= 0) return "ALREADY_PAID";
+  const amt = amount ?? (kind === "deposit" ? dep.reduce((s, x) => s + x, 0) : totalOwed);
+  if (!Number.isInteger(amt) || amt <= 0 || amt > totalOwed) return "INVALID_AMOUNT";
+  let share: number[];
+  if (amt >= totalOwed) share = owed;
+  else if (amount === null && kind === "deposit") share = dep;
+  else {
+    share = owed.map((o) => Math.floor((o * amt) / totalOwed));
+    let left = amt - share.reduce((s, x) => s + x, 0);
+    for (const gap of [1, 0])
+      for (let i = 0; i < share.length && left > 0; i++)
+        if (share[i] < owed[i] - gap) {
+          share[i]++;
+          left--;
+        }
+  }
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (share[i] <= 0) {
+      // Sin parte del pago (ya estaba pagada) pero el grupo se confirma junto.
+      if (rows[i].status === "pending_deposit" || rows[i].status === "expired") rows[i].status = "confirmed";
+      continue;
+    }
+    const refused = registerPayment(db, rows[i], share[i], `${detail} (pago del grupo ${rows[0].code})`, i > 0);
+    if (refused) return refused;
+  }
+  if (amt >= totalOwed) rows.forEach((x) => (x.balancePaidAt ??= new Date().toISOString()));
+  return null;
+}
+
+// Cabañas de una reserva nueva con varias: cada una toma su unidad y la siguiente del mismo tipo ya no la ve.
+function allocateUnits(db: Db, cabins: { cabinTypeId: string; unit?: number | null }[], ci: string, co: string): number[] | null {
+  const o = occ(db);
+  const units: number[] = [];
+  for (const c of cabins) {
+    const n = unitsOf(db)[c.cabinTypeId] ?? 0;
+    const u = c.unit ? (unitFree(o, n, c.cabinTypeId, c.unit, ci, co) ? c.unit : 0) : findUnit(o, n, c.cabinTypeId, ci, co);
+    if (!u) return null;
+    units.push(u);
+    o.blocks = [...o.blocks, { id: "", cabinTypeId: c.cabinTypeId, unit: u, from: ci, to: addDays(co, -1), reason: "", notes: "" }];
+  }
+  return units;
+}
+
+const ME_KEY = "vf-admin-me";
+function meOf(): PanelUser {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(ME_KEY) || "null");
+    if (v?.role) return v;
+  } catch {}
+  return { id: "demo-admin", email: "demo@condordelruiz.test", name: "Equipo de prueba", role: "admin", photo: null };
+}
+
+// Baños de la demo: uno por cabaña y uno compartido, con un bloqueo de mantenimiento.
+function bathroomsOf(d: Db): { bathrooms: Bathroom[]; blocks: BathroomBlock[] } {
+  if (!d.bathrooms) {
+    const now = new Date().toISOString();
+    d.bathrooms = [
+      ...d.cabins.map((c) => ({
+        id: crypto.randomUUID(),
+        name: `Baño ${c.nombre.replace(/^Cabaña\s+/i, "")}`,
+        status: "available" as const,
+        cabinTypeId: c.id,
+        unit: 1,
+        notes: "",
+        statusUpdatedAt: now,
+      })),
+      {
+        id: crypto.randomUUID(),
+        name: "Baño compartido del kiosco",
+        status: "maintenance" as const,
+        cabinTypeId: null,
+        unit: null,
+        notes: "Cambio de la ducha",
+        statusUpdatedAt: now,
+      },
+    ];
+    const shared = d.bathrooms[d.bathrooms.length - 1];
+    d.bathroomBlocks = [
+      {
+        id: crypto.randomUUID(),
+        bathroomId: shared.id,
+        from: addDays(todayISO(), 2),
+        to: addDays(todayISO(), 4),
+        reason: "Reparación",
+        notes: "Cambio de la ducha",
+      },
+    ];
+  }
+  return { bathrooms: d.bathrooms, blocks: d.bathroomBlocks ?? [] };
+}
+
+// Empleados de la demo: quien está en la sesión y una persona de recepción.
+function employeesOf(d: Db, me: PanelUser): Employee[] {
+  if (!d.employees)
+    d.employees = [
+      {
+        id: "demo-recepcion",
+        email: "recepcion@condordelruiz.test",
+        name: "Laura Recepción",
+        photo: null,
+        role: "recepcion",
+        createdAt: new Date(Date.now() - 20 * 864e5).toISOString(),
+        lastSignInAt: new Date(Date.now() - 864e5).toISOString(),
+        active: true,
+      },
+    ];
+  if (!d.employees.some((e) => e.id === me.id))
+    d.employees = [{ ...me, createdAt: new Date().toISOString(), lastSignInAt: new Date().toISOString(), active: true }, ...d.employees];
+  return d.employees;
+}
+
+// Contenido del sitio simulado; los datos guardados antes de existir los servicios, los colores o el abono configurable toman
+// los de por defecto.
+const siteOf = (d: Db): SiteContent => ({
+  ...defaultContent,
+  ...d.site,
+  settings: { ...defaultContent.settings, ...d.site?.settings },
+  services: d.site?.services ?? defaultContent.services,
+  theme: mergeTheme(d.site?.theme),
+});
+
+function save(d: Db) {
+  try {
+    localStorage.setItem(DBK, JSON.stringify(d));
+  } catch {}
+}
+function load(): Db {
+  try {
+    const d = JSON.parse(localStorage.getItem(DBK) || "null");
+    if (d) return d;
+  } catch {}
+  const d = seed();
+  save(d);
+  return d;
+}
+
+// Lo que ve el huésped; en un grupo, la principal con los valores y las cabañas de todo el grupo.
+const pub = (db: Db, r0: Reservation): PublicReservation => {
+  const rows = groupOf(db.reservations, r0);
+  const r = groupMoney(rows);
+  const codes = new Set(rows.map((x) => x.code));
+  return {
+    ...pubOne(db, r),
+    payments: db.payments
+      .filter((p) => codes.has(p.reservationCode))
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .slice(0, 8),
+    ...(rows.length > 1 && { cabins: rows.map((x) => ({ cabinTypeId: x.cabinTypeId, adults: x.adults, children: x.children, total: x.quote.total })) }),
+  };
+};
+
+const pubOne = (db: Db, r: Reservation): PublicReservation => ({
+  code: r.code,
+  status: r.status,
+  checkIn: r.checkIn,
+  checkOut: r.checkOut,
+  cabinTypeId: r.cabinTypeId,
+  quote: r.quote,
+  depositDueAt: r.depositDueAt,
+  depositPaidAt: r.depositPaidAt,
+  balancePaidAt: r.balancePaidAt,
+  paid: r.paid,
+  checkedInAt: r.checkedInAt,
+  guestFirstName: r.guest.fullName.split(" ")[0],
+  liveKey: "simulado",
+  serverNow: new Date().toISOString(),
+  payments: db.payments
+    .filter((p) => p.reservationCode === r.code)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .slice(0, 8),
+});
+
+// Mismo plazo que run_payment_deadlines: las retenciones sin abono vencen.
+function expire(db: Db) {
+  let changed = false;
+  const now = Date.now();
+  db.reservations.forEach((r) => {
+    if (r.status === "pending_deposit" && Date.parse(r.depositDueAt) < now) {
+      r.status = "expired";
+      changed = true;
+    }
+    // Como run_auto_checkouts: estadía pagada, 30 minutos después de la hora de salida (hora de Colombia, UTC−5).
+    const pastCheckout =
+      r.status === "checked_in" && now >= Date.parse(`${r.checkOut}T${(siteOf(db).settings.checkOutTime || "12:00").slice(0, 5)}:00-05:00`) + 30 * 60e3;
+    if (pastCheckout && (r.balancePaidAt || r.paid >= r.quote.total)) {
+      r.status = "completed";
+      changed = true;
+    } else if (pastCheckout && !db.notifications.some((n) => n.kind === "checkout_pending" && n.reservationCode === r.code)) {
+      notify(db, "checkout_pending", `Check-out pendiente · ${r.guest.fullName}`, `${r.code} · saldo por cobrar`, r.code);
+      changed = true;
+    }
+  });
+  if (changed) save(db);
+}
+
+const occ = (db: Db) => ({
+  reservations: db.reservations.map((r) => ({
+    code: r.code,
+    cabinTypeId: r.cabinTypeId,
+    unit: r.unit,
+    checkIn: r.checkIn,
+    checkOut: r.checkOut,
+    status: r.status,
+  })),
+  blocks: db.blocks,
+});
+
+type MockRequest = { query?: Record<string, string | number | undefined>; body?: unknown; headers?: Record<string, string> };
+
+export async function mockRequest(method: string, path: string, opts: MockRequest): Promise<ApiResult<unknown>> {
+  const st = mockSettings();
+  const q = (opts.query || {}) as Record<string, string>;
+  const isAdmin = path.startsWith("/admin");
+  await sleep(method === "POST" && path === "/reservations" && st.post === "slow" ? 5000 : isAdmin ? 300 : 700);
+  const db = load();
+  expire(db);
+  const ok = (data: unknown) => ({ status: 200, data });
+  const invalid = (fields: Record<string, string>) => ({ status: 422, data: { error: "VALIDATION_ERROR", fields } });
+
+  if (method === "GET" && path === "/cabin-types") return ok(activeTypes(db));
+
+  if (method === "GET" && path === "/availability/calendar")
+    return ok({ unavailableDates: unavailableDates(occ(db), unitsOf(db)[q.cabinTypeId] ?? 0, q.cabinTypeId, q.from, q.to) });
+
+  if (method === "GET" && path === "/availability")
+    return ok(availability(occ(db), activeTypes(db), unitsOf(db), q.checkIn, q.checkOut, (+q.adults || 0) + (+q.children || 0), db.seasons));
+
+  if (method === "POST" && path === "/reservations") {
+    const body = opts.body as ReservationInput;
+    if (st.post === "network") throw { type: "network", message: "Simulado: sin conexión" };
+    if (st.post === "429") return { status: 429, data: { error: "RATE_LIMITED" } };
+    if (st.post === "409") return { status: 409, data: { error: "DATES_UNAVAILABLE" } };
+    if (st.post === "422")
+      return invalid({ "guest.docNumber": "El número de documento no coincide con el tipo elegido.", "guest.phone": "El celular debe tener 10 dígitos." });
+    if (body.website) return invalid({ website: "Solicitud rechazada." });
+    const key = opts.headers?.["Idempotency-Key"];
+    if (key && db.idem[key])
+      return {
+        status: 201,
+        data: pub(
+          db,
+          db.reservations.find((r) => r.code === db.idem[key])!,
+        ),
+      };
+    const f = { ...validateReservation(body, activeTypes(db), todayISO()), ...validateExtraCabins(body.more, activeTypes(db)) };
+    if (Object.keys(f).length) return invalid(f);
+    const cabins = [{ cabinTypeId: body.cabinTypeId, adults: body.adults, children: body.children }, ...(body.more ?? [])];
+    const units = allocateUnits(db, cabins, body.checkIn, body.checkOut);
+    if (!units) return { status: 409, data: { error: "DATES_UNAVAILABLE" } };
+    const unit = units[0];
+    const r: Reservation = {
+      ...body,
+      code: newReservationCode(),
+      unit,
+      status: "pending_deposit",
+      quote: quoteFor(db, body.cabinTypeId, body.checkIn, body.checkOut, body.adults + body.children),
+      depositDueAt: depositDueAt(body.checkIn),
+      createdAt: new Date().toISOString(),
+      notes: [],
+      depositPaidAt: null,
+      balancePaidAt: null,
+      clientKey: "",
+      paid: 0,
+      checkedInAt: null,
+    };
+    r.clientKey = keyOf(r);
+    delete r.captchaToken;
+    delete r.website;
+    delete r.more;
+    db.reservations.push(r);
+    if (cabins.length > 1) {
+      r.groupCode = r.code;
+      cabins.slice(1).forEach((c, i) => {
+        const people = Number(c.adults) + Number(c.children ?? 0);
+        db.reservations.push({
+          ...r,
+          code: newReservationCode(),
+          cabinTypeId: c.cabinTypeId,
+          unit: units[i + 1],
+          adults: Number(c.adults),
+          children: Number(c.children ?? 0),
+          quote: quoteFor(db, c.cabinTypeId, body.checkIn, body.checkOut, people),
+          notes: [],
+        });
+      });
+    }
+    if (key) db.idem[key] = r.code;
+    save(db);
+    return { status: 201, data: pub(db, r) };
+  }
+
+  if (method === "GET" && path === "/reservations/lookup") {
+    const r = db.reservations.find(
+      (x) =>
+        x.code.toUpperCase() ===
+          String(q.code || "")
+            .trim()
+            .toUpperCase() &&
+        x.guest.email.toLowerCase() ===
+          String(q.email || "")
+            .trim()
+            .toLowerCase(),
+    );
+    return r ? ok(pub(db, r)) : { status: 404, data: { error: "NOT_FOUND" } };
+  }
+
+  // ----- Admin (sesión simulada en sessionStorage; acepta cualquier correo y contraseña) -----
+  const body = (opts.body || {}) as Record<string, string>;
+  if (method === "POST" && path === "/admin/login") {
+    if (!body.email || !body.password) return { status: 401, data: { error: "INVALID_CREDENTIALS" } };
+    sessionStorage.setItem(AUTH_KEY, "1");
+    const email = String(body.email).trim().toLowerCase();
+    const me: PanelUser = {
+      id: "demo-" + email,
+      email,
+      name: email.split("@")[0].replace(/[._-]+/g, " "),
+      role: email.includes("recepcion") ? "recepcion" : "admin",
+      photo: null,
+    };
+    sessionStorage.setItem(ME_KEY, JSON.stringify(me));
+    return ok({});
+  }
+  if (method === "POST" && path === "/admin/logout") {
+    sessionStorage.removeItem(AUTH_KEY);
+    sessionStorage.removeItem(ME_KEY);
+    return ok({});
+  }
+  if (isAdmin && sessionStorage.getItem(AUTH_KEY) !== "1") return { status: 401, data: { error: "UNAUTHORIZED" } };
+  const me = meOf();
+  const deny = (perm: Permission) => (can(me.role, perm) ? null : { status: 403, data: { error: "FORBIDDEN" } });
+  if (method === "GET" && path === "/admin/data")
+    return ok({
+      reservations: db.reservations,
+      blocks: db.blocks,
+      cabinTypes: [...db.cabins].sort((a, b) => a.sort - b.sort),
+      seasons: db.seasons,
+      unidades: unitsOf(db),
+      site: siteOf(db),
+      proofs: [],
+      payments: [...db.payments].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+      emails: db.emails,
+      clients: db.clients,
+      notifications: db.notifications,
+      me,
+      bathrooms: bathroomsOf(db).bathrooms,
+      bathroomBlocks: bathroomsOf(db).blocks,
+      channelStays: [],
+    });
+  // En modo simulado el contenido se guarda solo en este navegador y no cambia las páginas públicas.
+  if (method === "PUT" && path === "/admin/payment-terms") {
+    const no = deny("rates");
+    if (no) return no;
+    const b = opts.body as PaymentTerms;
+    const pct = Number(b.depositPct);
+    if (!Number.isInteger(pct) || pct < 1 || pct > 100) return invalid({ depositPct: "El abono debe ser un porcentaje entero entre 1 y 100." });
+    const site = siteOf(db);
+    db.site = {
+      ...site,
+      settings: { ...site.settings, depositPct: pct },
+      texts: { ...site.texts, payment: { instructions: String(b.instructions ?? "").trim() } },
+    };
+    save(db);
+    return ok(db.site);
+  }
+
+  if (method === "PUT" && path === "/admin/site") {
+    const b = opts.body as SiteInput;
+    const prev = siteOf(db);
+    db.site = {
+      settings: { ...b.settings, depositPct: prev.settings.depositPct },
+      policies: b.policies,
+      photos: {},
+      texts: { ...mergeTexts(b.content ?? defaultTexts), payment: prev.texts.payment },
+      services: siteOf(db).services,
+      theme: b.theme ? mergeTheme(b.theme) : prev.theme,
+    };
+    save(db);
+    return ok(db.site);
+  }
+  // Servicios del sitio (en modo simulado, solo en este navegador).
+  if (path === "/admin/services") {
+    const site = siteOf(db);
+    const b = (opts.body ?? {}) as Partial<SiteService> & { order?: string[] };
+    const clean = (s: Partial<SiteService>) => ({
+      title: String(s.title ?? "").trim(),
+      description: String(s.description ?? "").trim(),
+      icon: String(s.icon ?? "check"),
+      note: String(s.note ?? "").trim(),
+      visible: s.visible !== false,
+    });
+    if ((method === "POST" || method === "PUT") && !clean(b).title) return invalid({ title: "Escribe el nombre del servicio." });
+    if (method === "POST") site.services = [...site.services, { id: crypto.randomUUID(), ...clean(b) }];
+    else if (method === "PUT") site.services = site.services.map((s) => (s.id === b.id ? { id: s.id, ...clean(b) } : s));
+    else if (method === "PATCH") site.services = (b.order ?? []).map((id) => site.services.find((s) => s.id === id)).filter((s): s is SiteService => !!s);
+    else if (method === "DELETE") site.services = site.services.filter((s) => s.id !== q.id);
+    db.site = site;
+    save(db);
+    return ok(site.services);
+  }
+  if (path === "/admin/photos" || path === "/admin/cabins/photos" || path === "/admin/profile/photo" || path === "/admin/proofs" || path === "/admin/push")
+    return { status: 501, data: { error: "NOT_AVAILABLE_IN_MOCK" } };
+
+  // Reserva tomada por el equipo: mismas reglas que POST /api/admin/reservations (en modo simulado, solo en este navegador).
+  if (method === "POST" && path === "/admin/reservations") {
+    const raw = opts.body as ManualReservationInput;
+    const b: ManualReservationInput = {
+      ...raw,
+      unit: raw.unit ?? null,
+      total: raw.total ?? null,
+      guest: { ...raw.guest, phone: normalizePhone(raw.guest?.phone ?? "") },
+    };
+    const f = { ...validateManualReservation(b, activeTypes(db), unitsOf(db), todayISO()), ...validateExtraCabins(b.more, activeTypes(db), unitsOf(db)) };
+    if (Object.keys(f).length) return invalid(f);
+    const cabins = [{ cabinTypeId: b.cabinTypeId, unit: b.unit, adults: b.adults, children: b.children }, ...(b.more ?? [])];
+    const units = allocateUnits(db, cabins, b.checkIn, b.checkOut);
+    if (!units) return { status: 409, data: { error: "DATES_UNAVAILABLE" } };
+    const unit = units[0];
+    const rates = cabins.map((c) => quoteFor(db, c.cabinTypeId, b.checkIn, b.checkOut, Number(c.adults) + Number(c.children ?? 0)));
+    // Precio especial del grupo: se reparte en proporción a la tarifa de cada cabaña.
+    const quotes = b.total ? splitTotal(rates, b.total).map((t, i) => withTotal(rates[i], t)) : rates;
+    const quote = rates[0];
+    const r: Reservation = {
+      cabinTypeId: b.cabinTypeId,
+      checkIn: b.checkIn,
+      checkOut: b.checkOut,
+      adults: b.adults,
+      children: b.children,
+      pet: { hasPet: !!b.pet?.hasPet, smallBreedConfirmed: !!b.pet?.hasPet },
+      decoration: { requested: false, occasion: "", notes: "" },
+      estimatedArrival: b.estimatedArrival || siteOf(db).settings.checkInStart,
+      guest: {
+        ...b.guest,
+        fullName: b.guest.fullName.trim(),
+        docNumber: b.guest.docNumber.trim().toUpperCase(),
+        email: b.guest.email.trim(),
+        city: (b.guest.city ?? "").trim(),
+      },
+      specialRequests: (b.specialRequests ?? "").trim(),
+      consents: { policies: false, dataProcessing: false, marketing: false },
+      code: newReservationCode(),
+      unit,
+      status: "pending_deposit",
+      quote: quotes[0] ?? quote,
+      depositDueAt: unpaidUntil(b.checkIn),
+      createdAt: new Date().toISOString(),
+      notes: [],
+      depositPaidAt: null,
+      balancePaidAt: null,
+      clientKey: "",
+      paid: 0,
+      checkedInAt: null,
+      source: "panel",
+    };
+    r.clientKey = keyOf(r);
+    db.reservations.push(r);
+    if (cabins.length > 1) {
+      r.groupCode = r.code;
+      const group = [
+        r,
+        ...cabins.slice(1).map((c, i) => ({
+          ...r,
+          code: newReservationCode(),
+          cabinTypeId: c.cabinTypeId,
+          unit: units[i + 1],
+          adults: Number(c.adults),
+          children: Number(c.children ?? 0),
+          quote: quotes[i + 1],
+          notes: [],
+        })),
+      ];
+      db.reservations.push(...group.slice(1));
+      save(db);
+      return { status: 201, data: { reservation: r, group } };
+    }
+    save(db);
+    return { status: 201, data: { reservation: r } };
+  }
+
+  if (method === "POST" && path === "/admin/action") {
+    const r = db.reservations.find((x) => x.code === body.code);
+    if (!r) return { status: 404, data: {} };
+    const map: Record<string, Reservation["status"]> = { cancel: "cancelled", checkin: "checked_in", checkout: "completed" };
+    const now = new Date().toISOString();
+    const group = groupOf(db.reservations, r);
+    if (body.action === "cancel" && r.groupCode) {
+      if ((opts.body as { group?: boolean }).group) {
+        group.forEach((x) => (x.status = "cancelled"));
+        notify(db, "reservation_cancelled", `Reserva cancelada · ${r.groupCode}`, `${r.guest.fullName} · ${group.length} cabañas`, r.groupCode, true);
+      } else {
+        if (r.code === r.groupCode) return { status: 422, data: { error: "GROUP_LEAD" } };
+        Object.assign(r, { status: "cancelled", groupCode: null });
+        notify(db, "reservation_cancelled", `Reserva cancelada · ${r.code}`, r.guest.fullName, r.code, true);
+      }
+      save(db);
+      return ok(r);
+    }
+    if (body.action === "extend_hold" && group.length > 1) {
+      const due = unpaidUntil(r.checkIn);
+      if (Date.parse(due) <= Date.now()) return { status: 422, data: { error: "HOLD_TOO_SHORT" } };
+      group.forEach((x) => Object.assign(x, { status: "pending_deposit", depositDueAt: due }));
+      save(db);
+      return ok(r);
+    }
+    if ((body.action === "confirm" || body.action === "balance") && group.length > 1) {
+      const b = opts.body as { full?: boolean; amount?: number; method?: PayMethod; note?: string };
+      const kind = b.full ? "full" : body.action === "balance" ? "balance" : "deposit";
+      const amount = b.full || b.amount === undefined ? null : Number(b.amount);
+      const refused = registerGroupPayment(db, group, amount, kind, manualPaymentNote(b.method, b.note) || "Registrado por el equipo");
+      if (refused) return { status: refused === "ALREADY_PAID" ? 409 : 422, data: { error: refused } };
+      save(db);
+      return ok(r);
+    }
+    if (body.action === "extend_hold") {
+      if (r.status !== "pending_deposit" && r.status !== "expired") return { status: 422, data: { error: "INVALID_TRANSITION" } };
+      // Sin plazo: vuelve a quedar sin abono (no aparta fechas) hasta su día de llegada.
+      const due = unpaidUntil(r.checkIn);
+      if (Date.parse(due) <= Date.now()) return { status: 422, data: { error: "HOLD_TOO_SHORT" } };
+      Object.assign(r, { status: "pending_deposit", depositDueAt: due });
+      save(db);
+      return ok(r);
+    }
+    if (body.action === "confirm" || body.action === "balance") {
+      const b = opts.body as { full?: boolean; amount?: number; method?: PayMethod; note?: string };
+      const owed = r.quote.total - r.paid;
+      const amount = b.full ? owed : b.amount !== undefined ? Number(b.amount) : body.action === "confirm" ? Math.min(r.quote.deposit, owed) : owed;
+      const refused = registerPayment(db, r, amount, manualPaymentNote(b.method, b.note) || "Registrado por el equipo");
+      if (refused) return { status: refused === "ALREADY_PAID" ? 409 : 422, data: { error: refused } };
+      save(db);
+      return ok(r);
+    }
+    if (body.action === "checkout" && !r.balancePaidAt && r.paid < r.quote.total) return { status: 422, data: { error: "BALANCE_PENDING" } };
+    if (body.action === "checkin") r.checkedInAt = now;
+    if (body.action === "reschedule") {
+      const unit = findUnit(occ(db), unitsOf(db)[r.cabinTypeId] ?? 0, r.cabinTypeId, body.checkIn, body.checkOut, r.code);
+      if (!unit) return { status: 409, data: { error: "DATES_UNAVAILABLE" } };
+      Object.assign(r, {
+        checkIn: body.checkIn,
+        checkOut: body.checkOut,
+        unit,
+        status: r.status === "pending_deposit" ? "pending_deposit" : "rescheduled",
+        quote: quoteFor(db, r.cabinTypeId, body.checkIn, body.checkOut, r.adults + r.children),
+      });
+    } else if (body.action === "move") {
+      const type = db.cabins.find((c) => c.id === body.cabinTypeId);
+      const unit = Number(body.unit);
+      if (!type || unit < 1 || unit > type.units) return { status: 400, data: { error: "INVALID_BODY" } };
+      if (r.adults + r.children > type.maxPersonas) return { status: 422, data: { error: "OVER_CAPACITY" } };
+      if (!unitFree(occ(db), type.units, type.id, unit, r.checkIn, r.checkOut, r.code)) return { status: 409, data: { error: "DATES_UNAVAILABLE" } };
+      Object.assign(r, { cabinTypeId: type.id, unit });
+    } else if (body.action === "adjust") {
+      const b = opts.body as { adults: number; children: number; total: number };
+      const type = db.cabins.find((c) => c.id === r.cabinTypeId)!;
+      if (b.adults + b.children > type.maxPersonas) return { status: 422, data: { error: "OVER_CAPACITY" } };
+      Object.assign(r, {
+        adults: b.adults,
+        children: b.children,
+        quote: adjustedQuote(r, type, b.adults + b.children, b.total, db.seasons),
+        balancePaidAt: r.balancePaidAt && b.total > r.paid ? null : r.balancePaidAt,
+      });
+    } else if (body.action === "guest") {
+      const g = (opts.body as { guest: Reservation["guest"] }).guest;
+      const fields = validateGuest(g);
+      if (Object.keys(fields).length) return invalid(Object.fromEntries(Object.entries(fields).map(([k, v]) => [`guest.${k}`, v])));
+      const phone = normalizePhone(g.phone);
+      r.guest = {
+        ...g,
+        fullName: g.fullName.trim(),
+        docNumber: g.docType === "SD" ? phone.replace(/\D/g, "") : g.docNumber.trim().toUpperCase(),
+        phone,
+        city: (g.city ?? "").trim(),
+      };
+      r.clientKey = keyOf(r);
+      // En un grupo el huésped es el mismo para todas las cabañas.
+      group.forEach((x) => Object.assign(x, { guest: r.guest, clientKey: r.clientKey }));
+    } else if (body.action === "note") r.notes.push({ at: now, text: body.text });
+    else {
+      r.status = map[body.action] || r.status;
+      if (body.action === "cancel") notify(db, "reservation_cancelled", `Reserva cancelada · ${r.code}`, r.guest.fullName, r.code, true);
+    }
+    save(db);
+    return ok(r);
+  }
+
+  if (path === "/admin/blocks" && (method === "POST" || method === "PUT")) {
+    const b = opts.body as BlockInput & { id?: string };
+    const units = b.unit === "all" ? Array.from({ length: unitsOf(db)[b.cabinTypeId] ?? 0 }, (_, i) => i + 1) : [b.unit];
+    const conflicts = units.flatMap((u) => clashingReservations(occ(db).reservations, b.cabinTypeId, u, b.from, b.to).map((r) => r.code));
+    if (conflicts.length) return { status: 409, data: { error: "RESERVATION_CONFLICT", conflicts } };
+    const others = db.blocks.filter((x) => x.id !== b.id);
+    if (others.some((x) => x.cabinTypeId === b.cabinTypeId && units.includes(x.unit) && x.from <= b.to && b.from <= x.to))
+      return { status: 409, data: { error: "BLOCK_OVERLAP" } };
+    if (method === "PUT")
+      db.blocks = others.concat({ id: b.id!, cabinTypeId: b.cabinTypeId, unit: units[0], from: b.from, to: b.to, reason: b.reason, notes: b.notes });
+    else
+      units.forEach((unit, i) =>
+        db.blocks.push({ id: `b${Date.now()}${i}`, cabinTypeId: b.cabinTypeId, unit, from: b.from, to: b.to, reason: b.reason, notes: b.notes }),
+      );
+    db.blocks.sort((a, z) => (a.from < z.from ? -1 : 1));
+    save(db);
+    return ok(db.blocks);
+  }
+  if (method === "DELETE" && path === "/admin/blocks") {
+    db.blocks = db.blocks.filter((b) => b.id !== q.id);
+    save(db);
+    return ok(db.blocks);
+  }
+
+  if (method === "PUT" && path === "/admin/cabin-types") {
+    const rates = opts.body as Rates;
+    db.cabins.forEach((c) => rates[c.id] && Object.assign(c, rates[c.id]));
+    save(db);
+    return ok(db.cabins);
+  }
+  if (path === "/admin/cabins") {
+    if (method === "PATCH") {
+      (opts.body as { order: string[] }).order.forEach((id, i) => {
+        const c = db.cabins.find((x) => x.id === id);
+        if (c) c.sort = i + 1;
+      });
+    } else if (method === "DELETE") {
+      if (db.reservations.some((r) => r.cabinTypeId === q.id)) return { status: 409, data: { error: "HAS_RESERVATIONS" } };
+      db.cabins = db.cabins.filter((c) => c.id !== q.id);
+      db.blocks = db.blocks.filter((b) => b.cabinTypeId !== q.id);
+      db.seasons = db.seasons.filter((s) => s.cabinTypeId !== q.id);
+    } else {
+      const b = opts.body as CabinInput & { id?: string };
+      if (!b.nombre || b.nombre.trim().length < 3) return invalid({ nombre: "El nombre debe tener entre 3 y 60 caracteres." });
+      const badLabels = invalidUnitLabels(b.unitLabels, b.units);
+      if (badLabels) return invalid({ unitLabels: badLabels });
+      const fields = {
+        nombre: b.nombre.trim(),
+        descripcion: b.descripcion,
+        caracteristicas: b.caracteristicas,
+        badge: b.badge,
+        maxPersonas: b.maxPersonas,
+        units: b.units,
+        unitLabels: cleanUnitLabels(b.unitLabels, b.units),
+        precioPareja: b.precioPareja,
+        personaAdicional: b.personaAdicional,
+        activa: b.activa,
+      };
+      if (method === "PUT")
+        Object.assign(
+          db.cabins.find((c) => c.id === b.id)!,
+          fields,
+        );
+      else {
+        let id = slugify(b.nombre) || "cabana";
+        for (let i = 2; db.cabins.some((c) => c.id === id) || id === "nueva"; i++) id = `${slugify(b.nombre)}-${i}`;
+        db.cabins.push({ id, fotos: [], sort: db.cabins.length + 1, ...fields });
+      }
+    }
+    save(db);
+    return ok([...db.cabins].sort((a, b) => a.sort - b.sort));
+  }
+
+  if (path === "/admin/seasons") {
+    if (method === "DELETE") db.seasons = db.seasons.filter((s) => s.id !== q.id);
+    else {
+      const b = opts.body as SeasonInput;
+      const clash = b.activa && db.seasons.find((s) => s.id !== b.id && s.activa && s.cabinTypeId === b.cabinTypeId && s.from <= b.to && b.from <= s.to);
+      if (clash) return invalid({ dates: `Se cruza con la temporada activa "${clash.nombre}" de la misma cabaña.` });
+      const bad = invalidDayRates(b.dayRates ?? [], b.from, b.to);
+      if (bad) return invalid({ dayRates: bad });
+      const badTiers = invalidPersonRates(b.preciosPersonas);
+      if (badTiers) return invalid({ preciosPersonas: badTiers });
+      if (method === "PUT")
+        Object.assign(
+          db.seasons.find((s) => s.id === b.id)!,
+          b,
+        );
+      else db.seasons.push({ ...b, id: `s${Date.now()}` });
+    }
+    db.seasons.sort((a, z) => (a.from < z.from ? -1 : 1));
+    save(db);
+    return ok(db.seasons);
+  }
+
+  if (path === "/admin/clients") {
+    const b = opts.body as {
+      clientKey: string;
+      kind?: "note" | "incident";
+      severity?: string | null;
+      text?: string;
+      reservationCode?: string | null;
+    } & Partial<ClientProfile>;
+    let key: string | undefined = b?.clientKey;
+    if (method === "DELETE") {
+      key = Object.values(db.clients).find((c) => c.entries.some((e) => e.id === +q.entry))?.clientKey;
+      if (!key) return { status: 404, data: {} };
+      db.clients[key].entries = db.clients[key].entries.filter((e) => e.id !== +q.entry);
+    } else {
+      if (!key) return { status: 404, data: {} };
+      const c = (db.clients[key] ??= {
+        clientKey: key,
+        rating: null,
+        trust: "sin_evaluar",
+        tags: [],
+        preferences: "",
+        summary: "",
+        updatedAt: "",
+        entries: [],
+      });
+      if (method === "PUT") Object.assign(c, { rating: b.rating ?? null, trust: b.trust, tags: b.tags, preferences: b.preferences, summary: b.summary });
+      else
+        c.entries.unshift({
+          id: Date.now(),
+          kind: b.kind!,
+          severity: (b.kind === "incident" ? b.severity : null) as ClientProfile["entries"][number]["severity"],
+          text: b.text!,
+          reservationCode: b.reservationCode ?? null,
+          createdAt: new Date().toISOString(),
+        });
+      c.updatedAt = new Date().toISOString();
+    }
+    save(db);
+    return ok(db.clients[key]);
+  }
+
+  if (method === "POST" && path === "/admin/notifications") {
+    const b = opts.body as { ids?: number[]; all?: boolean };
+    const now = new Date().toISOString();
+    db.notifications.forEach((n) => (b.all || b.ids?.includes(n.id)) && (n.readAt ??= now));
+    save(db);
+    return ok(db.notifications);
+  }
+
+  // Correos: en modo simulado no salen; quedan registrados como enviados.
+  if (path === "/admin/emails") {
+    if (method === "GET") return ok({ configured: true });
+    const b = (opts.body || {}) as { action: string; id?: string; clientKey?: string; subject?: string; message?: string; reservationCode?: string | null };
+    if (b.action === "retry") {
+      const e = db.emails.find((x) => x.id === b.id);
+      if (!e) return { status: 404, data: { error: "NOT_FOUND" } };
+      Object.assign(e, { status: "sent", attempts: e.attempts + 1, lastError: "", sentAt: new Date().toISOString() });
+      save(db);
+      return ok(e);
+    }
+    const latest = db.reservations.filter((r) => r.clientKey === b.clientKey).sort((a, z) => (a.createdAt < z.createdAt ? 1 : -1))[0];
+    if (!latest) return { status: 404, data: { error: "CLIENT_NOT_FOUND" } };
+    if (!b.subject || b.subject.trim().length < 3) return invalid({ subject: "Escribe un asunto de 3 a 150 caracteres." });
+    if (!b.message || b.message.trim().length < 5) return invalid({ message: "Escribe un mensaje de 5 a 5000 caracteres." });
+    const now = new Date().toISOString();
+    const e: EmailRecord = {
+      id: crypto.randomUUID(),
+      kind: "team_message",
+      reservationCode: b.reservationCode ?? null,
+      to: latest.guest.email,
+      subject: b.subject.trim(),
+      status: "sent",
+      attempts: 1,
+      lastError: "",
+      sentAt: now,
+      createdAt: now,
+      updatedAt: now,
+    };
+    db.emails.unshift(e);
+    save(db);
+    return { status: 201, data: e };
+  }
+
+  if (method === "POST" && path === "/admin/reset") {
+    save(seed());
+    return ok({});
+  }
+
+  // ----- Baños (mismas reglas que /api/admin/bathrooms y /api/admin/bathroom-blocks) -----
+  if (path === "/admin/bathrooms") {
+    const all = bathroomsOf(db);
+    const b = (opts.body ?? {}) as BathroomInput;
+    if (method === "POST" || (method === "PUT" && (b.name !== undefined || b.cabinTypeId !== undefined || b.unit !== undefined))) {
+      const no = deny("bathrooms");
+      if (no) return no;
+    }
+    if (method === "DELETE") {
+      const no = deny("delete");
+      if (no) return no;
+      db.bathrooms = all.bathrooms.filter((x) => x.id !== q.id);
+      db.bathroomBlocks = all.blocks.filter((x) => x.bathroomId !== q.id);
+    } else {
+      if ((method === "POST" || b.name !== undefined) && !String(b.name ?? "").trim()) return invalid({ name: "Escribe un nombre de hasta 60 caracteres." });
+      const now = new Date().toISOString();
+      if (method === "POST")
+        db.bathrooms = [
+          ...all.bathrooms,
+          {
+            id: crypto.randomUUID(),
+            name: String(b.name).trim(),
+            status: b.status ?? "available",
+            cabinTypeId: b.cabinTypeId || null,
+            unit: b.cabinTypeId && b.unit ? b.unit : null,
+            notes: (b.notes ?? "").trim(),
+            statusUpdatedAt: now,
+          },
+        ];
+      else
+        db.bathrooms = all.bathrooms.map((x) =>
+          x.id !== b.id
+            ? x
+            : {
+                ...x,
+                ...(b.name !== undefined && { name: String(b.name).trim() }),
+                ...(b.status !== undefined && { status: b.status, statusUpdatedAt: now }),
+                ...(b.notes !== undefined && { notes: String(b.notes).trim() }),
+                ...((b.cabinTypeId !== undefined || b.unit !== undefined) && {
+                  cabinTypeId: b.cabinTypeId || null,
+                  unit: b.cabinTypeId && b.unit ? b.unit : null,
+                }),
+              },
+        );
+    }
+    save(db);
+    return ok(bathroomsOf(db));
+  }
+  if (path === "/admin/bathroom-blocks") {
+    const all = bathroomsOf(db);
+    if (method === "DELETE") {
+      const no = deny("delete");
+      if (no) return no;
+      db.bathroomBlocks = all.blocks.filter((x) => x.id !== q.id);
+    } else {
+      const b = opts.body as BathroomBlockInput;
+      if (!b?.bathroomId || !b.from || !b.to || b.to < b.from) return { status: 400, data: { error: "INVALID_BODY" } };
+      if (b.reason === "Otro" && !String(b.notes ?? "").trim()) return { status: 400, data: { error: "INVALID_NOTES" } };
+      const others = all.blocks.filter((x) => x.id !== b.id);
+      if (others.some((x) => x.bathroomId === b.bathroomId && x.from <= b.to && b.from <= x.to)) return { status: 409, data: { error: "BLOCK_OVERLAP" } };
+      const row: BathroomBlock = {
+        id: b.id ?? crypto.randomUUID(),
+        bathroomId: b.bathroomId,
+        from: b.from,
+        to: b.to,
+        reason: b.reason,
+        notes: String(b.notes ?? "").trim(),
+      };
+      db.bathroomBlocks = [...others, row].sort((a, c) => (a.from < c.from ? -1 : 1));
+    }
+    save(db);
+    return ok(bathroomsOf(db));
+  }
+
+  // ----- Reservas de Booking por correo (en modo simulado: una de ejemplo por asignar) -----
+  if (path === "/admin/booking") {
+    if (!db.booking) {
+      const ci = addDays(todayISO(), 12);
+      db.booking = [
+        {
+          ref: "4300001",
+          status: "pending",
+          guest: "Laura Restrepo",
+          email: "lrestrepo.100001@guest.booking.com",
+          phone: "",
+          checkIn: ci,
+          checkOut: addDays(ci, 2),
+          total: 400000,
+          reservationCode: null,
+          lastEmailAt: new Date().toISOString(),
+        },
+      ];
+      save(db);
+    }
+    if (method === "GET") return ok(db.booking);
+    const b = opts.body as BookingInboxAction;
+    const item = db.booking.find((x) => x.ref === b?.ref);
+    if (!item) return { status: 404, data: { error: "NOT_FOUND" } };
+    if (item.status !== "pending") return { status: 409, data: { error: "NOT_PENDING" } };
+    if (b.action === "dismiss") {
+      item.status = "dismissed";
+      save(db);
+      return ok(db.booking);
+    }
+    const row: ImportRow = {
+      ref: `ayenda:${item.ref}`,
+      guest: item.guest,
+      email: item.email,
+      phone: item.phone,
+      checkIn: item.checkIn,
+      checkOut: item.checkOut,
+      cabinTypeId: b.cabinTypeId,
+      unit: b.unit,
+      total: item.total,
+      commission: 0,
+      channel: "Booking",
+      status: "confirmed",
+      notes: `Booking vía Ayenda · reserva ${item.ref}`,
+    };
+    const r = await mockRequest("POST", "/admin/import", { body: { rows: [row] } });
+    const done = (r.data as { results?: ImportResult[] } | null)?.results?.[0];
+    if (!done?.ok || !done.code) return { status: 409, data: { error: done?.error?.includes("ocupadas") ? "DATES_UNAVAILABLE" : "FAILED" } };
+    const fresh = load();
+    fresh.booking = (fresh.booking ?? []).map((x) => (x.ref === item.ref ? { ...x, status: "assigned", reservationCode: done.code! } : x));
+    save(fresh);
+    return ok({ code: done.code, items: fresh.booking });
+  }
+
+  // ----- Empleados (en modo simulado, solo en este navegador) -----
+  if (path === "/admin/employees") {
+    const no = deny("employees");
+    if (no) return no;
+    const list = employeesOf(db, me);
+    const b = (opts.body ?? {}) as EmployeeInput;
+    const admins = list.filter((e) => e.role === "admin" && e.active);
+    if (method === "POST") {
+      const email = String(b.email ?? "")
+        .trim()
+        .toLowerCase();
+      const fields: Record<string, string> = {};
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fields.email = "Escribe un correo válido.";
+      else if (list.some((e) => e.email === email)) fields.email = "Ya existe una cuenta con ese correo.";
+      if (String(b.name ?? "").trim().length < 2) fields.name = "Escribe el nombre (2 a 80 caracteres).";
+      if (String(b.password ?? "").length < 8) fields.password = "Mínimo 8 caracteres.";
+      if (Object.keys(fields).length) return invalid(fields);
+      db.employees = [
+        ...list,
+        {
+          id: crypto.randomUUID(),
+          email,
+          name: String(b.name).trim(),
+          photo: null,
+          role: b.role ?? "recepcion",
+          createdAt: new Date().toISOString(),
+          lastSignInAt: null,
+          active: true,
+        },
+      ];
+    } else if (method === "PUT") {
+      const t = list.find((e) => e.id === b.id);
+      if (!t) return { status: 404, data: { error: "NOT_FOUND" } };
+      const losesAdmin = t.role === "admin" && t.active && ((b.role !== undefined && b.role !== "admin") || b.active === false);
+      if (t.id === me.id && (losesAdmin || b.active === false)) return { status: 409, data: { error: "SELF_LOCKOUT" } };
+      if (losesAdmin && admins.length <= 1) return { status: 409, data: { error: "LAST_ADMIN" } };
+      if (b.password !== undefined && String(b.password).length < 8) return invalid({ password: "Mínimo 8 caracteres." });
+      db.employees = list.map((e) =>
+        e.id !== t.id
+          ? e
+          : {
+              ...e,
+              ...(b.name !== undefined && { name: String(b.name).trim() }),
+              ...(b.role !== undefined && { role: b.role }),
+              ...(b.active !== undefined && { active: b.active }),
+            },
+      );
+    } else if (method === "DELETE") {
+      const t = list.find((e) => e.id === q.id);
+      if (!t) return { status: 404, data: { error: "NOT_FOUND" } };
+      if (t.id === me.id) return { status: 409, data: { error: "SELF_LOCKOUT" } };
+      if (t.role === "admin" && t.active && admins.length <= 1) return { status: 409, data: { error: "LAST_ADMIN" } };
+      db.employees = list.filter((e) => e.id !== t.id);
+    }
+    save(db);
+    return { status: method === "POST" ? 201 : 200, data: employeesOf(db, me) };
+  }
+
+  // ----- Perfil propio -----
+  if (method === "PUT" && path === "/admin/profile") {
+    const b = (opts.body ?? {}) as { name?: string; password?: string };
+    if (b.name !== undefined && String(b.name).trim().length < 2) return invalid({ name: "Escribe tu nombre (2 a 80 caracteres)." });
+    if (b.password !== undefined && String(b.password).length < 8) return invalid({ password: "Mínimo 8 caracteres." });
+    const updated: PanelUser = { ...me, ...(b.name !== undefined && { name: String(b.name).trim() }) };
+    sessionStorage.setItem(ME_KEY, JSON.stringify(updated));
+    db.employees = employeesOf(db, me).map((e) => (e.id === me.id ? { ...e, name: updated.name } : e));
+    save(db);
+    return ok({ me: updated });
+  }
+
+  // ----- Importar reservas (mismas reglas que /api/admin/import) -----
+  if (method === "POST" && path === "/admin/import") {
+    const no = deny("import");
+    if (no) return no;
+    const rows = ((opts.body as { rows?: ImportRow[] })?.rows ?? []).slice(0, 500);
+    const results: ImportResult[] = [];
+    for (const r of rows) {
+      const why = invalidImportRow(r, unitsOf(db));
+      if (why) {
+        results.push({ ref: String(r?.ref ?? ""), ok: false, error: why });
+        continue;
+      }
+      const units = unitsOf(db)[r.cabinTypeId] ?? 0;
+      if (db.reservations.some((x) => x.externalRef === r.ref)) {
+        results.push({ ref: r.ref, ok: false, error: "Ya se había importado." });
+        continue;
+      }
+      const active = r.status !== "cancelled";
+      if (active && !unitFree(occ(db), units, r.cabinTypeId, r.unit, r.checkIn, r.checkOut)) {
+        results.push({ ref: r.ref, ok: false, error: "Las fechas ya están ocupadas en esa cabaña." });
+        continue;
+      }
+      const total = Math.round(r.total);
+      const deposit = Math.round((total * (siteOf(db).settings.depositPct ?? config.depositPct)) / 100);
+      const nights = Math.max(1, Math.round((Date.parse(r.checkOut) - Date.parse(r.checkIn)) / 864e5));
+      const phone = String(r.phone ?? "")
+        .replace(/\D/g, "")
+        .slice(0, 15);
+      const res: Reservation = {
+        cabinTypeId: r.cabinTypeId as Reservation["cabinTypeId"],
+        checkIn: r.checkIn,
+        checkOut: r.checkOut,
+        adults: 2,
+        children: 0,
+        pet: { hasPet: false, smallBreedConfirmed: false },
+        decoration: { requested: false, occasion: "", notes: "" },
+        estimatedArrival: siteOf(db).settings.checkInStart,
+        guest: {
+          fullName: r.guest.trim(),
+          docType: "SD",
+          docNumber: importDocNumber(r),
+          email: (r.email ?? "").trim(),
+          phone: phone ? "+" + phone : "",
+          city: "",
+        },
+        specialRequests: r.notes ?? "",
+        consents: { policies: false, dataProcessing: false, marketing: false },
+        code: newReservationCode(),
+        unit: r.unit,
+        status: r.status,
+        quote: {
+          base: total,
+          extraGuests: 0,
+          extraAmount: 0,
+          total,
+          deposit,
+          balance: total - deposit,
+          pricePerNight: Math.round(total / nights),
+          extraPerNight: 0,
+          nights,
+        },
+        depositDueAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        notes: [],
+        depositPaidAt: null,
+        balancePaidAt: null,
+        clientKey: "",
+        paid: 0,
+        checkedInAt: null,
+        source: "import",
+        externalRef: r.ref,
+        channel: r.channel,
+        commission: Math.round(r.commission),
+      };
+      res.clientKey = keyOf(res);
+      db.reservations.push(res);
+      results.push({ ref: r.ref, ok: true, code: res.code });
+    }
+    save(db);
+    return ok({ results });
+  }
+  return { status: 404, data: { error: "NOT_FOUND" } };
+}

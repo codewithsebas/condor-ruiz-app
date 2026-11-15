@@ -1,0 +1,55 @@
+import type { Metadata } from "next";
+import { config } from "@/lib/config";
+import { wa } from "@/lib/format";
+import { getSite } from "@/lib/server/site";
+
+export const metadata: Metadata = {
+  title: "Políticas de reserva",
+  description: `Términos de reserva de ${config.name}: abono, horarios de check-in y check-out, cambios de fecha, mascotas y responsabilidades.`,
+  openGraph: { title: `Políticas de reserva · ${config.name}`, description: "Abono del 30 %, horarios, cambios de fecha y mascotas." },
+};
+
+const h2 = "text-[1.15rem] font-extrabold";
+
+export default async function PoliciesPage() {
+  const { c } = await getSite();
+  return (
+    <main className="flex flex-col gap-5 gutter-860 pt-6 pb-[72px] leading-[1.6]">
+      <h1 className="page-title">
+        <span>Políticas</span> <span className="text-accent">de reserva</span>
+      </h1>
+      <p className="max-w-[62ch]">Estas condiciones aplican a todas las reservas de {c.name}. Al enviar una solicitud de reserva aceptas lo siguiente.</p>
+      <section className="flex flex-col gap-[18px] rounded-lg bg-card p-[clamp(20px,4vw,36px)] text-on-light">
+        <h2 className={h2}>Horarios</h2>
+        <p>
+          Check-in: {c.checkIn}. Check-out: {c.checkOut}.
+        </p>
+        <h2 className={h2}>Abono, confirmación y saldo</h2>
+        <p>
+          La reserva se confirma cuando recibimos el abono del {c.depositPct} % del valor total, o el valor total si prefieres pagarlo de una vez. Las fechas se
+          aseguran con ese pago: mientras no llegue, siguen disponibles y, si otra persona las paga primero, movemos tu reserva a las próximas fechas libres con
+          el mismo valor y te avisamos. Si el abono no llega antes de tu día de llegada, la reserva vence.
+        </p>
+        <p>El saldo se puede pagar por transferencia antes de llegar o en recepción el día del check-in. El check-out se realiza con el saldo pagado.</p>
+        {c.policies.map((p) => (
+          <div key={p.id} className="contents">
+            <h2 className={h2}>{p.q}</h2>
+            <p className="whitespace-pre-line">{p.a}</p>
+          </div>
+        ))}
+        <h2 className={h2}>Tarifas</h2>
+        <p>
+          El precio por noche depende de la cabaña y de cuántas personas se alojan; cada cabaña muestra el suyo al reservar. Adultos y niños cuentan igual para
+          la capacidad y la tarifa. La decoración para ocasiones especiales tiene un valor adicional que se cotiza aparte.
+        </p>
+      </section>
+      <p>
+        ¿Dudas?{" "}
+        <a href={wa(c.whatsapp)} target="_blank" rel="noopener" className="font-extrabold underline">
+          Escríbenos por WhatsApp
+        </a>
+        .
+      </p>
+    </main>
+  );
+}

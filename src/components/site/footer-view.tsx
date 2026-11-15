@@ -11,7 +11,7 @@ import { FooterCabins } from "@/components/site/footer-cabins";
 // cordilleras y el Nevado nevado. Todo lo que se mueve respeta «reducir movimiento».
 
 const heading = "mb-2 flex items-center gap-2 font-body text-[.78rem] font-extrabold uppercase tracking-[.12em] text-accent";
-const row = "flex min-h-11 items-center";
+const row = "flex min-h-11 items-center lg:min-h-9";
 // Subrayado que crece desde la izquierda al pasar el mouse o al enfocar.
 const link =
   "w-fit bg-linear-to-r from-accent to-accent bg-[length:0%_2px] bg-left-bottom bg-no-repeat pb-0.5 transition-[background-size,color] duration-300 hover:bg-[length:100%_2px] hover:text-card focus-visible:bg-[length:100%_2px]";
@@ -95,7 +95,7 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
     // resplandor sobre el horizonte y estrellas que aparecen a medida que oscurece.
     <footer
       data-zone="redes"
-      className="relative isolate flex min-h-svh flex-col overflow-hidden bg-[linear-gradient(to_bottom,var(--color-bg),var(--color-deep)_clamp(140px,16vw,300px),color-mix(in_srgb,var(--color-deep)_55%,var(--color-night))_70%,var(--color-night))] text-on-dark lg:h-svh"
+      className="relative isolate flex min-h-svh flex-col overflow-hidden bg-[linear-gradient(to_bottom,var(--color-bg),var(--color-deep)_clamp(140px,16vw,300px),color-mix(in_srgb,var(--color-deep)_55%,var(--color-night))_70%,var(--color-night))] text-on-dark"
     >
       <div
         aria-hidden="true"
@@ -146,7 +146,7 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
 
         <div className="grid grid-cols-2 gap-x-6 gap-y-8 py-[clamp(20px,4vh,48px)] lg:grid-cols-4 lg:gap-x-10">
           <div className="col-span-2 flex flex-col items-start gap-4 sm:col-span-1">
-            <Marca parte="logo" width={160} className="bg-on-dark" />
+            <Marca parte="logo" width={136} className="bg-on-dark" />
             <p className="max-w-[28ch] text-on-dark-muted">{c.tagline}</p>
             {c.rnt && <p className="text-[.85rem] font-bold">RNT {c.rnt}</p>}
             {social.length > 0 && (
@@ -159,7 +159,7 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
                       rel="noopener"
                       aria-label={name}
                       title={name}
-                      className="grid size-11 place-items-center rounded-full border-2 border-on-dark/30 transition-[background-color,border-color,color,transform] duration-300 hover:-translate-y-0.5 hover:border-card hover:bg-card hover:text-on-light"
+                      className="grid size-11 place-items-center rounded-full border-2 border-on-dark/30 transition-[background-color,border-color,color,transform] duration-300 hover:-translate-y-0.5 hover:border-card hover:bg-card hover:text-on-light lg:size-10"
                     >
                       {SOCIAL_ICONS[name]}
                     </a>
@@ -215,14 +215,15 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
       </div>
 
       {/* El nombre se hunde detrás de las cordilleras y, delante, las cuatro cabañas en fila sobre el prado; un cóndor
-          pequeño cruza el cielo. Ocupa el alto que sobra: así el pie llena siempre la pantalla con todo a la vista. */}
-      <div aria-hidden="true" className="relative flex min-h-[clamp(220px,30vh,460px)] flex-1 flex-col lg:min-h-0">
+          pequeño cruza el cielo. Ocupa el alto que sobra para que el pie llene la pantalla; en pantallas bajas las cabañas
+          conservan su alto mínimo y el pie crece: nunca quedan recortadas. */}
+      <div aria-hidden="true" className="relative flex flex-1 flex-col">
         {/* El nombre, entero y en color sólido (como la invitación de arriba), por encima de la ilustración. */}
         <p className="display reveal-on-scroll flex-none gutter-1360 pt-[.1em] text-[clamp(2.8rem,min(8vw,11vh),7.5rem)] leading-[.86] whitespace-nowrap">
           El Cóndor <span className="text-accent">del Ruiz</span>
         </p>
         {/* Cabañas y Nevado: ocupan el alto que deje libre la pantalla. */}
-        <div className="relative mt-[clamp(4px,1vh,12px)] min-h-[120px] flex-1">
+        <div className="relative mt-[clamp(4px,1vh,12px)] min-h-[clamp(150px,26vh,320px)] flex-1">
           <Ranges className="absolute inset-x-0 bottom-0 h-[48%]" />
           <FooterCabins className="absolute bottom-0 left-1/2 h-full w-auto max-w-full -translate-x-1/2" />
         </div>

@@ -36,6 +36,43 @@ const PUFFS: [number, number, number][] = [
   [1710, 0, 17],
 ];
 
+// Pasto: tres capas de briznas curvas en el borde del prado (siguen su curva), de atrás (oscuras y bajas) a adelante
+// (claras y altas), cada una con degradado de la base a la punta; matas sueltas más abajo y unas florecitas. Posiciones
+// y altos pseudoaleatorios pero fijos (iguales en servidor y navegador).
+const groundY = (x: number) => 262 - 22 * Math.sin(Math.PI * Math.min(1, Math.max(0, x / 1900)));
+const rnd = (i: number) => {
+  const v = Math.sin(i * 12.9898) * 43758.5453;
+  return v - Math.floor(v);
+};
+const f1 = (n: number) => n.toFixed(1);
+// Brizna curva: base ancha, punta fina, inclinada hacia un lado.
+const blade = (x: number, y: number, h: number, lean: number, w: number) =>
+  `M${f1(x - w)} ${f1(y)}Q${f1(x + lean * 0.3)} ${f1(y - h * 0.55)} ${f1(x + lean)} ${f1(y - h)}Q${f1(x + lean * 0.2 + w * 0.3)} ${f1(y - h * 0.5)} ${f1(x + w)} ${f1(y)}Z`;
+const GRASS_LAYERS = [
+  { step: 3.2, minH: 6, maxH: 13, w: 1.6, dy: -1, seed: 0 },
+  { step: 2.6, minH: 8, maxH: 17, w: 1.5, dy: 1.5, seed: 400 },
+  { step: 3.4, minH: 9, maxH: 21, w: 1.4, dy: 4, seed: 900 },
+].map(({ step, minH, maxH, w, dy, seed }) => {
+  let d = "";
+  for (let i = 0; i * step < 2300; i++) {
+    const x = -200 + i * step + rnd(seed + i) * step;
+    const r = rnd(seed + i + 7);
+    // De vez en cuando una mata más alta.
+    const h = (minH + r * (maxH - minH)) * (rnd(seed + i + 13) > 0.93 ? 1.5 : 1);
+    d += blade(x, groundY(x) + dy, h, (rnd(seed + i + 3) - 0.45) * 9, w);
+  }
+  return d;
+});
+const TUFTS = Array.from({ length: 140 }, (_, i) => {
+  const x = -150 + rnd(i + 50) * 2200;
+  const y = groundY(x) + 12 + rnd(i + 90) * 28;
+  return [-3, 0, 3].map((o, k) => blade(x + o, y, 4 + rnd(i * 3 + k) * 5, (o + (rnd(i + k) - 0.5) * 3) * 0.8, 0.9)).join("");
+}).join("");
+const FLOWERS = Array.from({ length: 36 }, (_, i) => {
+  const x = -100 + rnd(i + 300) * 2100;
+  return { x, y: groundY(x) + 6 + rnd(i + 310) * 22, c: rnd(i + 320) > 0.5 ? "#f3e7a1" : "#f6f1e6" };
+});
+
 export function FooterCabins({ className = "" }: { className?: string }) {
   return (
     <svg aria-hidden="true" viewBox="0 0 1900 300" preserveAspectRatio="xMidYMax meet" overflow="visible" className={`pointer-events-none block ${className}`}>
@@ -64,6 +101,19 @@ export function FooterCabins({ className = "" }: { className?: string }) {
         <linearGradient id="ft-agua" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#8fe0e2" />
           <stop offset="1" stopColor="#3aa7b4" />
+        </linearGradient>
+        {/* Briznas: oscuras en la base, claras en la punta (una por capa) */}
+        <linearGradient id="ft-pasto-0" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stopColor="#3c4a32" />
+          <stop offset="1" stopColor="#5d7049" />
+        </linearGradient>
+        <linearGradient id="ft-pasto-1" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stopColor="#44543a" />
+          <stop offset="1" stopColor="#7a8f5f" />
+        </linearGradient>
+        <linearGradient id="ft-pasto-2" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stopColor="#4d5e40" />
+          <stop offset="1" stopColor="#9bb07a" />
         </linearGradient>
         <radialGradient id="ft-halo" cx=".5" cy=".5" r=".5">
           <stop offset="0" stopColor="#ffd27f" stopOpacity=".55" />
@@ -160,6 +210,12 @@ export function FooterCabins({ className = "" }: { className?: string }) {
 
       {/* Prado verde (el mismo de la franja final del pie); se extiende fuera del lienzo */}
       <path d="M-3000 300V262C0 262 600 236 950 240S1900 258 4900 262V300z" fill="#5b6b4d" />
+      {/* Franja más clara justo bajo el borde y el pasto */}
+      <path d="M-3000 268V262C0 262 600 236 950 240S1900 258 4900 262V268C1900 264 1200 248 950 246S0 268 -3000 268z" fill="#6a7c56" opacity=".6" />
+      <path d={TUFTS} fill="#46563b" opacity=".85" />
+      {FLOWERS.map((f, i) => (
+        <circle key={i} cx={f.x} cy={f.y} r="1.6" fill={f.c} opacity=".9" />
+      ))}
       <path d="M0 268C400 250 700 246 950 248S1600 262 1900 264" fill="none" className="stroke-card/15" strokeWidth="2" />
 
       {PINES.map((p) => (
@@ -196,6 +252,11 @@ export function FooterCabins({ className = "" }: { className?: string }) {
           opacity=".55"
         />
       </g>
+
+      {/* Briznas de pasto en el borde del prado, delante de todo */}
+      {GRASS_LAYERS.map((d, i) => (
+        <path key={i} d={d} fill={`url(#ft-pasto-${i})`} />
+      ))}
     </svg>
   );
 }

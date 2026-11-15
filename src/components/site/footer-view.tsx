@@ -238,7 +238,13 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
       </div>
 
       {/* Franja final: el prado verde de la ilustración, con textos claros. */}
-      <div className="relative flex-none bg-[#5b6b4d]">
+      <div
+        className="relative flex-none bg-[#5b6b4d]"
+        style={{
+          // Matas de pasto repartidas en el verde (briznas curvas en dos tonos), sobre una sombra que oscurece hacia abajo.
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='48'%3E%3Cg fill='%2346563b'%3E%3Cpath d='M10 40q1-6 2-11q1 5 1.5 11zM13 40q1.5-7 4-12q-1 6-2 12zM8 40q-1-5-3-9q2 4 4.5 9z'/%3E%3Cpath d='M58 20q1-5 2-9q1 4 1.5 9zM61 20q1.5-6 3.5-10q-1 5-1.5 10z'/%3E%3Cpath d='M78 44q1-4 1.5-7q1 3 1.2 7z'/%3E%3C/g%3E%3Cg fill='%236d8059'%3E%3Cpath d='M30 28q1-5 1.8-9q.9 4 1.3 9zM33 28q1.2-5 3-8q-.8 4-1.2 8z'/%3E%3Cpath d='M46 46q.8-4 1.5-7q.8 3 1 7z'/%3E%3Cpath d='M84 16q.8-4 1.4-6q.7 3 .9 6z'/%3E%3C/g%3E%3Ccircle cx='70' cy='34' r='1.2' fill='%23f3e7a1' opacity='.8'/%3E%3C/svg%3E"), linear-gradient(to bottom, transparent, rgb(0 0 0 / 0.18))`,
+        }}
+      >
         <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4 gutter-1360 pt-3 pb-[88px] text-[.85rem] text-[#e4e8d6] sm:items-center sm:pb-[clamp(12px,2.4vh,24px)]">
           <div className="flex max-w-[110ch] flex-col gap-1.5">
             <p>

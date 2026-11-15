@@ -96,7 +96,7 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
     // resplandor sobre el horizonte y estrellas que aparecen a medida que oscurece.
     <footer
       data-zone="redes"
-      className="relative isolate flex min-h-svh flex-col overflow-hidden bg-[linear-gradient(to_bottom,var(--color-bg),var(--color-deep)_clamp(140px,16vw,300px),color-mix(in_srgb,var(--color-deep)_55%,var(--color-night))_70%,var(--color-night))] text-on-dark"
+      className="relative isolate flex min-h-svh flex-col overflow-hidden bg-[linear-gradient(to_bottom,var(--color-bg),var(--color-deep)_clamp(140px,16vw,300px),color-mix(in_srgb,var(--color-deep)_55%,var(--color-night))_70%,var(--color-night))] text-on-dark lg:h-svh"
     >
       <div
         aria-hidden="true"
@@ -217,13 +217,13 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
 
       {/* El nombre se hunde detrás de las cordilleras y, delante, las cuatro cabañas en fila sobre el prado; un cóndor
           pequeño cruza el cielo. Ocupa el alto que sobra: así el pie llena siempre la pantalla con todo a la vista. */}
-      <div aria-hidden="true" className="relative min-h-[clamp(190px,27vh,460px)] flex-1">
-        <p className="display reveal-on-scroll bg-linear-to-b from-accent via-accent/80 to-accent/20 bg-clip-text gutter-1360 pt-[.14em] text-[clamp(3.2rem,11vw,10rem)] leading-[.82] whitespace-nowrap text-transparent">
+      <div aria-hidden="true" className="relative min-h-[clamp(190px,27vh,460px)] flex-1 lg:min-h-0">
+        <p className="display reveal-on-scroll bg-linear-to-b from-accent via-accent/80 to-accent/20 bg-clip-text gutter-1360 pt-[.14em] text-[clamp(3.2rem,min(11vw,16vh),10rem)] leading-[.82] whitespace-nowrap text-transparent">
           El Cóndor del Ruiz
         </p>
         <Ranges className="absolute inset-x-0 bottom-0 h-[42%]" />
         {/* Las cabañas tapan la parte baja del nombre: van al frente, del alto que deje libre la pantalla. */}
-        <FooterCabins className="absolute bottom-0 left-1/2 h-[80%] w-auto max-w-full -translate-x-1/2" />
+        <FooterCabins className="absolute bottom-0 left-1/2 h-[86%] w-auto max-w-full -translate-x-1/2" />
         <SoaringCondor
           id="condor-cordillera"
           className="absolute top-[38%] right-[6%] w-[clamp(40px,6vw,96px)]"
@@ -235,7 +235,7 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
       </div>
 
       <div className="relative flex-none bg-night">
-        <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4 gutter-1360 pt-4 pb-[clamp(76px,9vh,104px)] text-[.82rem] text-on-dark-muted">
+        <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4 gutter-1360 pt-4 pb-[88px] text-[.82rem] text-on-dark-muted sm:items-center sm:pb-[clamp(16px,3vh,28px)]">
           <div className="flex max-w-[90ch] flex-col gap-2.5">
             <p>
               En cumplimiento de la Ley 679 de 2001, {c.name} rechaza la explotación, la pornografía, el turismo sexual y cualquier forma de abuso sexual contra
@@ -249,7 +249,7 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
               Desarrollado en Murillo por <strong className="font-bold text-on-dark">Joab Giraldo</strong>
             </p>
           </div>
-          <a href="#" className="group flex min-h-11 items-center gap-2 font-bold text-on-dark transition-colors hover:text-accent">
+          <a href="#" className="group flex min-h-11 items-center gap-2 font-bold text-on-dark transition-colors hover:text-accent sm:mr-20">
             Volver arriba
             <span className="grid size-9 place-items-center rounded-full border-2 border-current transition-transform duration-300 group-hover:-translate-y-1">
               <ArrowUpIcon size={15} />

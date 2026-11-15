@@ -15,6 +15,7 @@ import {
   FileTextIcon,
   HomeIcon,
   ImageIcon,
+  PaletteIcon,
   PhoneIcon,
   PinIcon,
   PlusIcon,
@@ -42,6 +43,8 @@ import {
   type SiteTexts,
 } from "@/lib/site";
 import { ZONE_TAB, type PreviewData, type PreviewZone } from "@/lib/site-preview";
+import type { SiteTheme } from "@/lib/theme";
+import { ThemeEditor } from "@/components/admin/theme";
 import { Combobox } from "@/components/ui/combobox";
 import { ContentPreview } from "@/components/admin/content-preview";
 import { useAdmin } from "@/components/admin/context";
@@ -61,6 +64,7 @@ const ICONS: Record<ContentSectionId, ReactNode> = {
   politicas: <FileTextIcon size={15} />,
   contacto: <PhoneIcon size={15} />,
   redes: <ShieldIcon size={15} />,
+  colores: <PaletteIcon size={15} />,
 };
 // Zonas que se publican al instante (fotos y servicios): por sí solas no necesitan la barra de guardado.
 const PHOTOS_ONLY: ContentSectionId[] = ["experiencias", "servicios"];
@@ -73,6 +77,7 @@ const SECTION_ZONE: Record<ContentSectionId, PreviewZone> = {
   politicas: "politicas",
   contacto: "contacto",
   redes: "redes",
+  colores: "hero",
 };
 const GROUP_ZONE: Record<string, PreviewZone> = {
   "Portada · banner grande": "hero",
@@ -93,7 +98,7 @@ function timeOptions(current: string) {
   return out.sort().map((v) => ({ value: v, label: fmtTime(v), keywords: v }));
 }
 
-type Form = { s: SiteSettings; policies: SitePolicy[]; t: SiteTexts };
+type Form = { s: SiteSettings; policies: SitePolicy[]; t: SiteTexts; theme: SiteTheme };
 
 // Los textos como los guarda el servidor (sin espacios sobrantes ni líneas vacías): así, al publicar, no quedan «cambios» fantasma.
 const cleanTexts = (t: SiteTexts) =>
@@ -111,6 +116,7 @@ const SECTION_FIELDS: [ContentSectionId, (x: Form) => unknown][] = [
   ["politicas", (x) => x.policies],
   ["contacto", (x) => [x.s.whatsapp, x.s.phones, x.t.location]],
   ["redes", (x) => [x.t.social, x.s.rnt]],
+  ["colores", (x) => x.theme],
 ];
 const changedSections = (a: Form, b: Form) => SECTION_FIELDS.filter(([, pick]) => JSON.stringify(pick(a)) !== JSON.stringify(pick(b))).map(([id]) => id);
 
@@ -143,6 +149,7 @@ type FormCtx = {
   setS: (p: Partial<SiteSettings>) => void;
   setT: <K extends keyof SiteTexts>(k: K, p: Partial<SiteTexts[K]>) => void;
   setPolicies: (fn: (p: SitePolicy[]) => SitePolicy[]) => void;
+  setTheme: (t: SiteTheme) => void;
 };
 const Ctx = createContext<FormCtx | null>(null);
 
@@ -165,7 +172,7 @@ export function ContentLayout({ children }: { children: ReactNode }) {
   const seg = usePathname().split("/")[3] ?? "";
   const section = isContentSection(seg) ? seg : null;
   const meta = CONTENT_SECTIONS.find((x) => x.id === section);
-  const saved: Form = { s: data.site.settings, policies: data.site.policies, t: data.site.texts };
+  const saved: Form = { s: data.site.settings, policies: data.site.policies, t: data.site.texts, theme: data.site.theme };
   const [f, setF] = useState<Form>(saved);
   const [errors, setErrors] = useState<ReturnType<typeof validate>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -189,6 +196,7 @@ export function ContentLayout({ children }: { children: ReactNode }) {
         settings: { ...f.s, phones: f.s.phones.map((p) => p.trim()).filter(Boolean) },
         policies: f.policies.filter((p) => p.q.trim()),
         texts: f.t,
+        theme: f.theme,
         photos: { ...DEFAULT_PHOTOS, ...site.photos },
       },
       cabins: publicCabins(cabinTypes),
@@ -205,6 +213,7 @@ export function ContentLayout({ children }: { children: ReactNode }) {
     setS: (p) => setF((x) => ({ ...x, s: { ...x.s, ...p } })),
     setT: (k, p) => setF((x) => ({ ...x, t: { ...x.t, [k]: { ...x.t[k], ...p } } })),
     setPolicies: (fn) => setF((x) => ({ ...x, policies: fn(x.policies) })),
+    setTheme: (theme) => setF((x) => ({ ...x, theme })),
   };
 
   const save = () => {
@@ -220,8 +229,9 @@ export function ContentLayout({ children }: { children: ReactNode }) {
       settings: { ...f.s, phones: f.s.phones.map((p) => p.trim()).filter(Boolean), whatsapp: f.s.whatsapp.replace(/\D/g, "") },
       policies: f.policies.map((p) => ({ ...p, q: p.q.trim(), a: p.a.trim() })),
       content: cleanTexts(f.t),
+      theme: f.theme,
     };
-    setF({ s: body.settings, policies: body.policies, t: body.content });
+    setF({ s: body.settings, policies: body.policies, t: body.content, theme: body.theme });
     const names = CONTENT_SECTIONS.filter((x) => changed.includes(x.id)).map((x) => x.label);
     ask({
       title: "Publicar cambios del sitio",
@@ -245,6 +255,9 @@ export function ContentLayout({ children }: { children: ReactNode }) {
     revealZone(z);
   };
 
+  // Colores lleva su propia vista previa (el sitio entero, en computador o celular): la de las demás pestañas no.
+  const withPreview = !!section && section !== "colores";
+
   const counts = Object.values(errors).reduce<Record<string, number>>((m, x) => ({ ...m, [x.tab]: (m[x.tab] ?? 0) + 1 }), {});
 
   return (
@@ -265,16 +278,16 @@ export function ContentLayout({ children }: { children: ReactNode }) {
           })),
         }))}
       />
-      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(440px,1fr)_minmax(0,1.2fr)]">
+      <div className={`grid grid-cols-1 items-start gap-5 ${withPreview ? "xl:grid-cols-[minmax(440px,1fr)_minmax(0,1.2fr)]" : ""}`}>
         <div onFocusCapture={onFocusCapture} className="flex min-w-0 flex-col gap-4">
           {meta && <p className="text-[13.5px] leading-relaxed text-ink-muted">{meta.where}</p>}
           <div key={section} className="flex flex-col gap-4 motion-safe:animate-fade-in">
             {children}
           </div>
         </div>
-        {section && <ContentPreview data={preview} zone={zone} dirty={dirty} open={previewOpen} onClose={() => setPreviewOpen(false)} onEdit={editZone} />}
+        {withPreview && <ContentPreview data={preview} zone={zone} dirty={dirty} open={previewOpen} onClose={() => setPreviewOpen(false)} onEdit={editZone} />}
       </div>
-      {section && (
+      {withPreview && (
         <div className="fixed right-4 bottom-[calc(var(--savebar-h,0px)+16px)] z-20 xl:hidden">
           <Button variant="primary" icon={<EyeIcon size={15} />} onClick={() => setPreviewOpen(true)}>
             Ver cómo queda
@@ -299,7 +312,7 @@ export function ContentLayout({ children }: { children: ReactNode }) {
 
 // app/admin/contenido/[seccion]/page.tsx: los campos de una zona del sitio.
 export function ContentSection({ id }: { id: ContentSectionId }) {
-  const { f, errors, err, setS, setT } = useContext(Ctx)!;
+  const { f, saved, errors, err, setS, setT, setTheme } = useContext(Ctx)!;
   // La frase resaltada y las que la reemplazan se editan como una sola lista: la primera fila es la frase resaltada.
   const phrases = [f.t.hero.highlight, ...(f.t.hero.words ? f.t.hero.words.split("\n") : [])].join("\n");
   const setPhrases = (v: string) => {
@@ -310,6 +323,7 @@ export function ContentSection({ id }: { id: ContentSectionId }) {
 
   return (
     <>
+      {id === "colores" && <ThemeEditor theme={f.theme} saved={saved.theme} onChange={setTheme} />}
       {id === "portada" && (
         <>
           <Card data-zone="hero" aria-labelledby="ct-hero" className="flex flex-col gap-4 p-4 sm:p-5">

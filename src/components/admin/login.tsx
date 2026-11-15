@@ -7,6 +7,7 @@ import { BrandName, Logo } from "@/components/brand/logo";
 import { EyeIcon, EyeOffIcon } from "@/components/ui/icons";
 import { api } from "@/lib/client/api";
 import { isMockApi } from "@/lib/config";
+import { panelNext } from "@/lib/panel-next";
 import { PanelFooter } from "@/components/admin/footer";
 import { SoaringCondor } from "@/components/landing/soaring-condor";
 import { adminInput } from "@/components/admin/shared";
@@ -78,7 +79,14 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
       {/* Cóndores de la portada, en el verde del panel y muy suaves: uno grande que llega planeando por la izquierda y otro
           lejano arriba a la derecha. Con movimiento reducido quedan quietos. */}
       <SoaringCondor id="condor-ingreso" arrive fill="fill-ink" opacity={0.1} className="absolute bottom-[18%] left-[2%] w-[clamp(200px,26vw,480px)]" />
-      <SoaringCondor id="condor-ingreso-lejano" fill="fill-ink" opacity={0.14} offset={0.45} slow={1.6} className="absolute top-[14%] right-[9%] w-[clamp(70px,9vw,130px)]" />
+      <SoaringCondor
+        id="condor-ingreso-lejano"
+        fill="fill-ink"
+        opacity={0.14}
+        offset={0.45}
+        slow={1.6}
+        className="absolute top-[14%] right-[9%] w-[clamp(70px,9vw,130px)]"
+      />
 
       <form
         noValidate
@@ -179,11 +187,9 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-// Página /login: al entrar vuelve a la ruta del panel de la que venía (?next=), o al inicio del panel. Solo se aceptan
-// rutas del propio panel, para que el enlace no pueda llevar a otro sitio.
+// Página /login: al entrar vuelve a la ruta del panel de la que venía (?next=), o al inicio del panel (lib/panel-next.ts).
 export function LoginPage() {
   const router = useRouter();
-  const next = useSearchParams().get("next") ?? "";
-  const target = /^\/admin(\/|$|\?)/.test(next) && !next.startsWith("//") ? next : "/admin";
+  const target = panelNext(useSearchParams().get("next"));
   return <Login onSuccess={() => router.replace(target)} />;
 }

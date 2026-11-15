@@ -5,7 +5,8 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { BrandName, Logo, PanelBrand as Brand } from "@/components/brand/logo";
+import { BrandName, Logo } from "@/components/brand/logo";
+import { Marca } from "@/components/brand/marca";
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, InfoIcon, MenuIcon, RefreshIcon, SearchIcon, SettingsIcon, WarningIcon } from "@/components/ui/icons";
 import { useSite } from "@/components/site/site-provider";
 import { api } from "@/lib/client/api";
@@ -23,7 +24,6 @@ import { AdminProvider, type AdminCtx } from "@/components/admin/context";
 import { DateRangePicker } from "@/components/admin/date-picker";
 import { PanelFooter } from "@/components/admin/footer";
 import { TipProvider, useLabelTip, useTip } from "@/components/ui/floating";
-import { Login } from "@/components/admin/login";
 import { PanelSkeleton } from "@/components/admin/skeletons";
 import { NotificationCenter, chime, soundFor, unlockAudio, useRealtime } from "@/components/admin/notifications";
 import { PREF, usePref, writePref } from "@/components/admin/prefs";
@@ -140,11 +140,13 @@ function Gated({ children }: { children: ReactNode }) {
         <PanelSkeleton />
       </>
     );
+  // Sin sesión: el ingreso tiene su propia página; al entrar vuelve a esta ruta (components/admin/login.tsx).
   if (gate.status === "login")
     return (
       <>
         {pre}
-        <Login onSuccess={recheck} />
+        <ToLogin />
+        <PanelSkeleton />
       </>
     );
   if (gate.status === "error" || gate.status === "expired")
@@ -172,6 +174,18 @@ function Gated({ children }: { children: ReactNode }) {
       {children}
     </Panel>
   );
+}
+
+// Lleva a /login con la ruta actual en ?next=, para volver a ella después de entrar.
+function ToLogin() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const search = useSearchParams().toString();
+  useEffect(() => {
+    const here = pathname + (search ? `?${search}` : "");
+    router.replace(`/login?next=${encodeURIComponent(here)}`);
+  }, [router, pathname, search]);
+  return null;
 }
 
 /* ───────────── Confirmación ───────────── */
@@ -420,12 +434,13 @@ function Sidebar({
           href={paths.dashboard}
           aria-label={mini ? `${config.name}: ir al dashboard` : undefined}
           {...(mini ? tip(() => <NavTip label="Ir al dashboard" />, SIDE_TIP) : {})}
-          className={`flex min-w-0 items-center gap-3 rounded-[20px] pt-6 pb-5 ${mini ? "justify-center px-2" : "px-5"}`}
+          className={`flex min-w-0 items-center gap-3 rounded-[20px] pt-6 pb-5 ${mini ? "justify-center px-1" : "px-5"}`}
         >
-          {mini ? <Logo size={32} eager /> : <Brand size={40} wordSize="1.1rem" eyebrowSize=".47rem" eager />}
+          {/* Abierto: solo el nombre «Cabañas / EL CÓNDOR DEL RUIZ». Contraído: solo el símbolo, del ancho de la barra. */}
+          {mini ? <Marca parte="simbolo" width={54} /> : <Marca parte="nombre" width={176} />}
         </Link>
-        {/* Centrado con el logo: 24 px de margen + medio logo − 14 px (medio botón): 30 px abierto (logo de 40), 26 px
-            contraído (logo de 32, centrado con los íconos; el botón sale un poco más para no taparlo). Dorado pastel fijo en
+        {/* Centrado con el logo: 24 px de margen + medio logo − 14 px (medio botón): 33 px abierto (nombre de 46 de alto),
+            21 px contraído (símbolo de 23 de alto; el botón sale casi entero de la barra para no taparlo). Dorado pastel fijo en
             los dos modos: la barra lateral es negra siempre y el dorado oscuro del modo oscuro no se vería. */}
         <button
           type="button"
@@ -434,7 +449,7 @@ function Sidebar({
           data-gesture={mini ? "next" : "prev"}
           {...tip(() => <NavTip label={mini ? "Expandir el menú" : "Contraer el menú"} />, SIDE_TIP)}
           aria-expanded={!mini}
-          className={`absolute grid size-7 ${mini ? "top-[26px] -right-[18px]" : "top-7.5 -right-3.5"} place-items-center rounded-full bg-[#f5d462] text-[#171614] ring-[3px] ring-canvas transition-colors hover:bg-[#e9bf38]`}
+          className={`absolute grid size-7 ${mini ? "top-[21px] -right-[25px]" : "top-[33px] -right-3.5"} place-items-center rounded-full bg-[#f5d462] text-[#171614] ring-[3px] ring-canvas transition-colors hover:bg-[#e9bf38]`}
         >
           {mini ? <ChevronRightIcon size={15} /> : <ChevronLeftIcon size={15} />}
         </button>
@@ -841,7 +856,7 @@ function Panel({
                 <div className="admin-dark flex h-full flex-col bg-sidebar text-white">
                   <div className="flex items-center justify-between gap-2 px-5 pt-5 pb-5">
                     <span className="flex min-w-0 items-center gap-2.5">
-                      <Brand size={36} wordSize="1.05rem" eyebrowSize=".52rem" />
+                      <Marca parte="nombre" width={168} />
                     </span>
                     <h2 id="mn-title" className="sr-only">
                       Menú del panel

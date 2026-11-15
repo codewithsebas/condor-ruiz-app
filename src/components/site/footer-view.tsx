@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { dirHref, tel, wa } from "@/lib/format";
 import type { SiteConfig, SiteTexts } from "@/lib/site";
-import { ArrowUpIcon, CalendarIcon, LogoMark, PhoneIcon, PinIcon, WhatsAppIcon } from "@/components/brand/icons";
+import { ArrowUpIcon, CalendarIcon, PhoneIcon, PinIcon, WhatsAppIcon } from "@/components/brand/icons";
+import { Marca } from "@/components/brand/marca";
 import { SoaringCondor } from "@/components/landing/soaring-condor";
 
 // Pie de página: una noche en el páramo, el cierre de la portada de día. Cielo con estrellas que titilan y un cóndor
@@ -100,9 +101,7 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
 
         <div className="grid grid-cols-2 gap-x-6 gap-y-8 py-[clamp(32px,5vw,56px)] lg:grid-cols-4 lg:gap-x-10">
           <div className="col-span-2 flex flex-col items-start gap-4 sm:col-span-1">
-            <span className="grid size-[68px] place-items-center rounded-full border-2 border-on-dark">
-              <LogoMark size={50} snow />
-            </span>
+            <Marca parte="logo" width={200} className="bg-on-dark" />
             <p className="max-w-[28ch] text-on-dark-muted">{c.tagline}</p>
             {c.rnt && <p className="text-[.85rem] font-bold">RNT {c.rnt}</p>}
             {social.length > 0 && (

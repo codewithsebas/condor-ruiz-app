@@ -122,7 +122,7 @@ export function LandingHeader() {
         >
           <div className="flex items-center justify-between gap-3">
             <span className="flex items-center gap-2.5 motion-safe:animate-menu-item" style={item(0)}>
-              <LogoMark size={40} snow />
+              <LogoMark size={64} />
               <span className="display whitespace-nowrap text-[1.5rem] tracking-[.03em]">El Cóndor del Ruiz</span>
             </span>
             <button type="button" aria-label="Cerrar menú" onClick={close} autoFocus className="btn-icon btn-card size-12 border-0 transition-transform duration-300 motion-safe:hover:rotate-90">

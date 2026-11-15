@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { Marca } from "@/components/brand/marca";
 
 type IconProps = { size?: number; stroke?: number; className?: string; style?: CSSProperties };
 
@@ -107,15 +108,10 @@ export const SparkleIcon = ({ size = 18, className, style }: IconProps) => (
   </svg>
 );
 
-export const CONDOR_HEAD = "M24 12.5 C21.5 11 18 10.2 13 11.2 L15 12 L13 13 L16 13 L15 14.4 C18 13.4 21 13.4 23 14.4 L24 16.2 L25 14.4 C27 13.4 30 13.4 33 14.4 L32 13 L35 13 L33 12 L35 11.2 C30 10.2 26.5 11 24 12.5 Z";
-
-// Monograma: montañas + cóndor. `snow` añade los picos nevados recortados en el color de fondo.
-export const LogoMark = ({ size = 38, snow = false }: { size?: number; snow?: boolean }) => (
-  <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true" className="fill-on-dark">
-    <path d="M8 36 L19 20 L24 26 L29 18 L40 36 Z" opacity={snow ? 0.95 : 1} />
-    {snow && <path d="M19 20 L22.5 25 L20.5 25 L19 23.5 L17.2 26 Z M29 18 L33.5 24.5 L31 24 L29 22.5 L26.8 25.5 L26 24.5 Z" className="fill-bg" />}
-    <path d={CONDOR_HEAD} />
-  </svg>
+// Símbolo del logo (el cóndor, el Nevado del Ruiz y su fumarola: components/brand/marca.tsx), en el color del texto
+// sobre fondo oscuro. `size` es el ancho; el alto sale de la proporción del símbolo. `snow` se acepta por compatibilidad.
+export const LogoMark = ({ size = 38, className = "bg-on-dark" }: { size?: number; snow?: boolean; className?: string }) => (
+  <Marca parte="simbolo" width={size} className={className} />
 );
 
 // Silueta del cóndor en vuelo (viewBox 200×50): alas, cola y la cabeza. La cabeza va en el mismo sentido de giro que

@@ -91,7 +91,7 @@ self.addEventListener("pushsubscriptionchange", (event) => {
 // Rutas con parámetro: todas comparten la misma estructura de página y el componente toma el parámetro de la dirección
 // (usePathname). Una sola copia sirve para abrir, sin internet, una reserva que nunca se abrió en este dispositivo.
 const TEMPLATES = [
-  [/^\/admin\/reservas\/[^/]+$/, "/admin/reservas/VF-00000"],
+  [/^\/admin\/reservas\/[^/]+$/, "/admin/reservas/ECR-00000"],
   [/^\/admin\/clientes\/[^/]+$/, "/admin/clientes/cc-00000"],
   [/^\/admin\/cabanas\/(?!nueva$)[^/]+$/, "/admin/cabanas/plantilla"],
 ];

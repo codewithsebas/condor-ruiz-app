@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   title: { default: config.name, template: `%s | ${config.name}` },
   description: "Cabañas tipo chalet con vista al Nevado del Ruiz y a una cascada en Murillo, Tolima.",
   openGraph: { locale: "es_CO", siteName: config.name, type: "website" },
-  // PWA: los íconos salen de app/favicon.ico, app/icon.tsx y app/apple-icon.tsx (lib/app-icon.tsx); el manifiesto, de app/manifest.webmanifest.
+  // PWA: los íconos salen de app/favicon.ico, app/icon.png y app/apple-icon.png (public/icons para la PWA, components/brand/marca.tsx); el manifiesto, de app/manifest.webmanifest.
   manifest: "/manifest.webmanifest",
   applicationName: config.name,
   appleWebApp: { capable: true, title: "Cóndor del Ruiz", statusBarStyle: "black" },
@@ -30,7 +30,7 @@ export const viewport: Viewport = {
 };
 
 // Apariencia del panel antes de pintar (components/admin/appearance.tsx), para que el modo oscuro no destelle en claro.
-const ADMIN_THEME = `try{if(location.pathname.startsWith("/admin")){var p=localStorage.getItem("vf-admin-theme");document.documentElement.dataset.adminTheme=p==="dark"||(p==="system"&&matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light"}}catch(e){}`;
+const ADMIN_THEME = `try{if(/^\/(admin|login)(\/|$)/.test(location.pathname)){var p=localStorage.getItem("vf-admin-theme");document.documentElement.dataset.adminTheme=p==="dark"||(p==="system"&&matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light"}}catch(e){}`;
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const [content, cabins] = await Promise.all([getSiteContent(), getSiteCabins()]);

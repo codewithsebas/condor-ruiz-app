@@ -114,7 +114,7 @@ export const LIVE_LABEL: Record<LiveStatus, string> = {
 type SoundGroup = NotificationGroup;
 export const SOUND_GROUPS = NOTIFICATION_GROUPS;
 
-const SOUND_URL = "/sounds/notificacion.mp3"; // el mugido de la vaca (2 s)
+const SOUND_URL = "/sounds/condor.mp3"; // aletazos y grito de cóndor con eco (1,9 s; scripts/sonido-condor.py)
 const SOUND_GAP_MS = 2500; // varios avisos seguidos suenan una sola vez, sin encimarse
 
 let audio: AudioContext | null = null;

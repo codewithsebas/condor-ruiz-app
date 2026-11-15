@@ -24,7 +24,7 @@ export const db = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET
 export const TAG = `e2e-${Date.now().toString(36)}`;
 
 export async function login(page: Page, who: { email: string; password: string }) {
-  await page.goto("/admin");
+  await page.goto("/login");
   await page.getByLabel("Correo").fill(who.email);
   await page.getByLabel("Contraseña", { exact: true }).fill(who.password);
   await page.getByRole("button", { name: /^(ingresar|entrar)/i }).click();

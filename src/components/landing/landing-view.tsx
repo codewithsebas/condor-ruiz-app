@@ -406,7 +406,7 @@ export function LandingView({
               <span aria-hidden="true" className="absolute inset-0 bg-linear-to-t from-black/55 via-black/5 to-transparent" />
               <figcaption className="absolute inset-x-4 bottom-4 flex items-center gap-3 rounded-xl bg-bg/55 px-4 py-3 ring-1 ring-card/15 backdrop-blur-md">
                 <span className="grid size-10 flex-none place-items-center rounded-full border-2 border-on-dark">
-                  <LogoMark size={28} snow />
+                  <LogoMark size={30} />
                 </span>
                 <span className="flex min-w-0 flex-col leading-tight">
                   <span className="font-script text-[1.25rem] text-card">Te esperamos en la montaña</span>

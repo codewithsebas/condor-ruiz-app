@@ -4,7 +4,8 @@
 // llegan los datos, para que al cargar todo quede en su sitio y no salte nada. El dashboard tiene el suyo, pieza por pieza.
 import { usePathname } from "next/navigation";
 import type { CSSProperties, ReactNode } from "react";
-import { Logo, PanelBrand as Brand } from "@/components/brand/logo";
+import { Logo } from "@/components/brand/logo";
+import { Marca } from "@/components/brand/marca";
 import { PREF, usePref } from "@/components/admin/prefs";
 import { MODULES, MODULE_IDS, NAV_GROUPS, moduleOf } from "@/components/admin/routes";
 import { ACCENT, Deco, PageSkeleton, Skeleton, type Accent, type DecoShape } from "@/components/admin/ui";
@@ -90,8 +91,8 @@ function SidebarSkeleton({ mini }: { mini: boolean }) {
   return (
     <aside aria-hidden="true" className="sticky top-0 z-40 hidden h-dvh w-(--admin-sidebar) flex-none p-3 lg:block">
       <div className="admin-dark relative flex h-full flex-col overflow-hidden rounded-[28px] bg-sidebar text-white">
-        <div className={`flex min-w-0 items-center gap-3 pt-6 pb-5 ${mini ? "justify-center px-2" : "px-5"}`}>
-          {mini ? <Logo size={32} eager /> : <Brand size={40} wordSize="1.1rem" eyebrowSize=".47rem" eager />}
+        <div className={`flex min-w-0 items-center gap-3 pt-6 pb-5 ${mini ? "justify-center px-1" : "px-5"}`}>
+          {mini ? <Marca parte="simbolo" width={54} /> : <Marca parte="nombre" width={176} />}
         </div>
         <div className={`flex flex-col ${mini ? "gap-2.5 px-2" : "gap-4 px-3"}`}>
           {groups.map((n, gi) => (

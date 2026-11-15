@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type CSSProperties, type FormEvent } from "react";
 import { BrandName, Logo } from "@/components/brand/logo";
 import { EyeIcon, EyeOffIcon } from "@/components/ui/icons";
 import { api } from "@/lib/client/api";
 import { isMockApi } from "@/lib/config";
 import { PanelFooter } from "@/components/admin/footer";
+import { SoaringCondor } from "@/components/landing/soaring-condor";
 import { adminInput } from "@/components/admin/shared";
 import { Button, Callout, Field } from "@/components/admin/ui";
 
@@ -71,8 +73,12 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
   }
   const missing = (v: string) => (lg.error && !v ? ({ "aria-invalid": true } as const) : {});
   return (
-    <main className="admin-surface relative grid min-h-dvh grid-rows-[1fr_auto] place-items-center gap-4 bg-canvas px-4 py-4 text-ink">
+    <main className="admin-surface relative grid min-h-dvh grid-rows-[1fr_auto] place-items-center gap-4 overflow-hidden bg-canvas px-4 py-4 text-ink">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={GRID} />
+      {/* Cóndores de la portada, en el verde del panel y muy suaves: uno grande que llega planeando por la izquierda y otro
+          lejano arriba a la derecha. Con movimiento reducido quedan quietos. */}
+      <SoaringCondor id="condor-ingreso" arrive fill="fill-ink" opacity={0.1} className="absolute bottom-[18%] left-[2%] w-[clamp(200px,26vw,480px)]" />
+      <SoaringCondor id="condor-ingreso-lejano" fill="fill-ink" opacity={0.14} offset={0.45} slow={1.6} className="absolute top-[14%] right-[9%] w-[clamp(70px,9vw,130px)]" />
 
       <form
         noValidate
@@ -82,13 +88,13 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
       >
         {/* Logo y nombre centrados, sobre el saludo. En pantallas bajas todo se compacta para que quepa sin scroll. */}
         <div className="flex flex-col items-center gap-3 text-center">
-          <Logo size={72} eager className="motion-safe:animate-glide [@media(max-height:860px)]:size-14" />
+          <Logo size={72} eager className="[@media(max-height:860px)]:size-14" />
           <BrandName wordSize="1.15rem" eyebrowSize=".62rem" className="items-center text-ink" />
           <h1 id="lg-title" className="mt-3 text-[26px] leading-tight font-bold tracking-[-0.03em] [@media(max-height:860px)]:mt-1">
             Bienvenido al panel
           </h1>
           <p className="max-w-[30ch] text-[14.5px] text-balance text-ink-muted [@media(max-height:640px)]:hidden">
-            {isMockApi ? "Modo simulado: entra con cualquier correo y contraseña." : "Ingresa con tu cuenta del equipo para gestionar las reservas."}
+            {isMockApi ? "Modo simulado: entra con cualquier correo y contraseña." : "Accede con tu cuenta para gestionar reservas."}
           </p>
         </div>
 
@@ -158,17 +164,26 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
             {lg.error}
           </Callout>
         )}
-        <Button type="submit" variant="primary" size="lg" loading={lg.loading}>
+        <Button type="submit" variant="primary" size="lg" loading={lg.loading} className="h-12! text-[14px]">
           {lg.loading ? "Entrando…" : "Entrar"}
         </Button>
         <p className="text-center text-[13.5px] text-ink-muted">
           ¿Buscabas el sitio?{" "}
           <Link href="/" className="font-bold text-ink transition-colors hover:text-ink-muted">
-            Volver a El Cóndor del Ruiz
+            Volver a la web
           </Link>
         </p>
       </form>
       <PanelFooter className="relative w-full" />
     </main>
   );
+}
+
+// Página /login: al entrar vuelve a la ruta del panel de la que venía (?next=), o al inicio del panel. Solo se aceptan
+// rutas del propio panel, para que el enlace no pueda llevar a otro sitio.
+export function LoginPage() {
+  const router = useRouter();
+  const next = useSearchParams().get("next") ?? "";
+  const target = /^\/admin(\/|$|\?)/.test(next) && !next.startsWith("//") ? next : "/admin";
+  return <Login onSuccess={() => router.replace(target)} />;
 }

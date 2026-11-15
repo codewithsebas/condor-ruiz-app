@@ -138,9 +138,10 @@ export function CalendarView() {
   const showsToday = today >= from && today <= to;
 
   // Anterior, «Hoy» y siguiente en una sola pieza del color de «Nueva reserva». Va en la fila del resumen, junto a la
-  // quincena (en el encabezado solo si no hay cabañas, porque entonces no hay resumen).
+  // quincena, en columna con «Nueva reserva» (mismo ancho) y con el filtro de cabañas (del ancho de la quincena). En el
+  // encabezado solo si no hay cabañas, porque entonces no hay resumen.
   const todayNav = (
-    <div className="flex h-9 flex-none items-center justify-between gap-0.5 rounded-full bg-ink p-0.5 text-paper">
+    <div className="flex h-9 flex-none items-center justify-between gap-0.5 rounded-full bg-ink p-0.5 text-paper sm:w-[148px]">
       <IconButton label={prevLabel} size="sm" variant="primary" onClick={() => step(-1)}>
         <ChevronLeftIcon size={15} />
       </IconButton>
@@ -199,7 +200,7 @@ export function CalendarView() {
           <div className="min-w-0 sm:w-[188px]">
             <Combobox value={filter} onChange={setFilter} options={cabinOptions} icon={<HomeIcon size={14} className="text-ink-muted" />} />
           </div>
-          <Button variant="primary" icon={<PlusIcon size={15} />} onClick={() => setDraft({ cabinTypeId: filter || undefined })}>
+          <Button variant="primary" icon={<PlusIcon size={15} />} className="sm:w-[148px]" onClick={() => setDraft({ cabinTypeId: filter || undefined })}>
             Nueva reserva
           </Button>
         </div>
@@ -417,7 +418,11 @@ function MonthHalves({
 function HalfSwitch({ days, active, onChange }: { days: string[]; active: number; onChange: (k: number) => void }) {
   const parts = halvesOf(days);
   return (
-    <div role="group" aria-label="Quincena" className="flex flex-none items-center gap-0.5 rounded-full border border-line-strong p-0.5">
+    <div
+      role="group"
+      aria-label="Quincena"
+      className="flex h-9 flex-none items-center justify-between gap-0.5 rounded-full border border-line-strong p-0.5 sm:w-[188px]"
+    >
       <IconButton label={`Primera quincena · ${halfLabel(parts[0])}`} size="sm" disabled={active === 0} onClick={() => onChange(0)}>
         <ChevronLeftIcon size={16} />
       </IconButton>

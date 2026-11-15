@@ -2,18 +2,18 @@
 // el sitio público tiene sus propios colores.
 export const PANEL_THEME_CSS = `
 :root:not([data-admin-theme="dark"]) {
-  --color-ink:#163a2a;
-  --color-focus:#163a2a;
-  --color-chart:#163a2a;
-  --color-series-1:#163a2a;
-  --color-ink-muted:color-mix(in srgb, #163a2a 66%, var(--color-canvas));
-  --color-ink-subtle:color-mix(in srgb, #163a2a 52%, var(--color-canvas));
-  --color-sidebar:#163a2a;
-  --color-canvas:#f5f1e4;
-  --color-panel:#ebe4cf;
-  --color-paper:#fffdf6;
-  --color-line:#ddd4b8;
-  --color-line-strong:color-mix(in srgb, #ddd4b8 88%, #000);
+  --color-ink:#3a2817;
+  --color-focus:#3a2817;
+  --color-chart:#3a2817;
+  --color-series-1:#3a2817;
+  --color-ink-muted:color-mix(in srgb, #3a2817 66%, var(--color-canvas));
+  --color-ink-subtle:color-mix(in srgb, #3a2817 52%, var(--color-canvas));
+  --color-sidebar:#5b3a21;
+  --color-canvas:#f6eddc;
+  --color-panel:#ead8b8;
+  --color-paper:#fffcf5;
+  --color-line:#dcc7a2;
+  --color-line-strong:color-mix(in srgb, #dcc7a2 88%, #000);
   --color-pink:#d9937f;
   --color-pink-soft:color-mix(in srgb, #d9937f 55%, #fff);
   --color-pink-deep:color-mix(in srgb, #d9937f 86%, #000);
@@ -37,7 +37,7 @@ export const PANEL_THEME_CSS = `
   --color-error-soft:color-mix(in srgb, #c41e2a 20%, #fff);
 }
 :root[data-admin-theme="dark"] {
-  --color-sidebar:#0f2a1e;
+  --color-sidebar:#2a1d12;
   --color-pink:color-mix(in srgb, #d9937f 48%, #000);
   --color-pink-soft:color-mix(in srgb, #d9937f 20%, #121110);
   --color-pink-deep:color-mix(in srgb, #d9937f 68%, #000);

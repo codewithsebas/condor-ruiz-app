@@ -1,40 +1,44 @@
 // Ilustración del pie de página: las cabañas del Cóndor (tipo A) al anochecer, con pinos entre ellas sobre el prado y,
-// a la derecha, el Nevado del Ruiz con su casquete de hielo y la fumarola. Cuatro estándar iguales y la Premium, que
-// tiene además su jacuzzi de madera humeando en el deck. Estilo plano y suave: techo de teja terracota en escamas, marco oscuro, el gran ventanal
-// triangular encendido con luz cálida, el listón de madera del costado, el balcón con su pasamanos claro, un farolito
-// bajo el caballete y, como las reales, la base metálica que las levanta del suelo. Los colores de las cabañas y los pinos son fijos (los reales); el prado sigue la paleta del sitio.
+// a la derecha, el Nevado del Ruiz con su casquete de hielo y la fumarola. Cuatro estándar iguales y, aparte, la
+// Premium con su jacuzzi de madera humeando en el deck. Estilo plano y suave: techo de teja terracota en escamas, marco
+// oscuro, el gran ventanal triangular encendido con luz cálida, el listón de madera del costado, el balcón con su
+// pasamanos claro, un farolito bajo el caballete y, como las reales, la base metálica negra que las levanta del suelo.
+// Los colores de las cabañas, los pinos y el volcán son fijos; el prado sigue la paleta del sitio.
 // Un solo SVG: la cabaña y el pino son <symbol> y se repiten con <use>.
 
-// Lienzo de 1700 × 300: las cabañas a la izquierda y el Nevado a la derecha. Cada cabaña mide 180 × 234 y apoya en el
-// prado (y = 262). La última es la Premium con jacuzzi.
+// Lienzo de 1900 × 300: las cabañas a la izquierda y el Nevado a la derecha. Cada cabaña mide 180 × 234 y apoya en el
+// prado (y = 262). Las cuatro estándar van juntas; la Premium con jacuzzi, un poco aparte, entre pinos. El prado se
+// extiende más allá del lienzo (overflow visible) para que no se vea su borde en pantallas anchas.
 const CABIN_W = 180;
 const CABIN_H = 234;
 const CABIN_Y = 262 - (250 / 260) * CABIN_H;
-const CABINS = [40, 260, 480, 700];
-const PREMIUM = 920;
-// Pinos: en las orillas y entre cabañas, de distintos altos.
+const CABINS = [40, 250, 460, 670];
+const PREMIUM = 960;
+// Pinos: en las orillas, entre cabañas y un grupo que separa la Premium.
 const PINES: { x: number; h: number }[] = [
   { x: 14, h: 130 },
-  { x: 240, h: 120 },
-  { x: 460, h: 140 },
-  { x: 680, h: 118 },
-  { x: 900, h: 136 },
-  { x: 1186, h: 150 },
-  { x: 1222, h: 112 },
+  { x: 236, h: 116 },
+  { x: 446, h: 136 },
+  { x: 656, h: 118 },
+  { x: 876, h: 150 },
+  { x: 912, h: 112 },
+  { x: 940, h: 128 },
+  { x: 1240, h: 146 },
+  { x: 1274, h: 108 },
 ];
-// Fumarola del cráter: bocanadas que suben y se abren hacia la derecha.
+// Fumarola del cráter: bocanadas que suben y se abren hacia la derecha, cada vez más grandes.
 const PUFFS: [number, number, number][] = [
-  [1440, 48, 13],
-  [1452, 34, 17],
-  [1472, 22, 19],
-  [1500, 14, 20],
-  [1530, 12, 18],
-  [1556, 16, 14],
+  [1570, 34, 13],
+  [1586, 20, 17],
+  [1610, 8, 21],
+  [1642, 0, 23],
+  [1678, -4, 21],
+  [1710, 0, 17],
 ];
 
 export function FooterCabins({ className = "" }: { className?: string }) {
   return (
-    <svg aria-hidden="true" viewBox="0 0 1700 300" preserveAspectRatio="xMidYMax meet" className={`pointer-events-none block ${className}`}>
+    <svg aria-hidden="true" viewBox="0 0 1900 300" preserveAspectRatio="xMidYMax meet" overflow="visible" className={`pointer-events-none block ${className}`}>
       <defs>
         {/* Tejas en escamas */}
         <pattern id="ft-tejas" width="14" height="11" patternUnits="userSpaceOnUse">
@@ -48,11 +52,14 @@ export function FooterCabins({ className = "" }: { className?: string }) {
           <stop offset="0" stopColor="#ffcf7d" />
           <stop offset="1" stopColor="#f39a45" />
         </linearGradient>
-        <linearGradient id="ft-roca" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#8b7663" />
-          <stop offset=".55" stopColor="#7a6553" />
-          <stop offset=".56" stopColor="#5f4d40" />
-          <stop offset="1" stopColor="#544438" />
+        {/* Roca del volcán: la ladera izquierda con luz y la derecha en sombra, más oscuras hacia la base */}
+        <linearGradient id="ft-roca-luz" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#a08a76" />
+          <stop offset="1" stopColor="#7c6654" />
+        </linearGradient>
+        <linearGradient id="ft-roca-sombra" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#7a6555" />
+          <stop offset="1" stopColor="#584739" />
         </linearGradient>
         <linearGradient id="ft-agua" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#8fe0e2" />
@@ -110,30 +117,50 @@ export function FooterCabins({ className = "" }: { className?: string }) {
         </symbol>
       </defs>
 
-      {/* Nevado del Ruiz: volcán ancho de cima casi plana, una ladera en sombra, el casquete de hielo con su borde
-          irregular y las lenguas de los glaciares, y la fumarola saliendo del cráter. */}
+      {/* Cordillera lejana detrás del volcán */}
+      <path d="M1180 272 1250 206 1300 222 1360 176 1420 200 1470 170 1760 190 1820 160 1900 186 4000 186V272z" fill="#c4ae8d" opacity=".55" />
+
+      {/* Nevado del Ruiz: volcán ancho de cima casi plana, una ladera con luz y otra en sombra, quebradas, el casquete de
+          hielo con su borde irregular y las lenguas de los glaciares, el cráter y la fumarola. */}
       <g>
-        <path d="M1170 272C1240 232 1300 160 1350 92L1378 62Q1440 46 1500 60L1528 88C1580 150 1640 216 1700 250V272z" fill="url(#ft-roca)" />
-        {/* Casquete de hielo con las lenguas de los glaciares */}
+        <path d="M1250 272C1330 236 1400 160 1462 90L1500 52Q1530 46 1572 44V272z" fill="url(#ft-roca-luz)" />
+        <path d="M1572 44Q1610 44 1640 50L1676 84C1740 150 1810 220 1900 252V272H1572z" fill="url(#ft-roca-sombra)" />
+        {/* Quebradas */}
         <path
-          d="M1350 92 1378 62Q1440 46 1500 60L1528 88 1520 104 1508 96 1498 122 1486 102 1474 140 1462 108 1450 128 1438 104 1426 146 1414 110 1402 128 1390 104 1378 124 1366 104 1356 112z"
-          fill="#f8f5ee"
+          d="M1520 140 1490 200 1470 250M1556 150 1546 210 1550 262M1610 150 1630 214 1660 258M1650 120 1700 190 1760 240"
+          stroke="#4e3f33"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          fill="none"
+          opacity=".45"
         />
-        <path d="M1452 52Q1478 54 1500 60L1528 88 1520 104 1508 96 1498 122 1486 102 1474 140 1462 108z" fill="#d9dfe8" />
-        <path d="M1426 146 1420 170M1474 140 1480 162M1378 124 1370 142" stroke="#f8f5ee" strokeWidth="6" strokeLinecap="round" />
+        {/* Casquete de hielo */}
+        <path
+          d="M1462 90 1500 52Q1570 36 1640 50L1676 84 1668 100 1654 92 1644 122 1630 100 1618 144 1604 110 1590 134 1576 104 1562 152 1548 112 1532 136 1518 106 1504 128 1490 104 1476 118z"
+          fill="#fbf9f4"
+        />
+        <path d="M1572 40Q1610 40 1640 50L1676 84 1668 100 1654 92 1644 122 1630 100 1618 144 1604 110 1590 134 1576 104z" fill="#dde3ec" />
+        {/* Lenguas de los glaciares */}
+        <path d="M1562 152 1558 176M1618 144 1624 170M1532 136 1524 158M1644 122 1654 142" stroke="#fbf9f4" strokeWidth="6" strokeLinecap="round" />
         {/* Cráter */}
-        <path d="M1420 58q20-6 40 0" stroke="#b9c2cf" strokeWidth="3" strokeLinecap="round" fill="none" />
-        {PUFFS.map(([cx, cy, r]) => (
-          <circle key={cx} cx={cx} cy={cy} r={r} fill="#f6f2ea" opacity=".85" />
-        ))}
-        {/* Estribaciones delante del volcán */}
-        <path d="M1110 272C1180 246 1250 230 1320 236S1460 214 1540 228 1660 240 1700 236V272z" fill="#6c7a5a" />
-        <path d="M1110 272C1180 252 1260 246 1330 250S1480 236 1560 246 1660 254 1700 252V272z" fill="#5a6a4c" />
+        <ellipse cx="1572" cy="44" rx="26" ry="5" fill="#c3cad5" />
+        {/* Fumarola */}
+        <g opacity=".92">
+          {PUFFS.map(([cx, cy, r]) => (
+            <circle key={cx} cx={cx} cy={cy} r={r} fill="#f7f3ec" />
+          ))}
+          {PUFFS.map(([cx, cy, r]) => (
+            <circle key={cx} cx={cx + r * 0.25} cy={cy + r * 0.3} r={r * 0.7} fill="#e3ddd2" opacity=".55" />
+          ))}
+        </g>
+        {/* Estribaciones verdes delante del volcán */}
+        <path d="M1200 272C1290 244 1370 232 1450 238S1620 216 1720 230 1860 244 1900 240 4000 240 4000 240V272z" fill="#6f7d5c" />
+        <path d="M1200 272C1300 252 1380 246 1460 250S1640 236 1740 246 1880 254 4000 254V272z" fill="#5b6b4d" />
       </g>
 
-      {/* Prado: una loma suave que sigue la paleta del sitio */}
-      <path d="M0 300V262q425-26 850-20t850 18v40z" className="fill-night" />
-      <path d="M0 268q425-24 850-18t850 16" fill="none" className="stroke-card/15" strokeWidth="2" />
+      {/* Prado: una loma suave que sigue la paleta del sitio; se extiende fuera del lienzo */}
+      <path d="M-3000 300V262C0 262 600 236 950 240S1900 258 4900 262V300z" className="fill-night" />
+      <path d="M0 268C400 250 700 246 950 248S1600 262 1900 264" fill="none" className="stroke-card/15" strokeWidth="2" />
 
       {PINES.map((p) => (
         <use key={p.x} href="#ft-pino" x={p.x - p.h * 0.3} y={268 - p.h} width={p.h * 0.6} height={p.h} />

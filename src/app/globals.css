@@ -156,6 +156,7 @@
   --animate-letter-out: ec-letter-out 0.4s cubic-bezier(0.6, 0, 0.8, 0.4) both;
   --animate-paw-step: ec-paw-step 4.6s ease-out infinite both;
   --animate-star: ec-star 4.5s ease-in-out infinite;
+  --animate-smoke: ec-smoke 9s linear infinite;
   --animate-icon-draw: ec-icon-draw 1s cubic-bezier(0.4, 0, 0.2, 1) both;
   --animate-progress: ec-progress linear both;
   --animate-fog-drift: ec-fog-drift 46s ease-in-out infinite alternate;
@@ -254,6 +255,25 @@
     }
     to {
       stroke-dashoffset: 0;
+    }
+  }
+
+  /* Fumarola del Nevado (pie de página): cada bocanada sale del cráter, sube y se abre hacia la derecha, crece y se
+     disuelve. Va en unidades del SVG (footer-cabins.tsx). */
+  @keyframes ec-smoke {
+    0% {
+      transform: translate(0, 0) scale(0.35);
+      opacity: 0;
+    }
+    12% {
+      opacity: 0.95;
+    }
+    55% {
+      opacity: 0.8;
+    }
+    100% {
+      transform: translate(170px, -70px) scale(1.7);
+      opacity: 0;
     }
   }
 

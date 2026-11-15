@@ -26,7 +26,9 @@ const PINES: { x: number; h: number }[] = [
   { x: 1240, h: 146 },
   { x: 1274, h: 108 },
 ];
-// Fumarola del cráter: bocanadas que suben y se abren hacia la derecha, cada vez más grandes.
+// Fumarola del cráter. Con movimiento: bocanadas que salen una tras otra (animate-smoke, globals.css). Con «reducir
+// movimiento»: estas bocanadas quietas que suben y se abren hacia la derecha, cada vez más grandes.
+const SMOKE = 8; // bocanadas animadas, repartidas a lo largo del ciclo de 9 s
 const PUFFS: [number, number, number][] = [
   [1570, 34, 13],
   [1586, 20, 17],
@@ -194,8 +196,21 @@ export function FooterCabins({ className = "" }: { className?: string }) {
         <path d="M1562 152 1558 176M1618 144 1624 170M1532 136 1524 158M1644 122 1654 142" stroke="#fbf9f4" strokeWidth="6" strokeLinecap="round" />
         {/* Cráter */}
         <ellipse cx="1572" cy="44" rx="26" ry="5" fill="#c3cad5" />
-        {/* Fumarola */}
-        <g opacity=".92">
+        {/* Fumarola animada */}
+        <g className="motion-reduce:hidden">
+          {Array.from({ length: SMOKE }, (_, i) => (
+            <g
+              key={i}
+              className="[transform-origin:center] animate-smoke [transform-box:fill-box]"
+              style={{ animationDelay: `${(-9 * i) / SMOKE}s`, opacity: 0 }}
+            >
+              <circle cx="1572" cy={30 - (i % 3) * 3} r={15 + (i % 2) * 3} fill="#f7f3ec" />
+              <circle cx="1576" cy={34 - (i % 3) * 3} r={10 + (i % 2) * 2} fill="#e3ddd2" opacity=".55" />
+            </g>
+          ))}
+        </g>
+        {/* Fumarola quieta */}
+        <g opacity=".92" className="hidden motion-reduce:inline">
           {PUFFS.map(([cx, cy, r]) => (
             <circle key={cx} cx={cx} cy={cy} r={r} fill="#f7f3ec" />
           ))}

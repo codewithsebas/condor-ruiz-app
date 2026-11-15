@@ -137,9 +137,25 @@ export function CalendarView() {
 
   const showsToday = today >= from && today <= to;
 
+  // Anterior, «Hoy» y siguiente en una sola pieza del color de «Nueva reserva». Va en la fila del resumen, junto a la
+  // quincena (en el encabezado solo si no hay cabañas, porque entonces no hay resumen).
+  const todayNav = (
+    <div className="flex h-9 flex-none items-center justify-between gap-0.5 rounded-full bg-ink p-0.5 text-paper">
+      <IconButton label={prevLabel} size="sm" variant="primary" onClick={() => step(-1)}>
+        <ChevronLeftIcon size={15} />
+      </IconButton>
+      <Button size="sm" variant="primary" onClick={() => setAnchor(today)} aria-current={showsToday ? "date" : undefined} className="h-8! px-3!">
+        Hoy
+      </Button>
+      <IconButton label={nextLabel} size="sm" variant="primary" onClick={() => step(1)}>
+        <ChevronRightIcon size={15} />
+      </IconButton>
+    </div>
+  );
+
   return (
     <div ref={wrap} className="flex flex-col gap-3">
-      {/* Una línea en pantallas anchas: el periodo a la izquierda y, a la derecha, las flechas con «Hoy», el mes, la
+      {/* Una línea en pantallas anchas: el periodo a la izquierda y, a la derecha, el mes, la
           vista, las cabañas y «Nueva reserva». En el celular, los controles en una cuadrícula de dos columnas. */}
       <header className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -151,18 +167,7 @@ export function CalendarView() {
           </p>
         </div>
         <div className="grid w-full grid-cols-2 items-center gap-2 sm:ml-auto sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
-          {/* Anterior, «Hoy» y siguiente en una sola pieza del color de «Nueva reserva», pegada al mes. */}
-          <div className="flex h-9 flex-none items-center justify-between gap-0.5 rounded-full bg-ink p-0.5 text-paper">
-            <IconButton label={prevLabel} size="sm" variant="primary" onClick={() => step(-1)}>
-              <ChevronLeftIcon size={15} />
-            </IconButton>
-            <Button size="sm" variant="primary" onClick={() => setAnchor(today)} aria-current={showsToday ? "date" : undefined} className="h-8! px-3!">
-              Hoy
-            </Button>
-            <IconButton label={nextLabel} size="sm" variant="primary" onClick={() => step(1)}>
-              <ChevronRightIcon size={15} />
-            </IconButton>
-          </div>
+          {!rows.length && todayNav}
           <div className="min-w-0 sm:w-[184px]">
             <label htmlFor="cal-mes" className="sr-only">
               Mes del calendario
@@ -227,7 +232,10 @@ export function CalendarView() {
               <Chip label="Noches libres" value={Math.max(0, capacity - busyNights)} icon={<MoonIcon size={13} />} />
               {blockedNights > 0 && <Chip label="Bloqueadas" value={blockedNights} icon={<BanIcon size={13} />} />}
             </ul>
-            {splitMonth && <HalfSwitch days={days} active={half} onChange={setHalf} />}
+            <div className="flex flex-none items-center gap-2">
+              {todayNav}
+              {splitMonth && <HalfSwitch days={days} active={half} onChange={setHalf} />}
+            </div>
           </div>
           <div key={`${view}-${from}-${filter}-${monthGrid}`} className="motion-safe:animate-fade-in">
             {!width ? (

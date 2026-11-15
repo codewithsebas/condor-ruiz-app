@@ -233,7 +233,7 @@ export function CalendarView() {
               <Chip label="Noches libres" value={Math.max(0, capacity - busyNights)} icon={<MoonIcon size={13} />} />
               {blockedNights > 0 && <Chip label="Bloqueadas" value={blockedNights} icon={<BanIcon size={13} />} />}
             </ul>
-            <div className="flex flex-none items-center gap-2">
+            <div className="flex flex-none items-center gap-2 sm:ml-auto">
               {splitMonth && <HalfSwitch days={days} active={half} onChange={setHalf} />}
               {todayNav}
             </div>

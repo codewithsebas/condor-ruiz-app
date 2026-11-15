@@ -14,7 +14,7 @@ const heading = "mb-2 flex items-center gap-2 font-body text-[.78rem] font-extra
 const row = "flex min-h-11 items-center lg:min-h-10";
 // Subrayado que crece desde la izquierda al pasar el mouse o al enfocar.
 const link =
-  "w-fit bg-linear-to-r from-accent to-accent bg-[length:0%_2px] bg-left-bottom bg-no-repeat pb-0.5 transition-[background-size,color] duration-300 hover:bg-[length:100%_2px] hover:text-card focus-visible:bg-[length:100%_2px]";
+  "w-fit bg-linear-to-r from-accent to-accent bg-[length:0%_2px] bg-left-bottom bg-no-repeat pb-0.5 transition-[background-size,color] duration-300 hover:bg-[length:100%_2px] hover:text-accent focus-visible:bg-[length:100%_2px]";
 
 // Estrellas en posiciones fijas (pseudoaleatorias pero iguales en servidor y navegador).
 const STARS = Array.from({ length: 46 }, (_, i) => ({
@@ -159,7 +159,7 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
                       rel="noopener"
                       aria-label={name}
                       title={name}
-                      className="grid size-11 place-items-center rounded-full border-2 border-on-dark/30 transition-[background-color,border-color,color,transform] duration-300 hover:-translate-y-0.5 hover:border-card hover:bg-card hover:text-on-light lg:size-10"
+                      className="grid size-11 place-items-center rounded-full border-2 border-on-dark/30 transition-[background-color,border-color,color,transform] duration-300 hover:-translate-y-0.5 hover:border-cta hover:bg-cta hover:text-cta-text lg:size-10"
                     >
                       {SOCIAL_ICONS[name]}
                     </a>

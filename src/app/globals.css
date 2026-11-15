@@ -1,0 +1,1437 @@
+@import "tailwindcss";
+
+/* Paleta "Bosque" del diseño. `static` porque varios colores (estados) se usan desde JS.
+   Los colores del sitio (fondos, tarjetas, textos, acentos y botón principal) se guardan en site_settings.theme:
+   lib/theme.ts los vuelve a declarar en :root en las páginas públicas (components/site/site-theme.tsx). El panel tiene
+   su propio tema (components/admin/panel-theme.ts). */
+@theme static {
+  --color-bg: #163a2a;
+  --color-surface: #1d4633;
+  --color-card: #f2ebd3;
+  --color-card-muted: #e6dcbe;
+  --color-on-dark: #f2ebd3;
+  --color-on-dark-muted: color-mix(in srgb, #f2ebd3 85%, #163a2a);
+  --color-on-light: #163a2a;
+  --color-on-light-muted: color-mix(in srgb, #163a2a 75%, #e6dcbe);
+  --color-accent: #7fae84;
+  --color-highlight: #d9a441;
+  --color-cta: #163a2a;
+  --color-cta-text: #f2ebd3;
+  --color-error: #9b2c1a;
+  --color-footer: color-mix(in srgb, #163a2a 72%, #000);
+  /* Profundidad del mismo verde (de claro a oscuro): bg → deep (valles de las secciones) → night (pie de página). */
+  --color-deep: #11301f;
+  --color-night: #07140d;
+
+  --color-status-pending: #d9a441;
+  --color-status-confirmed: #7fae84;
+  --color-status-cancelled: #d9937f;
+  --color-status-expired: #bdb6a2;
+  --color-status-rescheduled: #9fb8c4;
+  --color-status-checked-in: #c8d98a;
+  --color-status-completed: #e6dcbe;
+  --color-status-block: #8a8f86;
+  /* Noches ocupadas en Booking.com (calendario del panel). */
+  --color-status-booking: #5b7fc0;
+
+  --radius-sm: 10px;
+  --radius-md: 18px;
+  --radius-lg: 28px;
+
+  --shadow-card: 0 22px 44px -20px rgb(0 0 0 / 0.55);
+  --shadow-pop: 0 30px 60px -24px rgb(0 0 0 / 0.6), 0 0 0 1px #e6dcbe;
+
+  /* Panel de administración: identidad propia, independiente de la paleta del sitio. Fondo crema, tarjetas arena, papel
+     para campos y ventanas, negro para la navegación y las acciones principales, y cuatro pasteles (rosa, amarillo,
+     verde y azul) para indicadores, estados y acentos. Los textos cumplen 4.5:1 sobre el fondo y las tarjetas; los
+     tonos «-deep» son decorativos y los «-soft», fondos de etiquetas y avisos. */
+  --color-canvas: #f7f2e8;
+  --color-panel: #efe9dd;
+  --color-paper: #fffdf9;
+  --color-line: #e2dacb;
+  --color-line-strong: #cec5b3;
+  --color-ink: #171614;
+  --color-ink-muted: #66615a;
+  --color-ink-subtle: #857f75;
+  --color-sidebar: #171614;
+  --color-focus: #171614;
+  --color-chart: #171614;
+  /* Dos series (abonos y saldos): negro y rosa oscuro, ≥ 3:1 sobre las tarjetas y distintas también con daltonismo. */
+  --color-series-1: #171614;
+  --color-series-2: #c2588f;
+  /* Rosado: el acento del panel (en la barra lateral negra, el crema del fondo: .admin-dark). */
+  --color-pink: #f4b8d6;
+  --color-pink-soft: #f9dcea;
+  --color-pink-deep: #e994c0;
+  --color-yellow: #f5d462;
+  --color-yellow-soft: #fbedb5;
+  --color-yellow-deep: #e9bf38;
+  --color-green: #a8b874;
+  --color-green-soft: #e1e8c8;
+  --color-green-deep: #8b9b56;
+  --color-blue: #b6c8ef;
+  --color-blue-soft: #dbe5f8;
+  --color-blue-deep: #91a9e0;
+  --color-success: #4b6420;
+  --color-success-soft: #e1e8c8;
+  --color-warning: #7a5900;
+  --color-warning-soft: #f8e9ad;
+  --color-error-soft: #f7d6cf;
+  --color-info: #2e4c8a;
+  --color-info-soft: #dbe5f8;
+
+  --shadow-panel: 0 1px 2px rgb(23 22 20 / 0.06);
+  --shadow-overlay: 0 28px 60px -20px rgb(23 22 20 / 0.32), 0 0 0 1px rgb(23 22 20 / 0.06);
+
+  --animate-pulse-soft: ec-pulse 1.2s ease-in-out infinite;
+  --animate-spin-fast: ec-spin 0.8s linear infinite;
+  --animate-fade-in: ec-fade-in 0.18s ease-out;
+  --animate-pop-in: ec-pop-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-slide-in-right: ec-slide-in-right 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-slide-up: ec-slide-up 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-slide-in-left: ec-slide-in-left 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-glide: ec-glide 3.6s ease-in-out infinite;
+  --animate-loader-bar: ec-loader-bar 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  --animate-fade-out: ec-fade-out 0.18s ease-out reverse both;
+  --animate-pop-out: ec-pop-out 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) reverse both;
+  --animate-slide-out-left: ec-slide-out-left 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) reverse both;
+  --animate-menu-drop: ec-menu-drop 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  @keyframes ec-fade-out {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes ec-pop-out {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.98);
+    }
+  }
+  @keyframes ec-slide-out-left {
+    from {
+      transform: translateX(-32px);
+      opacity: 0;
+    }
+  }
+  @keyframes ec-menu-drop {
+    from {
+      opacity: 0;
+      transform: translateY(-12px);
+    }
+  }
+  --animate-menu-open: ec-menu-open 0.6s cubic-bezier(0.7, 0, 0.2, 1) both;
+  --animate-menu-close: ec-menu-close 0.42s cubic-bezier(0.6, 0, 0.8, 0.3) both;
+  --animate-menu-item: ec-menu-item 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+  /* Menú del sitio: se abre como un círculo que crece desde el botón (--menu-x/--menu-y) y sus enlaces suben en cascada. */
+  @keyframes ec-menu-open {
+    from {
+      clip-path: circle(0 at var(--menu-x, calc(100% - 48px)) var(--menu-y, 48px));
+    }
+    to {
+      clip-path: circle(150% at var(--menu-x, calc(100% - 48px)) var(--menu-y, 48px));
+    }
+  }
+  @keyframes ec-menu-close {
+    from {
+      clip-path: circle(150% at var(--menu-x, calc(100% - 48px)) var(--menu-y, 48px));
+    }
+    to {
+      clip-path: circle(0 at var(--menu-x, calc(100% - 48px)) var(--menu-y, 48px));
+    }
+  }
+  /* ── Portada viva ── */
+  --animate-condor-arrive: ec-condor-arrive 3.2s cubic-bezier(0.16, 0.84, 0.3, 1) both;
+  --animate-soar-x: ec-soar-x 13s ease-in-out infinite alternate;
+  --animate-soar-y: ec-soar-y 6.5s ease-in-out infinite alternate;
+  --animate-wing-left: ec-wing-left 7s ease-in-out infinite;
+  --animate-wing-right: ec-wing-right 7s ease-in-out infinite;
+  --animate-ken-burns: ec-ken-burns 26s ease-in-out infinite alternate;
+  --animate-dash-march: ec-dash-march 2.4s linear infinite;
+  --animate-twinkle: ec-twinkle 2.8s ease-in-out infinite;
+  --animate-nudge: ec-nudge 3.6s ease-in-out infinite;
+  --animate-rise: ec-rise 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-letter-in: ec-letter-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-letter-out: ec-letter-out 0.4s cubic-bezier(0.6, 0, 0.8, 0.4) both;
+  --animate-paw-step: ec-paw-step 4.6s ease-out infinite both;
+  --animate-star: ec-star 4.5s ease-in-out infinite;
+  --animate-icon-draw: ec-icon-draw 1s cubic-bezier(0.4, 0, 0.2, 1) both;
+  --animate-progress: ec-progress linear both;
+  --animate-fog-drift: ec-fog-drift 46s ease-in-out infinite alternate;
+  --animate-fog-drift-back: ec-fog-drift 64s ease-in-out infinite alternate-reverse;
+  --animate-land-rise: ec-land-rise 1.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-photo-open: ec-photo-open 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-photo-in-next: ec-photo-in-next 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-photo-in-prev: ec-photo-in-prev 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-photo-out-next: ec-photo-out-next 0.45s cubic-bezier(0.4, 0, 0.6, 1) both;
+  --animate-photo-out-prev: ec-photo-out-prev 0.45s cubic-bezier(0.4, 0, 0.6, 1) both;
+
+  /* Galería de fotos: la foto entra desde el lado hacia el que se avanza y la anterior sale por el otro. */
+  @keyframes ec-photo-open {
+    from {
+      opacity: 0;
+      transform: scale(0.94);
+    }
+  }
+  @keyframes ec-photo-in-next {
+    from {
+      opacity: 0;
+      transform: translateX(9%) scale(0.96);
+    }
+  }
+  @keyframes ec-photo-in-prev {
+    from {
+      opacity: 0;
+      transform: translateX(-9%) scale(0.96);
+    }
+  }
+  @keyframes ec-photo-out-next {
+    to {
+      opacity: 0;
+      transform: translateX(-9%) scale(0.96);
+    }
+  }
+  @keyframes ec-photo-out-prev {
+    to {
+      opacity: 0;
+      transform: translateX(9%) scale(0.96);
+    }
+  }
+
+  /* Capas de un paisaje que suben a su lugar al cargar (ingreso al panel): la cordillera y, detrás, el nevado. */
+  @keyframes ec-land-rise {
+    from {
+      opacity: 0;
+      transform: translateY(28%);
+    }
+  }
+
+  /* Niebla del horizonte: se corre muy despacio de un lado a otro. */
+  @keyframes ec-fog-drift {
+    from {
+      transform: translateX(-4%);
+    }
+    to {
+      transform: translateX(4%);
+    }
+  }
+
+  /* Capa lejana de un paisaje: mientras cruza la pantalla baja un poco (--parallax), así sube más lento que la página. */
+  @keyframes ec-parallax {
+    from {
+      transform: translateY(calc(var(--parallax, 20px) * -1));
+    }
+    to {
+      transform: translateY(var(--parallax, 20px));
+    }
+  }
+
+  /* La ruta del mapa se dibuja (path con pathLength="1"). */
+  @keyframes ec-route-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* Barra de avance (galería de experiencias, preguntas de políticas): su duración la pone quien la usa. */
+  @keyframes ec-progress {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  /* Ícono que se vuelve a dibujar con el trazo (pathLength="1" en el path). */
+  @keyframes ec-icon-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* Estrellas del pie de página: titilan con distinto ritmo. */
+  @keyframes ec-star {
+    0%,
+    100% {
+      opacity: 0.85;
+    }
+    50% {
+      opacity: 0.15;
+    }
+  }
+
+  /* El cóndor llega planeando desde lo alto y lejos. */
+  @keyframes ec-condor-arrive {
+    from {
+      opacity: 0;
+      transform: translate(240px, -160px) scale(0.35);
+    }
+  }
+  /* Círculos de térmica: dos vaivenes desfasados (horizontal y vertical) dibujan una órbita suave; al alejarse se ve
+     más pequeño y se inclina como al virar. */
+  @keyframes ec-soar-x {
+    from {
+      transform: translateX(-30px) scale(1.04);
+    }
+    to {
+      transform: translateX(120px) scale(0.8);
+    }
+  }
+  @keyframes ec-soar-y {
+    from {
+      transform: translateY(-16px) rotate(-7deg);
+    }
+    to {
+      transform: translateY(20px) rotate(5deg);
+    }
+  }
+  /* Planea casi todo el tiempo y de vez en cuando bate las alas (dos aleteos). */
+  @keyframes ec-wing-left {
+    0%,
+    62%,
+    100% {
+      transform: rotate(0deg) scaleY(1);
+    }
+    68% {
+      transform: rotate(14deg) scaleY(0.92);
+    }
+    75% {
+      transform: rotate(-11deg) scaleY(1.06);
+    }
+    82% {
+      transform: rotate(12deg) scaleY(0.94);
+    }
+    89% {
+      transform: rotate(-7deg) scaleY(1.04);
+    }
+  }
+  @keyframes ec-wing-right {
+    0%,
+    62%,
+    100% {
+      transform: rotate(0deg) scaleY(1);
+    }
+    68% {
+      transform: rotate(-14deg) scaleY(0.92);
+    }
+    75% {
+      transform: rotate(11deg) scaleY(1.06);
+    }
+    82% {
+      transform: rotate(-12deg) scaleY(0.94);
+    }
+    89% {
+      transform: rotate(7deg) scaleY(1.04);
+    }
+  }
+  @keyframes ec-ken-burns {
+    from {
+      transform: scale(1.06) translate(0, 0);
+    }
+    to {
+      transform: scale(1.14) translate(-1.5%, -1.2%);
+    }
+  }
+  @keyframes ec-dash-march {
+    to {
+      stroke-dashoffset: -20;
+    }
+  }
+  @keyframes ec-twinkle {
+    0%,
+    100% {
+      transform: scale(1) rotate(0deg);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(0.55) rotate(45deg);
+      opacity: 0.55;
+    }
+  }
+  @keyframes ec-nudge {
+    0%,
+    70%,
+    100% {
+      transform: translateX(0);
+    }
+    78% {
+      transform: translateX(5px);
+    }
+    86% {
+      transform: translateX(0);
+    }
+    92% {
+      transform: translateX(3px);
+    }
+  }
+  @keyframes ec-rise {
+    from {
+      opacity: 0;
+      transform: translateY(0.4em) rotate(1.5deg);
+    }
+  }
+  @keyframes ec-letter-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.5em) rotate(8deg);
+    }
+  }
+  @keyframes ec-letter-out {
+    to {
+      opacity: 0;
+      transform: translateY(-0.45em) rotate(-6deg);
+    }
+  }
+  /* Huella: se marca con un pequeño apretón, se queda y se desvanece; con retrasos escalonados parecen pasos. */
+  @keyframes ec-paw-step {
+    0% {
+      opacity: 0;
+      transform: scale(1.5);
+    }
+    5% {
+      opacity: 1;
+      transform: scale(0.88);
+    }
+    9% {
+      transform: scale(1);
+    }
+    55% {
+      opacity: 1;
+    }
+    80%,
+    100% {
+      opacity: 0;
+      transform: scale(1);
+    }
+  }
+
+  --animate-photo-settle: ec-photo-settle 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  /* Foto del ingreso al panel: entra un poco ampliada y se asienta. */
+  @keyframes ec-photo-settle {
+    from {
+      opacity: 0;
+      transform: scale(1.08);
+    }
+  }
+  @keyframes ec-menu-item {
+    from {
+      opacity: 0;
+      transform: translateY(28px);
+    }
+  }
+
+  /* Pantalla de carga del panel: el cóndor planea y una barra recorre el riel. */
+  @keyframes ec-glide {
+    0%,
+    100% {
+      transform: translate(0, 0) rotate(-4deg);
+    }
+    50% {
+      transform: translate(10px, -9px) rotate(2deg);
+    }
+  }
+  @keyframes ec-loader-bar {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(300%);
+    }
+  }
+  @keyframes ec-slide-in-left {
+    from {
+      transform: translateX(-32px);
+      opacity: 0;
+    }
+  }
+
+  @keyframes ec-pulse {
+    50% {
+      opacity: 0.45;
+    }
+  }
+  @keyframes ec-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes ec-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes ec-pop-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.98);
+    }
+  }
+  @keyframes ec-slide-in-right {
+    from {
+      transform: translateX(32px);
+      opacity: 0;
+    }
+  }
+  @keyframes ec-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+  }
+}
+
+@theme inline {
+  --font-display: var(--font-bebas), Impact, sans-serif;
+  --font-body: var(--font-manrope), system-ui, sans-serif;
+  --font-script: var(--font-caveat), cursive;
+}
+
+/* Márgenes laterales: el contenido se centra en `n` px con un mínimo de 16 px. */
+@utility gutter-* {
+  padding-inline: max(16px, calc((100% - --value(integer) * 1px) / 2));
+}
+
+/* Pantallas con alto suficiente para que una vista ocupe exactamente el alto disponible (calendario del panel). */
+@custom-variant tall (@media (min-height: 600px));
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+  body {
+    background: var(--color-bg);
+    color: var(--color-on-dark);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  /* El color y el grosor del anillo se ajustan por zona (--ring*); en el sitio, dorado sobre verde. */
+  :focus-visible {
+    outline: var(--ring-width, 3px) solid var(--ring, var(--color-highlight)) !important;
+    outline-offset: var(--ring-offset, 3px);
+  }
+  /* Títulos y secciones que reciben el foco por código (cambio de página, resultado de una consulta) para los lectores
+     de pantalla: no son controles, sin anillo. */
+  :is(h1, h2, section)[tabindex="-1"]:focus-visible {
+    outline: none !important;
+  }
+  /* Ventanas modales: la página de fondo no se desplaza. */
+  html:has(dialog:modal) {
+    overflow: hidden;
+  }
+  /* En el panel la barra de desplazamiento reserva su espacio: abrir un modal no desplaza el contenido. */
+  html:has(.admin-root) {
+    scrollbar-gutter: stable;
+    background: var(--color-canvas);
+  }
+  html:has(.admin-theme) body {
+    background: var(--color-canvas);
+  }
+
+  /* Panel: su tipografía (Plus Jakarta Sans, app/admin/layout.tsx), sus colores de estado (los pasteles del panel; el
+     sitio conserva los suyos) y un solo grosor de trazo para todos los iconos. */
+  .admin-theme {
+    font-family: var(--font-admin), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    --color-status-pending: var(--color-yellow);
+    --color-status-confirmed: var(--color-green);
+    --color-status-rescheduled: var(--color-blue);
+    --color-status-checked-in: var(--color-pink);
+    --color-status-completed: #ddd5c3;
+    --color-status-cancelled: #f0a693;
+    --color-status-expired: #d3ccbd;
+    --color-status-block: #8a857b;
+    /* Barras del calendario (calendar/shared.tsx): el pastel pleno de cada estado; --bar-mix oscurece los contornos. */
+    --bar-pending: var(--color-yellow);
+    --bar-confirmed: var(--color-green);
+    --bar-rescheduled: var(--color-blue);
+    --bar-checked-in: var(--color-pink);
+    --bar-completed: #e3dccb;
+    --bar-mix: #000;
+  }
+  .admin-theme [data-icon] {
+    stroke-width: 1.75px;
+  }
+  /* Los chips de estado (components/ui/status-pill.tsx) usan la tinta del panel, también en modo oscuro. */
+  .admin-theme {
+    --status-text: var(--color-ink);
+  }
+
+  /* Modo oscuro del panel (data-admin-theme en <html>: components/admin/appearance.tsx). Mismos papeles, invertidos:
+     fondo casi negro, tarjetas y campos un poco más claros, tinta crema y los pasteles en tonos profundos, para que el
+     texto crema se lea sobre ellos (≥ 4.5:1). La barra lateral sigue negra y conserva sus acentos crema. */
+  :root[data-admin-theme="dark"] {
+    color-scheme: dark;
+    --color-canvas: #121110;
+    --color-panel: #1d1c1a;
+    --color-paper: #272623;
+    --color-line: #302e2a;
+    --color-line-strong: #46433e;
+    --color-ink: #f3efe6;
+    --color-ink-muted: #aba59a;
+    --color-ink-subtle: #847e74;
+    --color-sidebar: #1b1a18;
+    --color-focus: #f3efe6;
+    --color-chart: #f3efe6;
+    --color-series-1: #f3efe6;
+    --color-series-2: #e994c0;
+    --color-pink: #7c2f62;
+    --color-pink-soft: #3a2230;
+    --color-pink-deep: #a4487f;
+    --color-yellow: #665007;
+    --color-yellow-soft: #3a3112;
+    --color-yellow-deep: #856a0c;
+    --color-green: #435914;
+    --color-green-soft: #283016;
+    --color-green-deep: #58731c;
+    --color-blue: #23478f;
+    --color-blue-soft: #1f2840;
+    --color-blue-deep: #4265b6;
+    --color-success: #b9cc85;
+    --color-success-soft: #2b3419;
+    --color-warning: #e9c35f;
+    --color-warning-soft: #3a3014;
+    --color-error: #f08a76;
+    --color-error-soft: #3f221d;
+    --color-info: #a9bdf0;
+    --color-info-soft: #1f2a44;
+    --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.45);
+    --shadow-overlay: 0 28px 60px -20px rgb(0 0 0 / 0.75), 0 0 0 1px rgb(255 255 255 / 0.07);
+  }
+  :root[data-admin-theme="dark"] .admin-theme {
+    --color-status-completed: #3a362f;
+    --color-status-cancelled: #5c2e25;
+    --color-status-expired: #312e29;
+    --color-status-block: #6f6a61;
+    /* En oscuro, las barras toman el tono profundo de cada pastel: se distinguen del fondo y la tinta crema se lee. */
+    --bar-pending: var(--color-yellow-deep);
+    --bar-confirmed: var(--color-green-deep);
+    --bar-rescheduled: var(--color-blue-deep);
+    --bar-checked-in: var(--color-pink-deep);
+    --bar-completed: #48433b;
+    --bar-mix: #fff;
+  }
+
+  /* Barras de desplazamiento del panel: finas, redondeadas, sin flechas y en sus colores (tinta translúcida sobre el
+     fondo claro; papel translúcido en la barra lateral negra). Chrome, Edge y Safari usan ::-webkit-scrollbar;
+     Firefox, las propiedades estándar. Van en la capa base: la utilidad no-scrollbar sigue ocultándolas. */
+  html:has(.admin-surface) {
+    --sb-thumb: color-mix(in srgb, var(--color-ink) 24%, transparent);
+    --sb-thumb-hover: color-mix(in srgb, var(--color-ink) 42%, transparent);
+  }
+  .admin-dark {
+    --sb-thumb: color-mix(in srgb, var(--color-paper) 22%, transparent);
+    --sb-thumb-hover: color-mix(in srgb, var(--color-paper) 42%, transparent);
+  }
+  html:has(.admin-surface)::-webkit-scrollbar,
+  html:has(.admin-surface) *::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+    background: transparent;
+  }
+  html:has(.admin-surface)::-webkit-scrollbar-thumb,
+  html:has(.admin-surface) *::-webkit-scrollbar-thumb {
+    /* El borde transparente deja el pulgar en 6 px, separado del borde de la ventana. */
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: var(--sb-thumb) padding-box;
+  }
+  html:has(.admin-surface)::-webkit-scrollbar-thumb:hover,
+  html:has(.admin-surface) *::-webkit-scrollbar-thumb:hover {
+    background: var(--sb-thumb-hover) padding-box;
+  }
+  html:has(.admin-surface)::-webkit-scrollbar-thumb:active,
+  html:has(.admin-surface) *::-webkit-scrollbar-thumb:active {
+    border-width: 2px;
+    background: var(--sb-thumb-hover) padding-box;
+  }
+  html:has(.admin-surface)::-webkit-scrollbar-button,
+  html:has(.admin-surface) *::-webkit-scrollbar-button {
+    display: none;
+  }
+  html:has(.admin-surface)::-webkit-scrollbar-track,
+  html:has(.admin-surface) *::-webkit-scrollbar-track,
+  html:has(.admin-surface)::-webkit-scrollbar-corner,
+  html:has(.admin-surface) *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  @supports not selector(::-webkit-scrollbar) {
+    html:has(.admin-surface),
+    html:has(.admin-surface) * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--sb-thumb) transparent;
+    }
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  }
+  svg {
+    flex-shrink: 0;
+  }
+  button:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  /* Aparece al entrar en pantalla mientras se hace scroll (animación ligada al scroll del navegador, sin JavaScript).
+     Donde no hay soporte, o con movimiento reducido, el contenido se ve quieto como siempre. */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      /* --reveal-after: scroll extra que espera (la segunda tarjeta de una fila llega un instante después, en cascada). */
+      .reveal-on-scroll {
+        animation: ec-rise linear both;
+        animation-timeline: view();
+        animation-range: entry calc(5% + var(--reveal-after, 0px)) entry calc(80% + var(--reveal-after, 0px));
+      }
+      /* Elementos altos (tarjetas de cabaña): aparecen en un tramo fijo del scroll y no proporcional a su alto, para
+         no quedarse a medio aparecer cuando ya se ven casi enteros. */
+      .reveal-on-scroll.reveal-tall {
+        animation-range: entry var(--reveal-after, 0px) entry calc(280px + var(--reveal-after, 0px));
+      }
+      /* Capas de un paisaje con profundidad: la distancia la da --parallax en la capa. */
+      .parallax-on-scroll {
+        animation: ec-parallax linear both;
+        animation-timeline: view();
+        animation-range: cover;
+      }
+      /* Trazo que se dibuja mientras entra en pantalla (máscara de la ruta del mapa). */
+      .draw-on-scroll {
+        stroke-dasharray: 1;
+        animation: ec-route-draw linear both;
+        animation-timeline: view();
+        animation-range: entry 10% cover 45%;
+      }
+    }
+  }
+  /* Panel elevado sobre el fondo oscuro (servicios, políticas): más claro arriba, con un filo de luz en el borde
+     superior y una sombra larga debajo, para que se lea por encima de la sección y no pegado a ella. */
+  .panel-raised {
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--color-surface) 84%, var(--color-accent)),
+      color-mix(in srgb, var(--color-surface) 58%, var(--color-bg))
+    );
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--color-card) 18%, transparent),
+      inset 0 0 0 1px color-mix(in srgb, var(--color-on-dark) 9%, transparent),
+      0 44px 70px -40px rgb(0 0 0 / 0.6);
+  }
+  /* Partes de un SVG que giran sobre su propio punto (alas del cóndor, huellas). */
+  .svg-pivot {
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  /* Titulares en Bebas Neue */
+  .display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    text-transform: uppercase;
+  }
+  .display-xl {
+    font-family: var(--font-display);
+    font-weight: 400;
+    text-transform: uppercase;
+    font-size: clamp(2.6rem, 5.6cqi, 5.6rem);
+    line-height: 0.92;
+  }
+  .page-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    text-transform: uppercase;
+    font-size: clamp(2.6rem, 6vw, 4.4rem);
+    line-height: 0.92;
+  }
+
+  /* Letra manuscrita con destello */
+  .kicker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-family: var(--font-script);
+    font-size: 1.6rem;
+    line-height: 1.1;
+    transform: rotate(-3deg);
+  }
+
+  .eyebrow {
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* Botones: siempre pill, el color lo da la variante */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 0;
+    border-radius: 999px;
+    font: inherit;
+    font-weight: 800;
+    text-decoration: none;
+    transition: background-color 0.15s ease;
+  }
+  .btn-cta {
+    background: var(--color-cta);
+    color: var(--color-cta-text);
+  }
+  .btn-cta:not(:disabled):hover {
+    background: color-mix(in srgb, var(--color-cta) 80%, var(--color-accent));
+  }
+  .btn-card {
+    background: var(--color-card);
+    color: var(--color-on-light);
+  }
+  .btn-card:not(:disabled):hover {
+    background: var(--color-card-muted);
+  }
+  .btn-surface {
+    background: var(--color-surface);
+    color: var(--color-on-dark);
+  }
+  .btn-surface:hover {
+    background: color-mix(in srgb, var(--color-surface) 80%, var(--color-on-dark));
+  }
+  .btn-highlight {
+    background: var(--color-highlight);
+    color: var(--color-on-light);
+  }
+  .btn-outline-dark {
+    border: 2px solid var(--color-on-dark);
+    background: transparent;
+    color: var(--color-on-dark);
+  }
+  .btn-outline-light {
+    border: 2px solid var(--color-on-light);
+    background: transparent;
+    color: var(--color-on-light);
+  }
+  .btn-icon {
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    flex: none;
+  }
+
+  /* Campos de formulario sobre tarjeta clara */
+  .field-label {
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .field-input {
+    width: 100%;
+    min-height: 52px;
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--color-card-muted);
+    background: color-mix(in srgb, var(--color-card) 55%, #fff);
+    color: var(--color-on-light);
+    font: inherit;
+  }
+  .field-input[aria-invalid="true"],
+  .field-input[data-invalid="true"] {
+    border-color: var(--color-error);
+  }
+  .field-input::placeholder {
+    color: var(--color-on-light-muted);
+    opacity: 1;
+  }
+  .field-error {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-error);
+  }
+
+  /* Variante compacta del mismo campo, para el panel (densidad de herramienta, campo de papel sobre la tarjeta arena). */
+  /* Mismo alto y letra que los botones del panel (36 px, 13 px): campos, desplegables y selectores de fecha. */
+  .field-input.field-compact {
+    min-height: 36px;
+    padding: 0 14px;
+    border-width: 1px;
+    border-color: var(--color-line-strong);
+    border-radius: 14px;
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-size: 13px;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease,
+      background-color 0.15s ease;
+  }
+  .field-input.field-compact::placeholder {
+    color: var(--color-ink-subtle);
+  }
+  .field-input.field-compact:hover:not(:disabled) {
+    border-color: var(--color-ink-subtle);
+  }
+  .field-input.field-compact:focus-visible {
+    border-color: var(--color-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 12%, transparent);
+    outline: none !important;
+  }
+  /* El autocompletado del navegador pinta el campo de azul: se tapa con el papel del panel. */
+  .field-input.field-compact:autofill {
+    -webkit-text-fill-color: var(--color-ink);
+    box-shadow: inset 0 0 0 100px var(--color-paper);
+    caret-color: var(--color-ink);
+  }
+  .field-input.field-compact:autofill:focus-visible {
+    box-shadow:
+      inset 0 0 0 100px var(--color-paper),
+      0 0 0 3px color-mix(in srgb, var(--color-focus) 12%, transparent);
+  }
+  .field-input.field-compact[aria-invalid="true"],
+  .field-input.field-compact[data-invalid="true"] {
+    border-color: var(--color-error);
+  }
+  .field-input.field-compact[aria-invalid="true"]:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error) 18%, transparent);
+  }
+  .field-input.field-compact:disabled {
+    background-color: color-mix(in srgb, var(--color-panel) 60%, var(--color-canvas));
+    color: var(--color-ink-muted);
+    cursor: not-allowed;
+  }
+  .field-input.field-compact[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+  .field-input.field-compact[type="number"]::-webkit-inner-spin-button,
+  .field-input.field-compact[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  select.field-input.field-compact {
+    appearance: none;
+    padding-right: 36px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2366615a' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+  }
+  textarea.field-input.field-compact {
+    padding: 8px 14px;
+  }
+  /* En pantallas táctiles, lo que se escribe va a 16 px: con menos, iOS hace zoom al enfocar. El alto no cambia. */
+  @media (pointer: coarse) {
+    input.field-input.field-compact,
+    textarea.field-input.field-compact,
+    select.field-input.field-compact {
+      font-size: 16px;
+    }
+  }
+
+  /* Zona clara del panel: anillo de foco negro, más fino que en el sitio. En la barra lateral negra, el crema del fondo. */
+  .admin-surface {
+    --ring: var(--color-focus);
+    --ring-width: 2px;
+    --ring-offset: 2px;
+  }
+  /* Barra lateral negra (en los dos modos): el crema del fondo para lo activo y tinta oscura sobre él. */
+  .admin-dark {
+    --color-pink: #f7f2e8;
+    --color-pink-deep: #e2dacb;
+    --color-ink: #171614;
+    --ring: #f7f2e8;
+    --ring-width: 2px;
+    --ring-offset: 2px;
+  }
+
+  .skeleton {
+    background: var(--color-card-muted);
+    animation: var(--animate-pulse-soft);
+  }
+  .dotted-top {
+    border-top: 2px dotted var(--color-card-muted);
+  }
+}
+
+/* Fondo del panel: una mancha muy difuminada arriba a la derecha (verde en claro, azul en oscuro), fija al hacer scroll. Es un degradado y no
+   filter: blur(), así no le cuesta nada al navegador. El tono sale del token, por lo que se adapta a claro y oscuro. */
+.admin-root {
+  --glow: color-mix(in srgb, var(--color-green-deep) 38%, transparent);
+  isolation: isolate;
+}
+:root[data-admin-theme="dark"] .admin-root {
+  --glow: color-mix(in srgb, var(--color-blue-deep) 34%, transparent);
+}
+.admin-root::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(70vw 80vh at 100% 0%, var(--glow), transparent 72%);
+}
+
+/* Entrada del panel: al abrirlo (shell.tsx pone data-entering en .admin-root durante el primer segundo y medio), la barra
+   lateral y sus módulos llegan desde la izquierda, el encabezado baja y las tarjetas suben una tras otra. Cada pieza
+   marca su tipo en data-enter y su turno en --i. Después de la entrada (o con movimiento reducido) no se anima nada. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-entering] [data-enter] {
+    animation: ec-enter-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: calc(var(--enter-base, 120ms) + var(--i, 0) * 70ms);
+  }
+  [data-entering] [data-enter="pop"] {
+    animation-name: ec-enter-pop;
+  }
+  [data-entering] [data-enter="side"] {
+    --enter-base: 0ms;
+    animation-name: ec-enter-side;
+  }
+  [data-entering] [data-enter="down"] {
+    --enter-base: 60ms;
+    animation-name: ec-enter-down;
+  }
+}
+@keyframes ec-enter-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@keyframes ec-enter-pop {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+}
+@keyframes ec-enter-side {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+}
+@keyframes ec-enter-down {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+/* Encabezado del panel: sin color propio, desenfoca lo que pasa por debajo. El desenfoque va en una capa que se desvanece
+   hacia abajo y hacia el menú lateral, para que no marque un corte recto sobre el contenido. */
+.admin-header::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -24px;
+  z-index: -1;
+  pointer-events: none;
+  backdrop-filter: blur(24px);
+  mask-image: linear-gradient(to bottom, #000 60%, transparent), linear-gradient(to right, transparent, #000 32px);
+  mask-composite: intersect;
+}
+@media (max-width: 1023.98px) {
+  .admin-header::before {
+    mask-image: linear-gradient(to bottom, #000 60%, transparent);
+  }
+}
+
+/* Menú del panel: al pasar el mouse (y al llegar con el teclado) el icono de cada módulo hace un gesto corto y propio;
+   al hacer clic no se repite. Los iconos separan en trazos lo que se mueve por aparte. Con movimiento
+   reducido se quedan quietos. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-nav]:is(:hover, :focus-visible) {
+    svg {
+      overflow: visible;
+    }
+    svg,
+    svg * {
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+    &[data-nav="dashboard"] svg > * {
+      animation: ec-nav-pop 0.45s ease-out both;
+    }
+    &[data-nav="dashboard"] svg > :nth-child(2) {
+      animation-delay: 60ms;
+    }
+    &[data-nav="dashboard"] svg > :nth-child(3) {
+      animation-delay: 120ms;
+    }
+    &[data-nav="dashboard"] svg > :nth-child(4) {
+      animation-delay: 180ms;
+    }
+    &[data-nav="calendario"] svg > :nth-child(2) {
+      animation: ec-nav-lift 0.45s ease-in-out both;
+    }
+    &[data-nav="notificaciones"] svg > :nth-child(1) {
+      transform-origin: 50% 0;
+      animation: ec-nav-ring 0.7s ease-in-out both;
+    }
+    &[data-nav="notificaciones"] svg > :nth-child(2) {
+      animation: ec-nav-clap 0.7s ease-in-out both;
+    }
+    &[data-nav="empleados"] svg > :nth-child(2),
+    &[data-nav="empleados"] svg > :nth-child(3) {
+      animation: ec-nav-lift 0.45s ease-in-out both;
+    }
+    &[data-nav="empleados"] svg > :nth-child(4),
+    &[data-nav="empleados"] svg > :nth-child(5) {
+      transform-origin: 0 50%;
+      animation: ec-nav-grow 0.4s ease-out both;
+    }
+    &[data-nav="empleados"] svg > :nth-child(5) {
+      animation-delay: 90ms;
+    }
+    &[data-nav="reservas"] svg > :nth-child(-n + 3) {
+      transform-origin: 0 50%;
+      animation: ec-nav-grow 0.4s ease-out both;
+    }
+    &[data-nav="reservas"] svg > :nth-child(n + 4) {
+      animation: ec-nav-pop 0.4s ease-out both;
+    }
+    &[data-nav="reservas"] svg > :nth-child(3n + 2) {
+      animation-delay: 70ms;
+    }
+    &[data-nav="reservas"] svg > :nth-child(3n) {
+      animation-delay: 140ms;
+    }
+    &[data-nav="pagos"] svg > :nth-child(1) {
+      animation: ec-nav-lift 0.45s ease-in-out both;
+    }
+    &[data-nav="pagos"] svg > :nth-child(n + 2) {
+      transform-origin: 0 50%;
+      animation: ec-nav-grow 0.4s ease-out both;
+    }
+    &[data-nav="pagos"] svg > :nth-child(3) {
+      animation-delay: 70ms;
+    }
+    &[data-nav="pagos"] svg > :nth-child(4) {
+      animation-delay: 140ms;
+    }
+    &[data-nav="clientes"] svg > :nth-child(2) {
+      animation: ec-nav-lift 0.45s ease-in-out both;
+    }
+    &[data-nav="clientes"] svg > :nth-child(3) {
+      animation: ec-nav-peek 0.45s ease-out both;
+    }
+    &[data-nav="importar"] svg > :nth-child(3) {
+      animation: ec-nav-pop 0.45s ease-out both;
+    }
+    &[data-nav="cabanas"] svg {
+      transform-origin: 50% 100%;
+      animation: ec-nav-hop 0.5s ease-in-out both;
+    }
+    &[data-nav="bloqueos"] svg {
+      animation: ec-nav-spin 0.55s ease-in-out both;
+    }
+    &[data-nav="tarifas"] svg {
+      transform-origin: 20% 20%;
+      animation: ec-nav-swing 0.65s ease-in-out both;
+    }
+    &[data-nav="finanzas"] svg > :nth-child(1) {
+      stroke-dasharray: 1;
+      animation: ec-nav-draw 0.5s ease-out both;
+    }
+    &[data-nav="finanzas"] svg > :nth-child(2) {
+      animation: ec-nav-pop-in 0.3s ease-out 0.3s both;
+    }
+    &[data-nav="condiciones"] svg {
+      animation: ec-nav-tilt 0.5s ease-in-out both;
+    }
+    &[data-nav="booking"] svg > :nth-child(2) {
+      animation: ec-nav-lift 0.45s ease-in-out both;
+    }
+    &[data-nav="booking"] svg > :nth-child(3) {
+      animation: ec-nav-pop 0.45s ease-out 0.15s both;
+    }
+  }
+}
+/* En pantallas táctiles no hay hover: el :hover que queda pegado al tocar no anima el icono. */
+@media (hover: none) {
+  [data-nav]:hover:not(:focus-visible) :is(svg, svg *) {
+    animation: none !important;
+  }
+}
+/* Botones de icono del panel (encabezado, buscador, contraer el menú, actualizar y calendario): los mismos gestos. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  [data-gesture]:is(:hover, :focus-visible) {
+    svg {
+      overflow: visible;
+    }
+    svg,
+    svg > * {
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+    &[data-gesture="theme"] svg {
+      animation: ec-nav-tilt 0.5s ease-in-out both;
+    }
+    &[data-gesture="bell"] svg > :nth-child(1) {
+      transform-origin: 50% 0;
+      animation: ec-nav-ring 0.7s ease-in-out both;
+    }
+    &[data-gesture="bell"] svg > :nth-child(2) {
+      animation: ec-nav-clap 0.7s ease-in-out both;
+    }
+    &[data-gesture="settings"] svg {
+      animation: ec-nav-spin 0.6s ease-in-out both;
+    }
+    &[data-gesture="search"] svg {
+      animation: ec-nav-search 0.5s ease-in-out both;
+    }
+    &[data-gesture="prev"] svg {
+      animation: ec-nav-prev 0.45s ease-in-out both;
+    }
+    &[data-gesture="next"] svg {
+      animation: ec-nav-next 0.45s ease-in-out both;
+    }
+    /* Mientras actualiza, el icono ya gira con su propia animación. */
+    &[data-gesture="refresh"] svg:not(.animate-spin-fast) {
+      animation: ec-nav-full 0.6s ease-in-out both;
+    }
+    &[data-gesture="calendar"] svg > :nth-child(2) {
+      animation: ec-nav-lift 0.45s ease-in-out both;
+    }
+    /* Acciones de cada reserva en la lista. */
+    &:is([data-gesture="checkin"], [data-gesture="checkout"]) svg {
+      animation: ec-nav-next 0.45s ease-in-out both;
+    }
+    &[data-gesture="pay"] svg {
+      animation: ec-nav-hop 0.5s ease-in-out both;
+    }
+    &[data-gesture="cancel"] svg {
+      animation: ec-nav-swing 0.55s ease-in-out both;
+    }
+    &[data-gesture="chat"] svg {
+      animation: ec-nav-ring 0.6s ease-in-out both;
+    }
+  }
+}
+/* Avisos de notificaciones: al pasar por el aviso, su icono hace el gesto que le toca. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  [data-notice]:is(:hover, :focus-visible) [data-notice-icon] {
+    svg {
+      overflow: visible;
+    }
+    svg,
+    svg > * {
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+  }
+  [data-notice="enter"]:is(:hover, :focus-visible) [data-notice-icon] svg {
+    animation: ec-nav-next 0.45s ease-in-out both;
+  }
+  [data-notice="close"]:is(:hover, :focus-visible) [data-notice-icon] svg {
+    animation: ec-nav-spin 0.5s ease-in-out both;
+  }
+  [data-notice="tilt"]:is(:hover, :focus-visible) [data-notice-icon] svg {
+    animation: ec-nav-tilt 0.5s ease-in-out both;
+  }
+  [data-notice="mail"]:is(:hover, :focus-visible) [data-notice-icon] svg > :nth-child(2) {
+    animation: ec-nav-lift 0.45s ease-in-out both;
+  }
+  [data-notice="clock"]:is(:hover, :focus-visible) [data-notice-icon] svg > :nth-child(2) {
+    transform-origin: 0 71%;
+    animation: ec-nav-full 0.7s ease-in-out both;
+  }
+  [data-notice="pop"]:is(:hover, :focus-visible) [data-notice-icon] svg {
+    animation: ec-nav-pop 0.45s ease-out both;
+  }
+  [data-notice="swing"]:is(:hover, :focus-visible) [data-notice-icon] svg {
+    animation: ec-nav-swing 0.65s ease-in-out both;
+  }
+  [data-notice="bell"]:is(:hover, :focus-visible) [data-notice-icon] svg > :nth-child(1) {
+    transform-origin: 50% 0;
+    animation: ec-nav-ring 0.7s ease-in-out both;
+  }
+  [data-notice="bell"]:is(:hover, :focus-visible) [data-notice-icon] svg > :nth-child(2) {
+    animation: ec-nav-clap 0.7s ease-in-out both;
+  }
+}
+@keyframes ec-nav-search {
+  40% {
+    transform: translate(-1.5px, -1.5px) scale(1.12);
+  }
+}
+@keyframes ec-nav-prev {
+  40% {
+    transform: translateX(-2.5px);
+  }
+}
+@keyframes ec-nav-next {
+  40% {
+    transform: translateX(2.5px);
+  }
+}
+@keyframes ec-nav-full {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ec-nav-pop {
+  45% {
+    transform: scale(0.7);
+  }
+}
+@keyframes ec-nav-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+@keyframes ec-nav-lift {
+  40% {
+    transform: translateY(-2.5px);
+  }
+}
+@keyframes ec-nav-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes ec-nav-peek {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
+@keyframes ec-nav-ring {
+  20% {
+    transform: rotate(14deg);
+  }
+  40% {
+    transform: rotate(-11deg);
+  }
+  60% {
+    transform: rotate(7deg);
+  }
+  80% {
+    transform: rotate(-4deg);
+  }
+}
+@keyframes ec-nav-clap {
+  20% {
+    transform: translateX(-1.5px);
+  }
+  40% {
+    transform: translateX(1.5px);
+  }
+  60% {
+    transform: translateX(-1px);
+  }
+  80% {
+    transform: translateX(0.5px);
+  }
+}
+@keyframes ec-nav-hop {
+  35% {
+    transform: translateY(-3px) scale(0.96, 1.05);
+  }
+  70% {
+    transform: scale(1.05, 0.95);
+  }
+}
+@keyframes ec-nav-spin {
+  to {
+    transform: rotate(180deg);
+  }
+}
+@keyframes ec-nav-swing {
+  25% {
+    transform: rotate(-14deg);
+  }
+  55% {
+    transform: rotate(9deg);
+  }
+  80% {
+    transform: rotate(-4deg);
+  }
+}
+@keyframes ec-nav-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes ec-nav-tilt {
+  35% {
+    transform: rotate(-10deg) translateY(-1.5px);
+  }
+  70% {
+    transform: rotate(4deg);
+  }
+}
+
+/* Figuras de las tarjetas de color: transiciones hacia una pose, no animaciones. Al entrar o salir a mitad de camino siguen
+   desde donde iban y nunca hay un corte. La vuelta (más corta) se define en el estado normal y la ida, con rebote, en el
+   :hover. Solo las piezas que se mueven llevan transform-origin: los rayos del sol se colocan con un transform propio y
+   cambiárselo los descoloca. Sin mouse o con movimiento reducido, se quedan quietas. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  :root {
+    --pose-in: 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    --pose-out: 0.35s ease-out;
+  }
+
+  [data-deco],
+  [data-deco="sun"] > circle,
+  [data-deco="calendar"] > rect {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform var(--pose-out);
+  }
+  [data-deco="cabin"],
+  [data-deco="triangle"] {
+    transform-origin: 50% 100%;
+  }
+  :hover > [data-deco],
+  :hover > [data-deco="sun"] > circle,
+  :hover > [data-deco="calendar"] > rect {
+    transition: transform var(--pose-in);
+  }
+  :hover > [data-deco="sun"],
+  :hover > [data-deco="burst"] {
+    transform: rotate(45deg);
+  }
+  :hover > [data-deco="sun"] > circle {
+    transform: scale(1.12);
+  }
+  :hover > [data-deco="cross"] {
+    transform: rotate(90deg);
+  }
+  :hover > [data-deco="cabin"],
+  :hover > [data-deco="triangle"] {
+    transform: translateY(-8px) scale(1.05);
+  }
+  :hover > [data-deco="coin"] {
+    transform: rotateY(180deg);
+  }
+  :hover > [data-deco="calendar"] {
+    transform: rotate(-8deg);
+  }
+  :hover > [data-deco="calendar"] > rect {
+    transform: translateY(-1.5px);
+  }
+}

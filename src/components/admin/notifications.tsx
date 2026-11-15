@@ -1,0 +1,643 @@
+"use client";
+
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import {
+  AlertIcon,
+  BellIcon,
+  CheckIcon,
+  ChevronRightIcon,
+  ClockIcon,
+  CloseIcon,
+  FileTextIcon,
+  LoginIcon,
+  MailIcon,
+  PencilIcon,
+  SlidersIcon,
+  VolumeIcon,
+  VolumeOffIcon,
+  WalletIcon,
+} from "@/components/ui/icons";
+import { api } from "@/lib/client/api";
+import { isMockApi } from "@/lib/config";
+import { NOTIFICATION_GROUPS, groupOf, type NotificationGroup } from "@/lib/notification-groups";
+import { addDays, dateOf, fmtClock, fmtFullDate, plural, timeAgo } from "@/lib/format";
+import type { AdminNotification, NotificationKind } from "@/lib/types";
+import { useAdmin, useParam } from "@/components/admin/context";
+import { Paginator, usePaged } from "@/components/admin/paginator";
+import { Popover } from "@/components/ui/floating";
+import { PREF, readPref, usePref, writePref } from "@/components/admin/prefs";
+import { PushPrompt } from "@/components/admin/push";
+import { paths } from "@/components/admin/routes";
+import { EMAIL_KIND } from "@/components/admin/shared";
+import { Button, Card, CardHeader, EmptyState, IconButton, PageHeader, Segmented, buttonClass } from "@/components/admin/ui";
+
+/* ───────────── Tiempo real (Supabase Realtime) ───────────── */
+
+export type LiveStatus = "off" | "connecting" | "live" | "offline";
+
+let browser: SupabaseClient | null = null;
+const browserClient = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (isMockApi || !url || !key) return null;
+  // Lee la sesión del administrador desde las cookies que dejó el inicio de sesión: Realtime aplica RLS con ese usuario.
+  return (browser ??= createBrowserClient(url, key));
+};
+
+type Row = { id: number; kind: string; title: string; body: string; reservation_code: string | null; read_at: string | null; created_at: string };
+const toNotification = (n: Row): AdminNotification => ({
+  id: n.id,
+  kind: n.kind as NotificationKind,
+  title: n.title,
+  body: n.body,
+  reservationCode: n.reservation_code,
+  readAt: n.read_at,
+  createdAt: n.created_at,
+});
+
+// Escucha notificaciones nuevas y cambios en reservas, comprobantes, bloqueos y fechas de Booking (sin sondeos).
+export function useRealtime(handlers: { onNotification: (n: AdminNotification) => void; onChange: () => void }) {
+  const [status, setStatus] = useState<LiveStatus>(() => (browserClient() ? "connecting" : "off"));
+  const h = useRef(handlers);
+  useEffect(() => {
+    h.current = handlers;
+  });
+  useEffect(() => {
+    const sb = browserClient();
+    if (!sb) return;
+    let channel: ReturnType<SupabaseClient["channel"]> | null = null;
+    let alive = true;
+    (async () => {
+      const { data } = await sb.auth.getSession();
+      if (!alive) return;
+      if (data.session) sb.realtime.setAuth(data.session.access_token);
+      const changed = () => h.current.onChange();
+      channel = sb
+        .channel("panel-admin")
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "admin_notifications" }, (p) =>
+          h.current.onNotification(toNotification(p.new as Row)),
+        )
+        .on("postgres_changes", { event: "*", schema: "public", table: "reservations" }, changed)
+        .on("postgres_changes", { event: "*", schema: "public", table: "payment_proofs" }, changed)
+        .on("postgres_changes", { event: "*", schema: "public", table: "payments" }, changed)
+        .on("postgres_changes", { event: "*", schema: "public", table: "email_outbox" }, changed)
+        .on("postgres_changes", { event: "*", schema: "public", table: "blocks" }, changed)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "sync_changes" }, changed)
+        .subscribe(
+          (st) => alive && setStatus(st === "SUBSCRIBED" ? "live" : st === "CHANNEL_ERROR" || st === "TIMED_OUT" || st === "CLOSED" ? "offline" : "connecting"),
+        );
+    })();
+    // El token de la sesión se renueva: Realtime necesita el nuevo para seguir autorizado.
+    const { data: sub } = sb.auth.onAuthStateChange((_e, session) => session && sb.realtime.setAuth(session.access_token));
+    return () => {
+      alive = false;
+      sub.subscription.unsubscribe();
+      if (channel) sb.removeChannel(channel);
+    };
+  }, []);
+  return status;
+}
+
+export const LIVE_LABEL: Record<LiveStatus, string> = {
+  live: "En vivo: las reservas y pagos nuevos llegan sin recargar",
+  connecting: "Conectando…",
+  offline: "Sin conexión en vivo",
+  off: "Modo simulado (sin tiempo real)",
+};
+
+/* ───────────── Sonido ───────────── */
+
+// Los mismos grupos que eligen qué notificaciones push recibe cada dispositivo (lib/notification-groups.ts).
+type SoundGroup = NotificationGroup;
+export const SOUND_GROUPS = NOTIFICATION_GROUPS;
+
+const SOUND_URL = "/sounds/condor.mp3"; // aletazos y grito de cóndor con eco (1,9 s; scripts/sonido-condor.py)
+const SOUND_GAP_MS = 2500; // varios avisos seguidos suenan una sola vez, sin encimarse
+
+let audio: AudioContext | null = null;
+let sound: Promise<AudioBuffer | null> | null = null;
+let lastPlay = 0;
+
+// ¿Debe sonar este aviso? Respeta el interruptor general y los grupos silenciados en Configuración.
+export function soundFor(kind: NotificationKind) {
+  if (readPref(PREF.sound, "on") === "off") return false;
+  return !readPref(PREF.mutedSounds, "").split(",").includes(groupOf(kind));
+}
+
+// Interruptor general del sonido, compartido por la campana y Configuración.
+export function useSound() {
+  const on = usePref(PREF.sound, "on") !== "off";
+  const set = (v: boolean) => {
+    writePref(PREF.sound, v ? "on" : "off");
+    if (v) void previewSound();
+  };
+  return [on, set] as const;
+}
+
+// El archivo se descarga y decodifica una sola vez; si falla (sin conexión), se reintenta en el próximo aviso.
+const loadSound = (ctx: AudioContext) =>
+  (sound ??= fetch(SOUND_URL)
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+    .then((b) => ctx.decodeAudioData(b))
+    .catch(() => {
+      sound = null;
+      return null;
+    }));
+
+// Los navegadores solo permiten sonido después de una interacción: se prepara con cada clic o tecla
+// (el celular puede suspender el audio al pasar a segundo plano y hay que reanudarlo).
+export function unlockAudio() {
+  try {
+    audio ??= new AudioContext();
+    if (audio.state !== "running") void audio.resume().catch(() => {});
+    void loadSound(audio);
+  } catch {}
+}
+
+// Reproduce el sonido de aviso. Si el audio no está activo (aún no se preparó, el celular lo suspendió o el módulo
+// se recargó), lo crea o reanuda en ese momento: el navegador lo permite si ya hubo una interacción con la página.
+// Sin esa interacción, resume() queda esperando; se desiste a los 400 ms para no sonar tarde. Devuelve si sonó.
+export async function chime() {
+  if (Date.now() - lastPlay < SOUND_GAP_MS) return true;
+  try {
+    const ctx = (audio ??= new AudioContext());
+    if (ctx.state !== "running") await Promise.race([ctx.resume(), new Promise((ok) => setTimeout(ok, 400))]);
+    if (ctx.state !== "running") return false;
+    const buf = await loadSound(ctx);
+    if (!buf || Date.now() - lastPlay < SOUND_GAP_MS) return !!buf;
+    lastPlay = Date.now();
+    const src = ctx.createBufferSource();
+    const g = ctx.createGain();
+    src.buffer = buf;
+    g.gain.value = 0.8;
+    src.connect(g).connect(ctx.destination);
+    src.start();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// "Probar sonido" y al activarlo: suena aunque haya sonado un aviso hace un momento.
+export async function previewSound() {
+  unlockAudio();
+  lastPlay = 0;
+  await chime();
+}
+
+/* ───────────── Piezas compartidas ───────────── */
+
+const KIND: Record<NotificationKind, { icon: typeof BellIcon; tone: string; group: SoundGroup }> = {
+  reservation_created: { icon: LoginIcon, tone: "bg-success-soft text-success", group: "reservas" },
+  reservation_confirmed: { icon: LoginIcon, tone: "bg-success-soft text-success", group: "reservas" },
+  reservation_cancelled: { icon: CloseIcon, tone: "bg-error-soft text-error", group: "cambios" },
+  balance_paid: { icon: WalletIcon, tone: "bg-success-soft text-success", group: "pagos" },
+  checkout_pending: { icon: WalletIcon, tone: "bg-warning-soft text-warning", group: "pagos" },
+  email_failed: { icon: MailIcon, tone: "bg-error-soft text-error", group: "cambios" },
+  reservation_expired: { icon: ClockIcon, tone: "bg-warning-soft text-warning", group: "cambios" },
+  proof_uploaded: { icon: FileTextIcon, tone: "bg-info-soft text-info", group: "pagos" },
+  proof_approved: { icon: CheckIcon, tone: "bg-success-soft text-success", group: "pagos" },
+  proof_rejected: { icon: AlertIcon, tone: "bg-error-soft text-error", group: "pagos" },
+  booking_pending: { icon: MailIcon, tone: "bg-info-soft text-info", group: "reservas" },
+  booking_modified: { icon: PencilIcon, tone: "bg-info-soft text-info", group: "cambios" },
+  booking_cancelled: { icon: CloseIcon, tone: "bg-error-soft text-error", group: "cambios" },
+  booking_failed: { icon: AlertIcon, tone: "bg-error-soft text-error", group: "cambios" },
+  channel_conflict: { icon: AlertIcon, tone: "bg-error-soft text-error", group: "cambios" },
+  channel_moved: { icon: AlertIcon, tone: "bg-warning-soft text-warning", group: "cambios" },
+  channel_cancelled: { icon: AlertIcon, tone: "bg-error-soft text-error", group: "cambios" },
+  channel_sync_failed: { icon: AlertIcon, tone: "bg-warning-soft text-warning", group: "cambios" },
+  reservation_moved: { icon: ClockIcon, tone: "bg-warning-soft text-warning", group: "cambios" },
+};
+// Los avisos de Booking sin reserva (aún por asignar) llevan a la bandeja de Booking.
+const toBooking = (n: AdminNotification) => !n.reservationCode && n.kind.startsWith("booking_");
+// Un tipo que ya no existe (avisos antiguos de pagos en línea o de Booking.com) se muestra como aviso general,
+// en el mismo grupo que le dan las notificaciones push.
+const OTHER = { icon: BellIcon, tone: "bg-panel text-ink-muted", group: groupOf("") };
+const kindOf = (n: AdminNotification) => KIND[n.kind] ?? OTHER;
+
+// Gesto del icono al pasar el mouse por el aviso (globals.css), según qué icono lleva.
+const GESTURE = new Map<typeof BellIcon, string>([
+  [LoginIcon, "enter"],
+  [CloseIcon, "close"],
+  [WalletIcon, "tilt"],
+  [MailIcon, "mail"],
+  [ClockIcon, "clock"],
+  [FileTextIcon, "tilt"],
+  [CheckIcon, "pop"],
+  [AlertIcon, "swing"],
+  [BellIcon, "bell"],
+]);
+const gestureOf = (icon: typeof BellIcon) => GESTURE.get(icon) ?? "tilt";
+
+type Reminder = { key: string; icon: typeof BellIcon; tone: string; title: string; body: string; code: string };
+
+// Situaciones que piden atención ahora (se calculan con los datos; no se guardan).
+function useReminders(): Reminder[] {
+  const { data, today } = useAdmin();
+  const tomorrow = addDays(today, 1);
+  const out: Reminder[] = [];
+  for (const p of data.proofs.filter((p) => p.status === "pending")) {
+    const r = data.reservations.find((x) => x.code === p.reservationCode);
+    out.push({
+      key: `p${p.id}`,
+      icon: FileTextIcon,
+      tone: "bg-info-soft text-info",
+      title: `Comprobante por revisar · ${p.reservationCode}`,
+      body: r?.guest.fullName ?? "",
+      code: p.reservationCode,
+    });
+  }
+  for (const e of data.emails.filter((e) => e.status === "failed" && e.kind !== "team_message" && e.reservationCode))
+    out.push({
+      key: `e${e.id}`,
+      icon: MailIcon,
+      tone: "bg-error-soft text-error",
+      title: `${EMAIL_KIND[e.kind] ?? "Correo"} sin enviar · ${e.reservationCode}`,
+      body: e.lastError,
+      code: e.reservationCode!,
+    });
+  for (const r of data.reservations) {
+    if (r.status === "checked_in" && !r.balancePaidAt && r.paid < r.quote.total)
+      out.push({
+        key: `s${r.code}`,
+        icon: WalletIcon,
+        tone: "bg-warning-soft text-warning",
+        title: `Saldo por pagar · ${r.code}`,
+        body: `${r.guest.fullName} · registra el pago en recepción`,
+        code: r.code,
+      });
+    if (r.checkIn === tomorrow && ["confirmed", "rescheduled", "pending_deposit"].includes(r.status))
+      out.push({
+        key: `a${r.code}`,
+        icon: LoginIcon,
+        tone: "bg-success-soft text-success",
+        title: `Llega mañana · ${r.guest.fullName}`,
+        body: `${r.code}${r.estimatedArrival ? ` · ${r.estimatedArrival}` : ""}`,
+        code: r.code,
+      });
+  }
+  return out;
+}
+
+// Marca como leídas (al instante en pantalla; el servidor confirma en segundo plano).
+function useMarkRead() {
+  const { setData } = useAdmin();
+  return async (b: { ids?: number[]; all?: boolean }) => {
+    const at = new Date().toISOString();
+    setData((d) => ({ ...d, notifications: d.notifications.map((n) => (b.all || b.ids?.includes(n.id) ? { ...n, readAt: n.readAt ?? at } : n)) }));
+    try {
+      await api.admin.markNotifications(b);
+    } catch {}
+  };
+}
+
+function ReminderList({ items, onPick }: { items: Reminder[]; onPick: (code: string) => void }) {
+  return (
+    <ul>
+      {items.map((r) => (
+        <li key={r.key}>
+          <button
+            type="button"
+            onClick={() => onPick(r.code)}
+            data-notice={gestureOf(r.icon)}
+            className="flex w-full items-start gap-3 rounded-[14px] px-2.5 py-2 text-left transition-colors hover:bg-panel"
+          >
+            <span aria-hidden="true" data-notice-icon className={`grid size-8 flex-none place-items-center rounded-full ${r.tone}`}>
+              <r.icon size={15} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13.5px] font-semibold text-ink">{r.title}</span>
+              <span className="block truncate text-[12.5px] text-ink-muted">{r.body}</span>
+            </span>
+            <ChevronRightIcon size={15} className="mt-2 flex-none text-ink-subtle" />
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/* ───────────── Campana (acceso rápido) ───────────── */
+
+export function NotificationCenter() {
+  const { data, openReservation, go, now } = useAdmin();
+  const anchor = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [sound, setSound] = useSound();
+  const mark = useMarkRead();
+  const reminders = useReminders();
+  const unread = data.notifications.filter((n) => !n.readAt);
+  const recent = (unread.length ? unread : data.notifications).slice(0, 8);
+
+  const pick = (n: AdminNotification) => {
+    if (!n.readAt) void mark({ ids: [n.id] });
+    setOpen(false);
+    if (n.reservationCode) openReservation(n.reservationCode);
+    else if (toBooking(n)) go(paths.booking);
+  };
+
+  return (
+    <>
+      <button
+        ref={anchor}
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={unread.length ? `Notificaciones, ${unread.length} sin leer` : "Notificaciones"}
+        data-gesture="bell"
+        onClick={() => setOpen(!open)}
+        className="relative grid size-10 flex-none place-items-center rounded-full bg-ink text-paper transition-[background-color,transform] duration-150 hover:bg-ink/85 motion-safe:active:scale-[.97] pointer-coarse:size-11"
+      >
+        <BellIcon size={19} />
+        {unread.length > 0 && (
+          <span
+            aria-hidden="true"
+            className="absolute -top-0.5 -right-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-pink px-1 text-[10px] leading-none font-bold text-ink tabular-nums ring-2 ring-canvas motion-safe:animate-pop-in"
+          >
+            {unread.length > 9 ? "9+" : unread.length}
+          </span>
+        )}
+      </button>
+      <Popover
+        open={open}
+        onClose={() => setOpen(false)}
+        anchor={anchor}
+        placement="bottom-end"
+        label="Notificaciones"
+        className="w-[400px] max-w-[calc(100vw-16px)]"
+      >
+        <div className="flex max-h-[min(640px,80dvh)] flex-col">
+          <div className="flex items-center justify-between gap-2 border-b border-line px-4 pt-3.5 pb-3">
+            <div className="min-w-0">
+              <h2 className="text-[15px] font-bold text-ink">Notificaciones</h2>
+            </div>
+            <div className="flex items-center gap-1">
+              <IconButton
+                label={sound ? "Silenciar sonido de notificaciones" : "Activar sonido de notificaciones"}
+                size="sm"
+                onClick={() => setSound(!sound)}
+                aria-pressed={sound}
+              >
+                {sound ? <VolumeIcon size={17} /> : <VolumeOffIcon size={17} />}
+              </IconButton>
+              {unread.length > 0 && (
+                <Button size="sm" variant="ghost" onClick={() => mark({ all: true })}>
+                  Marcar leídas
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {reminders.length > 0 && (
+              <section aria-labelledby="nc-rem" className="border-b border-line px-2 py-2">
+                <h3 id="nc-rem" className="px-2 pt-1 pb-1.5 text-[11.5px] font-bold tracking-[.06em] text-ink-muted uppercase">
+                  Requiere atención
+                </h3>
+                <ReminderList
+                  items={reminders}
+                  onPick={(code) => {
+                    setOpen(false);
+                    openReservation(code);
+                  }}
+                />
+              </section>
+            )}
+            <h3 className="px-4 pt-3 pb-1 text-[11.5px] font-bold tracking-[.06em] text-ink-muted uppercase">
+              {unread.length ? `Sin leer · ${unread.length}` : "Recientes"}
+            </h3>
+            {recent.length ? (
+              <ul className="px-2 pb-2">
+                {recent.map((n) => {
+                  const k = kindOf(n);
+                  return (
+                    <li key={n.id}>
+                      <button
+                        type="button"
+                        onClick={() => pick(n)}
+                        data-notice={gestureOf(k.icon)}
+                        className="flex w-full items-start gap-3 rounded-[14px] px-2.5 py-2.5 text-left transition-colors hover:bg-panel"
+                      >
+                        <span aria-hidden="true" data-notice-icon className={`grid size-8 flex-none place-items-center rounded-full ${k.tone}`}>
+                          <k.icon size={15} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className={`block text-[13.5px] text-ink ${n.readAt ? "font-medium" : "font-bold"}`}>{n.title}</span>
+                          {n.body && <span className="block truncate text-[12.5px] text-ink-muted">{n.body}</span>}
+                          <span className="mt-0.5 block text-[11.5px] text-ink-subtle">{timeAgo(n.createdAt, now)}</span>
+                        </span>
+                        {!n.readAt && <span aria-label="Sin leer" className="mt-1.5 size-2 flex-none rounded-full bg-error" />}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="flex flex-col items-center gap-2 px-6 py-8 text-center">
+                <span aria-hidden="true" className="grid size-10 place-items-center rounded-full bg-panel text-ink-muted">
+                  <BellIcon size={18} />
+                </span>
+                <p className="text-[14px] font-semibold text-ink">Aún no hay notificaciones</p>
+                <p className="max-w-[30ch] text-[12.5px] text-ink-muted">
+                  Aquí aparecen las reservas nuevas, los comprobantes de pago y los cambios importantes.
+                </p>
+              </div>
+            )}
+          </div>
+          <PushPrompt />
+          <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2.5">
+            <Link href={paths.notificaciones()} onClick={() => setOpen(false)} className={buttonClass("ghost", "sm")}>
+              Ver todas
+              <ChevronRightIcon size={14} />
+            </Link>
+            <Link href={paths.configuracion} onClick={() => setOpen(false)} className={buttonClass("ghost", "sm", "text-ink-muted")}>
+              <SlidersIcon size={14} />
+              Configurar avisos
+            </Link>
+          </div>
+        </div>
+      </Popover>
+    </>
+  );
+}
+
+/* ───────────── Página de notificaciones ───────────── */
+
+type Status = "sin-leer" | "todas";
+type KindFilter = "todas" | SoundGroup;
+
+export function NotificationsView() {
+  const { data, today, now, openReservation } = useAdmin();
+  const mark = useMarkRead();
+  const reminders = useReminders();
+  const [status, setStatus] = useParam<Status>("estado", "todas");
+  const [kind, setKind] = useParam<KindFilter>("tipo", "todas");
+  const unread = data.notifications.filter((n) => !n.readAt);
+  const list = data.notifications.filter((n) => (status === "todas" || !n.readAt) && (kind === "todas" || kindOf(n).group === kind));
+  const paged = usePaged(list, "notificaciones", `${status}|${kind}`, 20);
+
+  // La página actual agrupada por día (hora de Colombia), de la más reciente a la más antigua.
+  const days: { day: string; items: AdminNotification[] }[] = [];
+  for (const n of paged.rows) {
+    const day = dateOf(n.createdAt);
+    const last = days[days.length - 1];
+    if (last?.day === day) last.items.push(n);
+    else days.push({ day, items: [n] });
+  }
+  const dayLabel = (d: string) => (d === today ? "Hoy" : d === addDays(today, -1) ? "Ayer" : fmtFullDate(d));
+  const countOf = (g: SoundGroup) => data.notifications.filter((n) => kindOf(n).group === g && (status === "todas" || !n.readAt)).length;
+
+  return (
+    <>
+      <PageHeader
+        title="Notificaciones"
+        description="Historial de avisos del panel: reservas nuevas, comprobantes de pago, cancelaciones y vencimientos."
+        actions={
+          <>
+            {unread.length > 0 && (
+              <Button icon={<CheckIcon size={14} />} onClick={() => mark({ all: true })}>
+                Marcar todas como leídas
+              </Button>
+            )}
+            <Link href={paths.configuracion} className={buttonClass("ghost")}>
+              <SlidersIcon size={15} />
+              Sonido y avisos
+            </Link>
+          </>
+        }
+      />
+
+      {reminders.length > 0 && (
+        <Card aria-labelledby="nt-rem" className="flex flex-col gap-2 p-4 sm:p-5">
+          <CardHeader
+            id="nt-rem"
+            icon={<AlertIcon size={18} />}
+            title="Requiere atención"
+            subtitle="Calculado con los datos actuales; desaparece cuando se resuelve."
+          />
+          <div className="-mx-2">
+            <ReminderList items={reminders} onPick={openReservation} />
+          </div>
+        </Card>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Segmented
+          label="Estado"
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: "todas", label: "Todas" },
+            { value: "sin-leer", label: "Sin leer", count: unread.length },
+          ]}
+        />
+        <Segmented
+          label="Tipo"
+          value={kind}
+          onChange={setKind}
+          options={[{ value: "todas", label: "Todos los tipos" }, ...SOUND_GROUPS.map((g) => ({ value: g.id, label: g.label, count: countOf(g.id) }))]}
+        />
+      </div>
+
+      {days.length ? (
+        <div className="flex flex-col gap-4">
+          {days.map(({ day, items }) => (
+            <Card key={day} aria-labelledby={`nt-${day}`} className="overflow-hidden">
+              <h2 id={`nt-${day}`} className="border-b border-line bg-canvas/70 px-4 py-2 text-[12.5px] font-bold text-ink-muted">
+                {dayLabel(day)} <span className="font-medium">· {plural(items.length, "aviso", "avisos")}</span>
+              </h2>
+              <ul className="divide-y divide-line">
+                {items.map((n) => {
+                  const k = kindOf(n);
+                  return (
+                    <li key={n.id} data-notice={gestureOf(k.icon)} className={`flex items-start gap-3 px-4 py-3 ${n.readAt ? "" : "bg-pink/12"}`}>
+                      <span aria-hidden="true" data-notice-icon className={`mt-0.5 grid size-9 flex-none place-items-center rounded-full ${k.tone}`}>
+                        <k.icon size={16} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-[14px] text-ink ${n.readAt ? "font-medium" : "font-bold"}`}>
+                          {!n.readAt && <span className="sr-only">Sin leer: </span>}
+                          {n.title}
+                        </p>
+                        {n.body && <p className="text-[13px] text-ink-muted">{n.body}</p>}
+                        <p className="mt-0.5 text-[12px] text-ink-subtle">
+                          {fmtClock(n.createdAt)} · {timeAgo(n.createdAt, now)}
+                        </p>
+                      </div>
+                      <div className="flex flex-none items-center gap-1">
+                        {n.reservationCode && (
+                          <Link
+                            href={paths.reserva(n.reservationCode)}
+                            onClick={() => !n.readAt && void mark({ ids: [n.id] })}
+                            className={buttonClass("secondary", "sm")}
+                          >
+                            Ver reserva
+                          </Link>
+                        )}
+                        {toBooking(n) && (
+                          <Link href={paths.booking} onClick={() => !n.readAt && void mark({ ids: [n.id] })} className={buttonClass("secondary", "sm")}>
+                            Ver en Booking
+                          </Link>
+                        )}
+                        {!n.readAt && (
+                          <IconButton label="Marcar como leída" size="sm" onClick={() => mark({ ids: [n.id] })}>
+                            <CheckIcon size={15} />
+                          </IconButton>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
+          ))}
+          <Paginator p={paged} noun="avisos" className="rounded-[20px] bg-panel px-4 py-3" />
+          {data.notifications.length >= 150 && <p className="text-center text-[12.5px] text-ink-muted">Se muestran los 150 avisos más recientes.</p>}
+        </div>
+      ) : (
+        <Card className="p-4">
+          <EmptyState
+            icon={<BellIcon size={18} />}
+            title={
+              status === "sin-leer" && unread.length === 0
+                ? "Estás al día"
+                : data.notifications.length
+                  ? "No hay avisos con estos filtros"
+                  : "Aún no hay notificaciones"
+            }
+            text={
+              status === "sin-leer" && unread.length === 0
+                ? "No tienes avisos sin leer."
+                : "Aquí aparecen las reservas nuevas, los comprobantes de pago y los cambios importantes."
+            }
+            action={
+              status !== "todas" || kind !== "todas" ? (
+                <Button
+                  onClick={() => {
+                    setStatus("todas");
+                    setKind("todas");
+                  }}
+                >
+                  Ver todas
+                </Button>
+              ) : undefined
+            }
+          />
+        </Card>
+      )}
+    </>
+  );
+}
+
+export function LiveDot({ status }: { status: LiveStatus }) {
+  const cls = status === "live" ? "bg-success" : status === "connecting" ? "bg-yellow-deep" : status === "offline" ? "bg-error" : "bg-ink-subtle";
+  return (
+    <span aria-hidden="true" className="relative inline-flex size-2">
+      {status === "live" && <span className="absolute inset-0 rounded-full bg-success/60 motion-safe:animate-ping" />}
+      <span className={`relative inline-flex size-2 rounded-full ${cls}`} />
+    </span>
+  );
+}

@@ -22,7 +22,8 @@ alter table public.reservations
 -- Lo ya registrado con el flujo anterior (el abono al confirmar y el saldo en el check-in).
 update public.reservations set paid_amount =
   (case when deposit_paid_at is not null then (quote ->> 'deposit')::integer else 0 end) +
-  (case when balance_paid_at is not null then (quote ->> 'balance')::integer else 0 end);
+  (case when balance_paid_at is not null then (quote ->> 'balance')::integer else 0 end)
+where true;
 update public.reservations set checked_in_at = coalesce(balance_paid_at, updated_at) where status in ('checked_in', 'completed');
 
 create index reservations_balance_due_idx on public.reservations (balance_due_at)

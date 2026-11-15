@@ -1,0 +1,19 @@
+import type { Metadata } from "next";
+import { Suspense } from "react";
+import { ReservationWizard } from "@/components/booking/wizard";
+import { config } from "@/lib/config";
+
+export const metadata: Metadata = {
+  title: { absolute: `Reservar | ${config.name} · Murillo, Tolima` },
+  description: "Reserva tu cabaña en El Cóndor del Ruiz, frente al Nevado del Ruiz en Murillo, Tolima. Elige fechas y cabaña, aparta tus fechas y confirma con tu abono.",
+  openGraph: { title: `Reservar | ${config.name}`, description: "Elige fechas y cabaña, y reserva en Murillo, Tolima." },
+  robots: { index: false },
+};
+
+export default function ReservePage() {
+  return (
+    <Suspense fallback={<div className="min-h-[70vh]" />}>
+      <ReservationWizard />
+    </Suspense>
+  );
+}

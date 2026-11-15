@@ -414,14 +414,15 @@ function MonthHalves({
   );
 }
 
-// Control de quincena en la fila de resumen, fuera de la tabla: ‹ 1 – 15 nov ›.
+// Control de quincena en la fila de resumen, fuera de la tabla: ‹ 1 – 15 nov ›. Mide 36 px como los botones y los
+// desplegables del encabezado: con el borde de 1 px, las flechas (32 px) caben sin relleno vertical.
 function HalfSwitch({ days, active, onChange }: { days: string[]; active: number; onChange: (k: number) => void }) {
   const parts = halvesOf(days);
   return (
     <div
       role="group"
       aria-label="Quincena"
-      className="flex h-9 flex-none items-center justify-between gap-0.5 rounded-full border border-line-strong p-0.5 sm:w-[188px]"
+      className="box-border flex h-9 flex-none items-center justify-between gap-0.5 rounded-full border border-line-strong bg-paper px-0.5 sm:w-[188px]"
     >
       <IconButton label={`Primera quincena · ${halfLabel(parts[0])}`} size="sm" disabled={active === 0} onClick={() => onChange(0)}>
         <ChevronLeftIcon size={16} />

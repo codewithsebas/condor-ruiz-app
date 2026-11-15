@@ -32,7 +32,7 @@ export const viewport: Viewport = {
 };
 
 // Apariencia del panel antes de pintar (components/admin/appearance.tsx), para que el modo oscuro no destelle en claro.
-const ADMIN_THEME = `try{if(/^\/(admin|login)(\/|$)/.test(location.pathname)){var p=localStorage.getItem("vf-admin-theme");document.documentElement.dataset.adminTheme=p==="dark"||(p==="system"&&matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light"}}catch(e){}`;
+const ADMIN_THEME = String.raw`try{if(/^\/(admin|login)(\/|$)/.test(location.pathname)){var p=localStorage.getItem("vf-admin-theme");document.documentElement.dataset.adminTheme=p==="dark"||(p==="system"&&matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light"}}catch(e){}`;
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const [content, cabins] = await Promise.all([getSiteContent(), getSiteCabins()]);

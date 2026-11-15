@@ -233,8 +233,8 @@ export function CalendarView() {
               {blockedNights > 0 && <Chip label="Bloqueadas" value={blockedNights} icon={<BanIcon size={13} />} />}
             </ul>
             <div className="flex flex-none items-center gap-2">
-              {todayNav}
               {splitMonth && <HalfSwitch days={days} active={half} onChange={setHalf} />}
+              {todayNav}
             </div>
           </div>
           <div key={`${view}-${from}-${filter}-${monthGrid}`} className="motion-safe:animate-fade-in">

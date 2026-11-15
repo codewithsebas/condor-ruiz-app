@@ -218,12 +218,12 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
           pequeño cruza el cielo. El pie mide al menos lo mismo que la pantalla (en computador, todo a la vista): la ilustración tiene un
           alto acotado y el espacio que sobra se lo lleva la parte de arriba; en celular el pie crece con su contenido. */}
       <div aria-hidden="true" className="relative flex flex-none flex-col">
-        {/* El nombre, entero y en color sólido (como la invitación de arriba), por encima de la ilustración. */}
-        <p className="display reveal-on-scroll flex-none gutter-1360 pt-[.1em] text-[clamp(2.6rem,min(8vw,12vh),8.5rem)] leading-[.86] whitespace-nowrap">
-          El Cóndor <span className="text-accent">del Ruiz</span>
+        {/* El nombre, enorme y detrás de todo: se desvanece hacia abajo, donde lo tapan las cabañas y el Nevado. */}
+        <p className="display reveal-on-scroll flex-none bg-linear-to-b from-accent via-accent/75 to-accent/5 bg-clip-text gutter-1360 pt-[.08em] text-[clamp(3.4rem,min(12vw,19vh),12.5rem)] leading-[.84] whitespace-nowrap text-transparent">
+          El Cóndor del Ruiz
         </p>
-        {/* Cabañas y Nevado: ocupan el alto que deje libre la pantalla. */}
-        <div className="relative mt-[clamp(4px,1vh,12px)] h-[clamp(130px,22vh,250px)]">
+        {/* Cabañas y Nevado, delante del nombre. */}
+        <div className="relative -mt-[clamp(36px,8.5vh,110px)] h-[clamp(130px,22vh,250px)]">
           <Ranges className="absolute inset-x-0 bottom-0 h-[48%]" />
           <FooterCabins className="absolute bottom-0 left-1/2 h-full w-auto max-w-full -translate-x-1/2" />
         </div>

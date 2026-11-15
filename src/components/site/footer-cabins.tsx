@@ -218,6 +218,11 @@ export function FooterCabins({ className = "" }: { className?: string }) {
       ))}
       <path d="M0 268C400 250 700 246 950 248S1600 262 1900 264" fill="none" className="stroke-card/15" strokeWidth="2" />
 
+      {/* Briznas de pasto en el borde del prado: detrás de pinos y cabañas, que apoyan delante */}
+      {GRASS_LAYERS.map((d, i) => (
+        <path key={i} d={d} fill={`url(#ft-pasto-${i})`} />
+      ))}
+
       {PINES.map((p) => (
         <use key={p.x} href="#ft-pino" x={p.x - p.h * 0.3} y={268 - p.h} width={p.h * 0.6} height={p.h} />
       ))}
@@ -252,11 +257,6 @@ export function FooterCabins({ className = "" }: { className?: string }) {
           opacity=".55"
         />
       </g>
-
-      {/* Briznas de pasto en el borde del prado, delante de todo */}
-      {GRASS_LAYERS.map((d, i) => (
-        <path key={i} d={d} fill={`url(#ft-pasto-${i})`} />
-      ))}
     </svg>
   );
 }

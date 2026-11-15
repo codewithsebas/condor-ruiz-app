@@ -1,122 +1,89 @@
-// Las cabañas del Cóndor (tipo A) dibujadas para el pie de página, vistas de tres cuartos como en la foto: el faldón de
-// teja color terracota que se pierde hacia atrás, el marco negro del frente, el gran ventanal triangular que refleja el
-// cielo, el listón de madera del costado y el balcón con su pasamanos claro. Son cuatro iguales, en fila sobre el prado.
-// Los colores son los de las cabañas reales (no los de la paleta del sitio); el prado sí sigue la paleta. Un solo SVG con
-// la cabaña como <symbol> y cuatro <use>: los degradados y las tejas se declaran una vez.
+// Ilustración del pie de página: las cuatro cabañas del Cóndor (tipo A, todas iguales) al anochecer, con pinos entre
+// ellas sobre el prado. Estilo plano y suave: techo de teja terracota en escamas, marco oscuro, el gran ventanal
+// triangular encendido con luz cálida, el listón de madera del costado, el balcón con su pasamanos claro y un farolito
+// bajo el caballete. Los colores de las cabañas y los pinos son fijos (los reales); el prado sigue la paleta del sitio.
+// Un solo SVG: la cabaña y el pino son <symbol> y se repiten con <use>.
 
-type P = [number, number];
-const lerp = (a: P, b: P, t: number): P => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-const pt = ([x, y]: P) => `${x.toFixed(1)} ${y.toFixed(1)}`;
-
-// Faldón izquierdo: del caballete (frente y fondo) al alero (frente y fondo).
-const RIDGE_F: P = [150, 22];
-const RIDGE_B: P = [96, 8];
-const EAVE_F: P = [70, 222];
-const EAVE_B: P = [6, 204];
-// Frente: el triángulo del marco.
-const APEX: P = [150, 22];
-const BASE_L: P = [70, 222];
-const BASE_R: P = [230, 222];
-
-const ROOF = `M${pt(RIDGE_F)}L${pt(RIDGE_B)}L${pt(EAVE_B)}L${pt(EAVE_F)}Z`;
-// Canales de teja: bajan del caballete al alero.
-const CHANNELS = Array.from({ length: 13 }, (_, i) => {
-  const t = (i + 0.5) / 13;
-  return `M${pt(lerp(RIDGE_F, RIDGE_B, t))}L${pt(lerp(EAVE_F, EAVE_B, t))}`;
-}).join("");
-// Hiladas: de frente a fondo, cada vez más abajo.
-const COURSES = Array.from({ length: 17 }, (_, i) => {
-  const s = (i + 1) / 18;
-  return `M${pt(lerp(RIDGE_F, EAVE_F, s))}L${pt(lerp(RIDGE_B, EAVE_B, s))}`;
-}).join("");
-
-const CABINS = [0, 1, 2, 3];
+// Cabañas: 200 de ancho, 60 entre una y otra, centradas en el lienzo de 1200.
+const CABINS = [110, 370, 630, 890];
+// Pinos: en las orillas y entre cabañas, de distintos altos.
+const PINES: { x: number; h: number }[] = [
+  { x: 28, h: 150 },
+  { x: 66, h: 110 },
+  { x: 318, h: 130 },
+  { x: 578, h: 150 },
+  { x: 838, h: 125 },
+  { x: 1104, h: 115 },
+  { x: 1140, h: 160 },
+];
 
 export function FooterCabins({ className = "" }: { className?: string }) {
   return (
-    <svg aria-hidden="true" viewBox="0 0 1080 250" preserveAspectRatio="xMidYMax meet" className={`pointer-events-none block ${className}`}>
+    <svg aria-hidden="true" viewBox="0 0 1200 300" preserveAspectRatio="xMidYMax meet" className={`pointer-events-none block ${className}`}>
       <defs>
-        <linearGradient id="ft-teja" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#d9784a" />
-          <stop offset="1" stopColor="#b2552f" />
+        {/* Tejas en escamas */}
+        <pattern id="ft-tejas" width="14" height="11" patternUnits="userSpaceOnUse">
+          <rect width="14" height="11" fill="#c8623a" />
+          <path d="M0 11a7 7 0 0 1 14 0" fill="#dc7a4c" />
+          <path d="M0 11a7 7 0 0 1 14 0" fill="none" stroke="#9c4524" strokeWidth="1.2" />
+          <path d="M-7 5.5a7 7 0 0 1 14 0M7 5.5a7 7 0 0 1 14 0" fill="#d36f43" stroke="#9c4524" strokeWidth="1.2" />
+        </pattern>
+        {/* Interior encendido: ámbar arriba que se vuelve miel abajo */}
+        <linearGradient id="ft-interior" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffcf7d" />
+          <stop offset="1" stopColor="#f39a45" />
         </linearGradient>
-        <linearGradient id="ft-vidrio" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#0b1222" />
-          <stop offset=".6" stopColor="#16264a" />
-          <stop offset="1" stopColor="#2c4573" />
-        </linearGradient>
-        <linearGradient id="ft-brillo" x1="0" y1="0" x2="1" y2=".6">
-          <stop offset="0" stopColor="#fff" stopOpacity=".22" />
-          <stop offset=".45" stopColor="#fff" stopOpacity="0" />
-        </linearGradient>
-        <radialGradient id="ft-luz" cx=".5" cy="1" r=".9">
-          <stop offset="0" stopColor="#ffd08a" />
-          <stop offset=".6" stopColor="#f2a24e" stopOpacity=".55" />
-          <stop offset="1" stopColor="#f2a24e" stopOpacity="0" />
+        <radialGradient id="ft-halo" cx=".5" cy=".5" r=".5">
+          <stop offset="0" stopColor="#ffd27f" stopOpacity=".55" />
+          <stop offset="1" stopColor="#ffd27f" stopOpacity="0" />
         </radialGradient>
-        <clipPath id="ft-techo">
-          <path d={ROOF} />
-        </clipPath>
-        <clipPath id="ft-ventanal">
-          <path d="M150 46 96 214h108z" />
-        </clipPath>
 
-        <symbol id="ft-cabana" viewBox="0 0 240 240" overflow="visible">
-          {/* Sombra en el prado */}
-          <ellipse cx="128" cy="232" rx="122" ry="7" fill="#000" opacity=".25" />
-
-          {/* Faldón de teja que se pierde hacia el fondo */}
-          <path d={ROOF} fill="url(#ft-teja)" />
-          <g clipPath="url(#ft-techo)">
-            <path d={CHANNELS} stroke="#f0a17a" strokeWidth="5" strokeLinecap="round" opacity=".45" />
-            <path d={CHANNELS} stroke="#8d3a1b" strokeWidth="1.4" transform="translate(3 1)" opacity=".8" />
-            <path d={COURSES} stroke="#7a2f14" strokeWidth="2.2" opacity=".75" />
-            <path d={COURSES} stroke="#f3ad86" strokeWidth="1" transform="translate(0 2.4)" opacity=".5" />
-            {/* Sombra junto al frente */}
-            <path d={`M${pt(RIDGE_F)}L${pt(EAVE_F)}l-18 -4L${pt(lerp(RIDGE_F, RIDGE_B, 0.18))}Z`} fill="#000" opacity=".18" />
-          </g>
-          {/* Caballete y alero */}
-          <path d={`M${pt(RIDGE_F)}L${pt(RIDGE_B)}`} stroke="#7a2f14" strokeWidth="3" strokeLinecap="round" />
-          <path d={`M${pt(EAVE_B)}L${pt(EAVE_F)}`} stroke="#5d2410" strokeWidth="3" strokeLinecap="round" />
-
-          {/* Marco negro del frente, con el borde de la teja asomando */}
-          <path d={`M${pt(APEX)}L${pt(BASE_L)}L${pt(BASE_R)}Z`} fill="#121316" />
-          <path d={`M${pt(APEX)}L${pt(BASE_L)}`} stroke="#c9653b" strokeWidth="2.5" strokeLinecap="round" />
+        <symbol id="ft-cabana" viewBox="0 0 200 230" overflow="visible">
+          {/* Resplandor de la luz sobre el prado */}
+          <ellipse cx="100" cy="206" rx="120" ry="34" fill="url(#ft-halo)" />
+          {/* Techo: la A completa en teja, con el caballete redondeado */}
+          <path d="M100 6 6 204h188z" fill="url(#ft-tejas)" stroke="#8a3a1c" strokeWidth="4" strokeLinejoin="round" />
+          {/* Brillo del faldón izquierdo */}
+          <path d="M100 12 14 198h14L100 34z" fill="#fff" opacity=".12" />
+          {/* Marco oscuro */}
+          <path d="M100 40 42 204h116z" fill="#2b2420" stroke="#2b2420" strokeWidth="4" strokeLinejoin="round" />
+          {/* Ventanal encendido */}
+          <path d="M100 56 58 204h84z" fill="url(#ft-interior)" />
           {/* Listón de madera del costado derecho */}
-          <path d="M156 42 218 222h-14L154 60z" fill="#9a6235" />
-          <path d="M162 70 204 192M166 64 211 196" stroke="#6e4220" strokeWidth=".8" opacity=".7" />
-
-          {/* Ventanal */}
-          <path d="M150 46 96 214h108z" fill="url(#ft-vidrio)" />
-          <g clipPath="url(#ft-ventanal)">
-            {/* Reflejo del cielo y de una nube abajo */}
-            <path d="M96 214 150 46l14 42-46 126z" fill="url(#ft-brillo)" />
-            <path d="M98 214c6-14 16-20 28-16 6-10 20-12 28-2 10-4 22 0 26 12z" fill="#c9d6ea" opacity=".35" />
-            {/* Puerta con la luz de adentro */}
-            <rect x="130" y="150" width="40" height="64" fill="url(#ft-luz)" />
-          </g>
-          {/* Divisiones del vidrio */}
-          <path d="M110 150h80M130 150v64M170 150v64M150 46v104" stroke="#0a0b0d" strokeWidth="2.4" />
-          {/* Tornillos del marco */}
-          {[0.2, 0.36, 0.52, 0.68, 0.84].map((t) => (
-            <circle key={t} cx={150 + 72 * t} cy={30 + 186 * t} r="1.4" fill="#aab3bd" />
+          <path d="M104 52 142 168h-9L101 64z" fill="#9b6334" />
+          {/* Reflejo en el vidrio */}
+          <path d="M100 56 82 108l8 4 12-38z" fill="#fff" opacity=".35" />
+          {/* Divisiones del vidrio y puerta */}
+          <path d="M71 158h58M100 56v102M86 166v38M114 166v38M86 166h28" stroke="#2b2420" strokeWidth="3.5" strokeLinecap="round" />
+          {/* Farolito bajo el caballete */}
+          <path d="M100 40v8" stroke="#2b2420" strokeWidth="2" />
+          <circle cx="100" cy="52" r="4.5" fill="#fff1c9" />
+          <circle cx="100" cy="52" r="10" fill="#ffe7a8" opacity=".35" />
+          {/* Balcón: pasamanos claro, barrotes y piso de madera */}
+          <rect x="20" y="168" width="160" height="7" rx="3.5" fill="#f1e6cf" />
+          {[28, 46, 64, 82, 118, 136, 154, 172].map((x) => (
+            <rect key={x} x={x - 2} y="174" width="4" height="26" rx="1" fill="#2b2420" />
           ))}
+          <rect x="12" y="198" width="176" height="9" rx="4.5" fill="#7a5233" />
+          <rect x="12" y="198" width="176" height="3" rx="1.5" fill="#9b6c46" />
+        </symbol>
 
-          {/* Balcón: plataforma, barrotes y pasamanos claro */}
-          <path d="M50 222h196l-6 8H56z" fill="#2b2622" />
-          {[58, 80, 102, 124, 176, 198, 220, 240].map((x) => (
-            <rect key={x} x={x - 1.8} y="196" width="3.6" height="27" fill="#16171a" />
-          ))}
-          <path d="M52 191h194l-2 7H54z" fill="#ede3cd" />
-          <path d="M54 198h190" stroke="#b7a98c" strokeWidth="1.5" />
+        <symbol id="ft-pino" viewBox="0 0 60 100" overflow="visible" preserveAspectRatio="none">
+          <rect x="27" y="82" width="6" height="18" rx="2" fill="#5a3b25" />
+          <path d="M30 0 52 34H40l16 26H43l15 26H2l15-26H4l16-26H8z" fill="#3e5a40" />
+          <path d="M30 0 8 34h12L4 60h13L2 86h28z" fill="#4c6d4c" />
         </symbol>
       </defs>
 
-      {/* Prado bajo las cabañas: sigue la paleta del sitio. */}
-      <path d="M0 250V238q270-16 540-12t540 10v14z" className="fill-night" />
+      {/* Prado: una loma suave que sigue la paleta del sitio */}
+      <path d="M0 300V262q300-26 600-20t600 18v40z" className="fill-night" />
+      <path d="M0 268q300-24 600-18t600 16" fill="none" className="stroke-card/15" strokeWidth="2" />
 
-      {CABINS.map((i) => (
-        <use key={i} href="#ft-cabana" x={28 + i * 262} y="8" width="240" height="240" />
+      {PINES.map((p) => (
+        <use key={p.x} href="#ft-pino" x={p.x - p.h * 0.3} y={268 - p.h} width={p.h * 0.6} height={p.h} />
+      ))}
+      {CABINS.map((x) => (
+        <use key={x} href="#ft-cabana" x={x} y="50" width="200" height="230" />
       ))}
     </svg>
   );

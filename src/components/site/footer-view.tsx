@@ -96,7 +96,7 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
     // resplandor sobre el horizonte y estrellas que aparecen a medida que oscurece.
     <footer
       data-zone="redes"
-      className="relative isolate overflow-hidden bg-[linear-gradient(to_bottom,var(--color-bg),var(--color-deep)_clamp(140px,16vw,300px),color-mix(in_srgb,var(--color-deep)_55%,var(--color-night))_70%,var(--color-night))] text-on-dark"
+      className="relative isolate flex min-h-svh flex-col overflow-hidden bg-[linear-gradient(to_bottom,var(--color-bg),var(--color-deep)_clamp(140px,16vw,300px),color-mix(in_srgb,var(--color-deep)_55%,var(--color-night))_70%,var(--color-night))] text-on-dark"
     >
       <div
         aria-hidden="true"
@@ -123,10 +123,10 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
         slow={1.9}
       />
 
-      <div className="relative gutter-1360 pt-[clamp(56px,8vw,128px)]">
+      <div className="relative flex-none gutter-1360 pt-[clamp(24px,5vh,72px)]">
         {/* Invitación final */}
-        <div className="reveal-on-scroll flex flex-wrap items-end justify-between gap-x-10 gap-y-6 border-b-2 border-dotted border-on-dark/20 pb-12">
-          <p className="display max-w-[16ch] text-[clamp(2.6rem,6vw,5.2rem)] leading-[.9]">
+        <div className="reveal-on-scroll flex flex-wrap items-end justify-between gap-x-10 gap-y-6 border-b-2 border-dotted border-on-dark/20 pb-[clamp(20px,4vh,48px)]">
+          <p className="display max-w-[16ch] text-[clamp(2.4rem,5vw,4.4rem)] leading-[.9] lg:max-w-none">
             ¿Listo para despertar <span className="text-accent">frente al nevado?</span>
           </p>
           <div className="flex flex-wrap gap-3">
@@ -145,9 +145,9 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-6 gap-y-8 py-[clamp(32px,5vw,56px)] lg:grid-cols-4 lg:gap-x-10">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-8 py-[clamp(20px,4vh,48px)] lg:grid-cols-4 lg:gap-x-10">
           <div className="col-span-2 flex flex-col items-start gap-4 sm:col-span-1">
-            <Marca parte="logo" width={200} className="bg-on-dark" />
+            <Marca parte="logo" width={160} className="bg-on-dark" />
             <p className="max-w-[28ch] text-on-dark-muted">{c.tagline}</p>
             {c.rnt && <p className="text-[.85rem] font-bold">RNT {c.rnt}</p>}
             {social.length > 0 && (
@@ -216,27 +216,26 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
       </div>
 
       {/* El nombre se hunde detrás de las cordilleras y, delante, las cuatro cabañas en fila sobre el prado; un cóndor
-          pequeño cruza el cielo. */}
-      <div aria-hidden="true" className="relative">
-        <p className="display reveal-on-scroll bg-linear-to-b from-accent via-accent/80 to-accent/20 bg-clip-text gutter-1360 pt-[.14em] text-[clamp(3.4rem,14vw,13.5rem)] leading-[.82] whitespace-nowrap text-transparent">
+          pequeño cruza el cielo. Ocupa el alto que sobra: así el pie llena siempre la pantalla con todo a la vista. */}
+      <div aria-hidden="true" className="relative min-h-[clamp(190px,27vh,460px)] flex-1">
+        <p className="display reveal-on-scroll bg-linear-to-b from-accent via-accent/80 to-accent/20 bg-clip-text gutter-1360 pt-[.14em] text-[clamp(3.2rem,11vw,10rem)] leading-[.82] whitespace-nowrap text-transparent">
           El Cóndor del Ruiz
         </p>
-        <div className="relative -mt-[clamp(28px,5vw,80px)] h-[clamp(130px,24vw,330px)]">
-          <Ranges className="absolute inset-x-0 bottom-0 h-[70%]" />
-          <FooterCabins className="reveal-on-scroll absolute bottom-0 left-1/2 h-full w-auto max-w-[calc(100%-32px)] -translate-x-1/2" />
-          <SoaringCondor
-            id="condor-cordillera"
-            className="absolute top-[4%] right-[8%] w-[clamp(40px,6vw,96px)]"
-            opacity={0.6}
-            depth={0}
-            offset={0.7}
-            slow={1.3}
-          />
-        </div>
+        <Ranges className="absolute inset-x-0 bottom-0 h-[42%]" />
+        {/* Las cabañas tapan la parte baja del nombre: van al frente, del alto que deje libre la pantalla. */}
+        <FooterCabins className="absolute bottom-0 left-1/2 h-[80%] w-auto max-w-full -translate-x-1/2" />
+        <SoaringCondor
+          id="condor-cordillera"
+          className="absolute top-[38%] right-[6%] w-[clamp(40px,6vw,96px)]"
+          opacity={0.6}
+          depth={0}
+          offset={0.7}
+          slow={1.3}
+        />
       </div>
 
-      <div className="relative bg-night">
-        <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4 gutter-1360 pt-4 pb-[110px] text-[.82rem] text-on-dark-muted">
+      <div className="relative flex-none bg-night">
+        <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4 gutter-1360 pt-4 pb-[clamp(76px,9vh,104px)] text-[.82rem] text-on-dark-muted">
           <div className="flex max-w-[90ch] flex-col gap-2.5">
             <p>
               En cumplimiento de la Ley 679 de 2001, {c.name} rechaza la explotación, la pornografía, el turismo sexual y cualquier forma de abuso sexual contra

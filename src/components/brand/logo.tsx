@@ -22,7 +22,7 @@ export function Brand({ circle = 46 }: { circle?: number; mark?: number; snow?: 
 export function Logo({ size, className = "" }: { size: number; eager?: boolean; className?: string }) {
   return (
     <span aria-hidden="true" className={`grid flex-none place-items-center rounded-full bg-[#5b3a21] ${className}`} style={{ width: size, height: size }}>
-      <Marca parte="simbolo" className="bg-[#fbf6ec]" style={{ width: "80%", height: "auto", aspectRatio: "800 / 338" }} />
+      <Marca parte="simbolo" className="bg-[#fbf6ec]" style={{ width: "90%", height: "auto", aspectRatio: "800 / 338" }} />
     </span>
   );
 }

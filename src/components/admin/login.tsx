@@ -96,7 +96,7 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
       >
         {/* Logo y nombre centrados, sobre el saludo. En pantallas bajas todo se compacta para que quepa sin scroll. */}
         <div className="flex flex-col items-center gap-3 text-center">
-          <Logo size={72} eager className="[@media(max-height:860px)]:size-14" />
+          <Logo size={96} eager className="[@media(max-height:860px)]:size-18" />
           <BrandName wordSize="1.15rem" eyebrowSize=".62rem" className="items-center text-ink" />
           <h1 id="lg-title" className="mt-3 text-[26px] leading-tight font-bold tracking-[-0.03em] [@media(max-height:860px)]:mt-1">
             Bienvenido al panel

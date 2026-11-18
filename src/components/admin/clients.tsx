@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
   AlertIcon,
@@ -20,7 +19,6 @@ import {
   TrashIcon,
   TrendIcon,
   UsersIcon,
-  WarningIcon,
   WhatsAppIcon,
 } from "@/components/ui/icons";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -34,7 +32,8 @@ import { Combobox } from "@/components/ui/combobox";
 import { useLabelTip } from "@/components/ui/floating";
 import { useAdmin, useParam } from "@/components/admin/context";
 import { Paginator, usePaged } from "@/components/admin/paginator";
-import { LIST_CARD, LIST_MOBILE_ROW, LIST_ROW, LIST_ROW_HOVER, LIST_ROW_LATEST, ListSearch, ListTableHead } from "@/components/admin/list-table";
+import { ListSearch } from "@/components/admin/list-table";
+import { Panel } from "@/components/admin/board";
 import { EmailComposer, hasEmail } from "@/components/admin/email-composer";
 import { Facts } from "@/components/admin/reservation-detail";
 import { MODULES, clientKeyOf, paths } from "@/components/admin/routes";
@@ -57,6 +56,7 @@ import {
   StatCard,
   Stars,
   buttonClass,
+  enter,
   iconButtonClass,
   type Tone,
 } from "@/components/admin/ui";
@@ -75,7 +75,6 @@ const lastActivity = (c: ClientSummary) => c.reservations.reduce((m, r) => (r.cr
 
 export function ClientList() {
   const { data } = useAdmin();
-  const router = useRouter();
   const money = can(data.me.role, "finance");
   const clients = useClients();
   const [q, setQ] = useParam("q", "");
@@ -138,87 +137,140 @@ export function ClientList() {
     </>
   );
 
+  const fresh = clients.filter(test.nuevos).length;
+  const alerts = clients.filter(test.alertas).length;
+  const top = [...clients].sort((a, b) => (money ? b.value - a.value : 0) || b.stays - a.stays).slice(0, 5);
+  // Ciudades de origen más comunes (nuevo).
+  const cities = Object.entries(
+    clients.reduce<Record<string, number>>((m, c) => {
+      const k = (c.city || "").trim();
+      if (k) m[k] = (m[k] ?? 0) + 1;
+      return m;
+    }, {}),
+  )
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+  const maxCity = Math.max(1, ...cities.map(([, n]) => n));
+
   return (
     <>
-      <PageHeader
-        title={MODULES.clientes.label}
-        description="Cada cliente se identifica por su documento. Su historial y la valoración interna del equipo están en su ficha."
-        actions={
-          active ? (
-            <Button size="sm" variant="ghost" icon={<CloseIcon size={14} />} onClick={clear}>
-              Limpiar filtros
-            </Button>
-          ) : undefined
-        }
-      />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          accent="pink"
-          label="Clientes"
-          value={total}
-          hint={`${clients.filter((c) => c.isNew).length} nuevos en 30 días`}
-          icon={<UsersIcon size={15} />}
-        />
-        <StatCard
-          accent="green"
-          label="Recurrentes"
-          value={recurring}
-          hint={total ? `${Math.round((recurring / total) * 100)} % volvió al menos una vez` : "—"}
-          icon={<TrendIcon size={15} />}
-          tone="success"
-        />
-        {money ? (
-          <StatCard
-            accent="yellow"
-            label="Valor generado"
-            value={cop(value)}
-            hint={total ? `${cop(Math.round(value / total))} por cliente` : "—"}
-            icon={<TrendIcon size={15} />}
-          />
-        ) : (
-          <StatCard
-            accent="yellow"
-            label="Con estadías"
-            value={clients.filter((c) => c.stays > 0).length}
-            hint="se han hospedado al menos una vez"
-            icon={<TrendIcon size={15} />}
-          />
+      <header {...enter(0)} className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium text-ink-muted">Cada cliente se identifica por su documento; su historial y la valoración del equipo están en su ficha</p>
+          <h1 className="mt-1 text-[clamp(1.5rem,2.4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-ink">{MODULES.clientes.label}</h1>
+        </div>
+        {active && (
+          <Button size="sm" variant="ghost" icon={<CloseIcon size={14} />} onClick={clear}>
+            Limpiar filtros
+          </Button>
         )}
-        <StatCard
-          accent="blue"
-          label="Con alertas"
-          value={clients.filter(test.alertas).length}
-          hint="confianza baja o incidencias"
-          icon={<WarningIcon size={15} />}
-          tone={clients.some(test.alertas) ? "warning" : undefined}
-        />
+      </header>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <section {...enter(1)} aria-label="Resumen de clientes" className="flex flex-col gap-4 rounded-[22px] bg-ink p-6 text-paper xl:col-span-4">
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-[13px] font-medium text-paper/70">Clientes</h2>
+            <span aria-hidden="true" className="grid size-9 place-items-center rounded-full bg-paper/10">
+              <UsersIcon size={16} />
+            </span>
+          </div>
+          <p className="text-[56px] leading-none font-semibold tracking-[-0.04em]">{total}</p>
+          {total > 0 && (
+            <div className="flex flex-col gap-2">
+              <div role="img" aria-label={`Recurrentes: ${recurring}; una sola vez: ${total - recurring}`} className="flex h-2.5 gap-[2px]">
+                {recurring > 0 && <span className="h-full rounded-full" style={{ width: `${(recurring / total) * 100}%`, background: "var(--color-chart-a)" }} />}
+                {total - recurring > 0 && <span className="h-full flex-1 rounded-full" style={{ background: "var(--color-chart-b)" }} />}
+              </div>
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-paper/70">
+                <li className="flex items-center gap-1.5">
+                  <span aria-hidden="true" className="size-2 rounded-full" style={{ background: "var(--color-chart-a)" }} />
+                  {`Recurrentes ${recurring}`}
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span aria-hidden="true" className="size-2 rounded-full" style={{ background: "var(--color-chart-b)" }} />
+                  {`Una sola vez ${total - recurring}`}
+                </li>
+              </ul>
+            </div>
+          )}
+          <dl className="mt-auto grid grid-cols-3 gap-3">
+            {[
+              { k: "Nuevos (30 días)", v: String(fresh) },
+              { k: "Volvieron", v: total ? `${Math.round((recurring / total) * 100)} %` : "—" },
+              { k: "Con alertas", v: String(alerts) },
+            ].map((x) => (
+              <div key={x.k} className="min-w-0 border-l border-paper/15 pl-3">
+                <dt className="text-[12px] leading-tight text-paper/60">{x.k}</dt>
+                <dd className="mt-1 text-[18px] font-semibold">{x.v}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <div {...enter(1.6)} className="min-w-0 xl:col-span-4">
+          <Panel id="cl-top" title={money ? "Los que más han generado" : "Los que más se han hospedado"} subtitle={money ? `Entre todos: ${cop(value)}` : undefined}>
+            {top.length ? (
+              <ol className="-mx-2 flex flex-col">
+                {top.map((c, i) => (
+                  <li key={c.key}>
+                    <Link href={paths.cliente(c.key)} className="flex items-center gap-3 rounded-[12px] px-2 py-2 transition-colors hover:bg-panel">
+                      <span className={`w-4 text-center text-[12px] font-semibold tabular-nums ${i === 0 ? "text-ink" : "text-ink-subtle"}`}>{i + 1}</span>
+                      <Initials name={c.name} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-ink">{c.name}</span>
+                        <span className="block truncate text-[11.5px] text-ink-muted">{plural(c.stays, "estadía", "estadías")}</span>
+                      </span>
+                      {money && <span className="flex-none text-[13px] font-semibold text-ink tabular-nums">{short(c.value)}</span>}
+                    </Link>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="text-[13px] text-ink-muted">Aún no hay clientes.</p>
+            )}
+          </Panel>
+        </div>
+
+        <div {...enter(2.2)} className="min-w-0 xl:col-span-4">
+          <Panel id="cl-cities" title="De dónde vienen" subtitle="Ciudades más frecuentes">
+            {cities.length ? (
+              <ul className="flex flex-col gap-3">
+                {cities.map(([city, n]) => (
+                  <li key={city} className="flex flex-col gap-1.5">
+                    <span className="flex items-baseline justify-between gap-3 text-[12.5px]">
+                      <span className="truncate font-medium text-ink">{city}</span>
+                      <span className="flex-none text-ink-muted tabular-nums">{plural(n, "cliente", "clientes")}</span>
+                    </span>
+                    <span aria-hidden="true" className="block h-2 rounded-full bg-panel">
+                      <span className="block h-full rounded-full" style={{ width: `${(n / maxCity) * 100}%`, background: "var(--color-chart-a)" }} />
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-[13px] text-ink-muted">Las ciudades aparecen cuando los clientes las escriben al reservar.</p>
+            )}
+          </Panel>
+        </div>
       </div>
 
-      <div
-        role="search"
-        aria-label="Filtrar clientes"
-        className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)]"
-      >
-        <ListSearch id="cl-q" label="Buscar clientes" value={q} onChange={setQ} placeholder="Nombre, correo, celular, documento o ciudad" />
-        <div className="min-w-0">
-          <label htmlFor="cl-filtro" className="sr-only">
-            Mostrar
-          </label>
-          <Combobox
-            id="cl-filtro"
-            value={filter}
-            onChange={(v) => setFilter(v as Filter)}
-            searchable={false}
-            options={[
-              { value: "todos", label: "Todos los clientes", description: plural(total, "cliente", "clientes") },
-              { value: "nuevos", label: "Nuevos", description: `${clients.filter(test.nuevos).length} en los últimos 30 días` },
-              { value: "recurrentes", label: "Recurrentes", description: plural(recurring, "cliente", "clientes") },
-              { value: "frecuentes", label: "Más frecuentes", description: "El 20 % con más estadías" },
-              { value: "alertas", label: "Con alertas", description: plural(clients.filter(test.alertas).length, "cliente", "clientes") },
-            ]}
-          />
+      <div role="search" aria-label="Filtrar clientes" className="flex flex-wrap items-center gap-2">
+        <div className="w-full 2xl:w-[380px]">
+          <ListSearch id="cl-q" label="Buscar clientes" value={q} onChange={setQ} placeholder="Nombre, correo, celular, documento o ciudad" />
         </div>
-        <div className="min-w-0">
+        <Segmented
+          label="Mostrar"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: "todos", label: "Todos", count: total },
+            { value: "nuevos", label: "Nuevos", count: fresh },
+            { value: "recurrentes", label: "Recurrentes", count: recurring },
+            { value: "frecuentes", label: "Frecuentes", count: clients.filter(test.frecuentes).length },
+            { value: "alertas", label: "Con alertas", count: alerts },
+          ]}
+        />
+        <div className="w-full sm:ml-auto sm:w-[220px]">
           <label htmlFor="cl-orden" className="sr-only">
             Ordenar por
           </label>
@@ -240,83 +292,88 @@ export function ClientList() {
 
       {list.length ? (
         <>
-          <Card className={LIST_CARD}>
-            <table className="w-full text-[14px]">
-              <ListTableHead
-                columns={["Cliente", "Contacto", "Estadías", ...(money ? ["Valor"] : []), "Valoración", "Acciones"]}
-                right={["Valor", "Acciones"]}
-              />
-              <tbody className="divide-y divide-line">
-                {paged.rows.map((c) => (
-                  <tr
-                    key={c.key}
-                    onClick={() => router.push(paths.cliente(c.key))}
-                    className={`${LIST_ROW} ${c.key === newest ? LIST_ROW_LATEST : LIST_ROW_HOVER}`}
-                  >
-                    <td className="px-4 py-3">
-                      <span className="flex flex-wrap items-center gap-1.5 font-semibold text-ink">
-                        {c.name}
-                        {badges(c)}
-                      </span>
-                      <span className="block text-[12.5px] text-ink-muted">{`${c.docType} ${mask(c.docNumber)}`}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="block text-ink">{c.phone}</span>
-                      <span className="block max-w-[240px] truncate text-[12.5px] text-ink-muted">{[c.email, c.city].filter(Boolean).join(" · ")}</span>
-                    </td>
-                    <td className="px-4 py-3 text-ink tabular-nums">{c.stays}</td>
-                    {money && <td className="px-4 py-3 text-right font-semibold text-ink tabular-nums">{cop(c.value)}</td>}
-                    <td className="px-4 py-3">
-                      <span className="flex items-center gap-2">
-                        <Stars value={c.profile?.rating ?? null} size={13} />
-                        {c.profile && c.profile.trust !== "sin_evaluar" && <Badge tone={TRUST[c.profile.trust].tone}>{TRUST[c.profile.trust].label}</Badge>}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <ClientActions c={c} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <Paginator p={paged} noun="clientes" className="border-t border-line px-4 py-3" />
-          </Card>
-          <ul className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:hidden">
+          <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
             {paged.rows.map((c) => (
-              <li key={c.key}>
-                <Link href={paths.cliente(c.key)} className={`${LIST_MOBILE_ROW} ${c.key === newest ? "bg-yellow-soft/70" : "bg-paper"}`}>
-                  <span className="flex w-full items-center justify-between gap-2">
-                    <span className="flex min-w-0 flex-wrap items-center gap-1.5 font-semibold text-ink">
-                      {c.name}
-                      {badges(c)}
+              <li
+                key={c.key}
+                className={`flex min-w-0 flex-col rounded-[22px] bg-paper ring-1 ring-inset ${c.flagged || c.incidents > 0 ? "ring-error/35" : c.key === newest ? "ring-ink/25" : "ring-line"}`}
+              >
+                <Link href={paths.cliente(c.key)} className="flex min-w-0 flex-col gap-3.5 rounded-t-[22px] p-5 transition-colors hover:bg-panel/60">
+                  <span className="flex items-start gap-3">
+                    <Initials name={c.name} size={44} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[15px] font-semibold text-ink">{c.name}</span>
+                      <span className="block truncate text-[12px] text-ink-muted">{`${c.docType} ${mask(c.docNumber)}${c.city ? ` · ${c.city}` : ""}`}</span>
+                      <span className="mt-1.5 flex flex-wrap gap-1.5">{badges(c)}</span>
                     </span>
-                    <ChevronRightIcon size={16} className="flex-none text-ink-subtle" />
                   </span>
-                  <span className="truncate text-[12.5px] text-ink-muted">{[c.email, c.city].filter(Boolean).join(" · ")}</span>
-                  <span className="flex flex-wrap items-center gap-x-3 text-[13px] text-ink-muted">
-                    <span>{plural(c.stays, "estadía", "estadías")}</span>
-                    {money && <span className="font-semibold text-ink">{cop(c.value)}</span>}
-                    {c.profile?.rating ? <Stars value={c.profile.rating} size={12} /> : null}
+                  <dl className="grid grid-cols-3 gap-2 rounded-[14px] bg-panel px-3.5 py-2.5 ring-1 ring-line ring-inset">
+                    <div className="min-w-0">
+                      <dt className="text-[11px] text-ink-muted">Estadías</dt>
+                      <dd className="text-[15px] font-semibold text-ink">{c.stays}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-[11px] text-ink-muted">Noches</dt>
+                      <dd className="text-[15px] font-semibold text-ink">{c.nights}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-[11px] text-ink-muted">{money ? "Valor" : "Próxima"}</dt>
+                      <dd className="truncate text-[15px] font-semibold text-ink">{money ? short(c.value) : c.nextStay ? fmtDate(c.nextStay.checkIn) : "—"}</dd>
+                    </div>
+                  </dl>
+                  <span className="flex flex-col gap-0.5 text-[12.5px]">
+                    <span className="truncate text-ink">{c.phone || "Sin celular"}</span>
+                    <span className="truncate text-ink-muted">{c.email || "Sin correo"}</span>
                   </span>
                 </Link>
+                <div className="mt-auto flex items-center justify-between gap-2 border-t border-line px-4 py-2">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Stars value={c.profile?.rating ?? null} size={13} />
+                    {c.profile && c.profile.trust !== "sin_evaluar" && <Badge tone={TRUST[c.profile.trust].tone}>{TRUST[c.profile.trust].label}</Badge>}
+                  </span>
+                  <ClientActions c={c} />
+                </div>
               </li>
             ))}
           </ul>
-          <Paginator p={paged} noun="clientes" className="rounded-[20px] bg-paper px-4 py-3 ring-1 ring-line xl:hidden" />
+          <Paginator p={paged} noun="clientes" className="rounded-[18px] bg-paper px-4 py-3 ring-1 ring-line" />
         </>
       ) : (
-        <Card className="p-4">
+        <Panel id="cl-empty" title="Clientes">
           <EmptyState
             icon={<UsersIcon size={18} />}
             title={clients.length ? "No hay clientes con ese filtro" : "Aún no hay clientes"}
             text={clients.length ? "Prueba con otra búsqueda o filtro." : "Cada persona que reserve aparecerá aquí con su historial."}
             action={active ? <Button onClick={clear}>Limpiar filtros</Button> : undefined}
           />
-        </Card>
+        </Panel>
       )}
     </>
   );
 }
+
+// Iniciales del cliente en un círculo (los clientes no tienen foto).
+function Initials({ name, size = 32 }: { name: string; size?: number }) {
+  const letters = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0] ?? "")
+    .join("")
+    .toUpperCase();
+  return (
+    <span
+      aria-hidden="true"
+      className="grid flex-none place-items-center rounded-full bg-blue font-semibold text-ink"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.36) }}
+    >
+      {letters || "?"}
+    </span>
+  );
+}
+
+// $390 mil · $1,2 M
+const short = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(1).replace(".", ",")} M` : n >= 1e3 ? `$${Math.round(n / 1e3)} mil` : cop(n));
 
 // WhatsApp y ficha del cliente. Los clics no abren la ficha dos veces (la fila entera también la abre).
 function ClientActions({ c }: { c: ClientSummary }) {

@@ -8,7 +8,7 @@ export const PREF = {
   sound: "vf-admin-sound", // "on" | "off"
   mutedSounds: "vf-admin-sound-muted", // grupos silenciados, separados por coma
   calendarView: "vf-admin-calendar-view", // "auto" | vista del calendario
-  sidebar: "vf-admin-sidebar", // "full" | "mini" (barra lateral contraída)
+  sidebar: "vf-admin-sidebar", // "open" | "closed" (barra lateral contraída a iconos con el botón de menú o Ctrl + B)
   theme: "vf-admin-theme", // "light" | "dark" | "system" (apariencia; app/layout.tsx la lee antes de pintar)
   pageSize: "vf-admin-page-size", // prefijo: filas por página de cada tabla ("vf-admin-page-size:reservas")
   importMap: "vf-admin-import-map", // importación: habitación del archivo → cabaña y unidad del panel (JSON)

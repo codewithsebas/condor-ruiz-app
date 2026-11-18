@@ -40,6 +40,66 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_log: {
+        Row: {
+          actor_email: string | null
+          actor_id: string | null
+          actor_name: string | null
+          actor_role: string | null
+          action: string
+          changes: Json | null
+          entity: string
+          entity_id: string | null
+          id: number
+          ip: string | null
+          label: string | null
+          occurred_at: string
+          op_id: string | null
+          received_at: string
+          refs: Json | null
+          tx_id: number | null
+          user_agent: string | null
+        }
+        Insert: {
+          actor_email?: string | null
+          actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
+          action: string
+          changes?: Json | null
+          entity: string
+          entity_id?: string | null
+          id?: never
+          ip?: string | null
+          label?: string | null
+          occurred_at?: string
+          op_id?: string | null
+          received_at?: string
+          refs?: Json | null
+          tx_id?: number | null
+          user_agent?: string | null
+        }
+        Update: {
+          actor_email?: string | null
+          actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
+          action?: string
+          changes?: Json | null
+          entity?: string
+          entity_id?: string | null
+          id?: never
+          ip?: string | null
+          label?: string | null
+          occurred_at?: string
+          op_id?: string | null
+          received_at?: string
+          refs?: Json | null
+          tx_id?: number | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       admin_notifications: {
         Row: {
           body: string
@@ -1257,6 +1317,7 @@ export type Database = {
       }
       is_admin: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
+      is_superadmin: { Args: never; Returns: boolean }
       panel_role: { Args: never; Returns: string }
       place_unpaid: {
         Args: {

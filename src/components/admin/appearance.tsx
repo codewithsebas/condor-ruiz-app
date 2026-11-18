@@ -12,7 +12,7 @@ import { iconButtonClass } from "@/components/admin/ui";
 export type ThemePref = "light" | "dark" | "system";
 
 export const THEME_OPTIONS = [
-  { value: "light", label: "Claro", hint: "Fondo crema", icon: SunIcon },
+  { value: "light", label: "Claro", hint: "Fondo claro", icon: SunIcon },
   { value: "dark", label: "Oscuro", hint: "Para la noche o poca luz", icon: MoonIcon },
   { value: "system", label: "Sistema", hint: "Igual que este dispositivo", icon: MonitorIcon },
 ] as const;
@@ -50,8 +50,8 @@ export function useApplyTheme() {
   );
 }
 
-// Apariencia en el encabezado: el icono del modo actual abre un menú con las tres opciones. `compact`: celular.
-export function ThemeMenu({ compact = false }: { compact?: boolean }) {
+// Apariencia en el encabezado: el icono del modo actual abre un menú con las tres opciones.
+export function ThemeMenu() {
   const [pref, setPref] = useThemePref();
   const anchor = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -74,7 +74,7 @@ export function ThemeMenu({ compact = false }: { compact?: boolean }) {
         data-gesture="theme"
         {...(open ? {} : tip)}
         onClick={() => setOpen(!open)}
-        className={compact ? iconButtonClass("secondary") : iconButtonClass("primary")}
+        className={iconButtonClass("secondary")}
       >
         <Icon size={18} />
       </button>

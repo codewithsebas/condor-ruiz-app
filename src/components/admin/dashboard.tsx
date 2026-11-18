@@ -1,58 +1,44 @@
 "use client";
 
-// Inicio del panel: saludo con el resumen del día, indicadores principales, movimiento de hoy (lista + detalle), pagos
-// por completar; a la derecha, el mes, la agenda de hoy y las próximas llegadas. Las cifras de dinero viven en Finanzas.
+// Inicio del panel, como un tablero de control: el pulso del día en una franja; el dinero generado (mes, año, ticket,
+// ingreso por noche y los últimos 12 meses); lo que falta por cobrar; la ocupación de las próximas dos semanas; de dónde
+// llegan las reservas y qué cabaña genera más; el movimiento de hoy en una tabla; las próximas llegadas y los huéspedes.
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   ArrowRightIcon,
+  BathIcon,
   CalendarIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   ClockIcon,
   FileTextIcon,
-  GiftIcon,
   HomeIcon,
   LoginIcon,
   LogoutIcon,
-  PawIcon,
+  MoonIcon,
   PlusIcon,
   RefreshIcon,
+  UserPlusIcon,
+  UsersIcon,
   WalletIcon,
   WhatsAppIcon,
 } from "@/components/ui/icons";
-import { StatusPill } from "@/components/ui/status-pill";
-import { Combobox } from "@/components/ui/combobox";
-import { balanceDue, pendingOf } from "@/lib/admin-metrics";
-import { BLOCKING_STATUSES, busyBlocks, isFromBooking, staysWithoutData } from "@/lib/booking";
-import { MONTHS, addDays, cop, countdown, fmtDate, fmtFullDate, nightsBetween, parseISO, plural, waTo } from "@/lib/format";
+import { balanceDue, buildClients, delta, paymentState, paymentsOf, pendingOf, recordsByCode, valueOf } from "@/lib/admin-metrics";
+import { BLOCKING_STATUSES, busyBlocks, isFromBooking } from "@/lib/booking";
+import { MONTHS, MS, addDays, cop, countdown, fmtDate, fmtFullDate, nightsBetween, parseISO, plural, waTo } from "@/lib/format";
 import type { Reservation } from "@/lib/types";
 import { useAdmin } from "@/components/admin/context";
+import { Delta, Figure, MoreLink, Panel, money } from "@/components/admin/board";
 import { displayName } from "@/components/admin/account";
 import { Count, useTweened } from "@/components/admin/motion";
 import { useLabelTip, useTip } from "@/components/ui/floating";
 import { NewReservationDialog } from "@/components/admin/new-reservation";
 import { paths } from "@/components/admin/routes";
-import { ARRIVING, DEPARTING, rowOf } from "@/components/admin/shared";
-import {
-  ACCENT,
-  Badge,
-  Button,
-  CountBadge,
-  Deco,
-  EmptyState,
-  IconButton,
-  enter,
-  ModalPresence,
-  PageHeader,
-  Segmented,
-  buttonClass,
-  iconButtonClass,
-  type Accent,
-  type DecoShape,
-} from "@/components/admin/ui";
+import { ARRIVING, DEPARTING } from "@/components/admin/shared";
+import { Badge, Button, EmptyState, IconButton, ModalPresence, Segmented, buttonClass, enter, iconButtonClass } from "@/components/admin/ui";
 
 type Data = ReturnType<typeof useAdmin>["data"];
+
+/* ───────────── Cálculos ───────────── */
 
 function occupancy(d: Data, date: string) {
   let busy = 0;
@@ -68,13 +54,22 @@ function occupancy(d: Data, date: string) {
   return { busy, total, pc: total ? Math.round((busy / total) * 100) : 0 };
 }
 
+// Reservas concretadas (el abono se pagó).
+const SECURED = ["confirmed", "rescheduled", "checked_in", "completed"];
+
+// Primer día del mes `n` meses antes o después del de `day` ("2026-11-18", -1 → "2026-10-01").
+const monthStart = (day: string, n = 0) => {
+  const d = parseISO(day);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1)).toISOString().slice(0, 10);
+};
+const monthEnd = (first: string) => addDays(monthStart(first, 1), -1);
+
 const greeting = (now: number) => {
   const h = Number(new Intl.DateTimeFormat("es-CO", { timeZone: "America/Bogota", hour: "numeric", hourCycle: "h23" }).format(now));
   return h >= 5 && h < 12 ? "Buenos días" : h >= 12 && h < 19 ? "Buenas tardes" : "Buenas noches";
 };
 
-// Cómo saludar a quien entra: su primer nombre («Joab Giraldo» → «Joab»). Si la cuenta lleva el nombre de un negocio
-// («Cabañas El Cóndor del Ruiz»), el nombre completo.
+// Cómo saludar a quien entra: su primer nombre; si la cuenta lleva el nombre de un negocio («El Cóndor…»), completo.
 const ARTICLES = new Set(["el", "la", "los", "las", "un", "una"]);
 const callName = (name: string) => {
   const first = name.trim().split(/\s+/)[0] ?? "";
@@ -85,32 +80,19 @@ const callName = (name: string) => {
 const hhmm = (iso: string) =>
   new Intl.DateTimeFormat("es-CO", { timeZone: "America/Bogota", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
 
-// "a, b y c"
-const listOf = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}` : (xs[0] ?? ""));
+// Cuándo empiezan a moverse las cifras: cuando cada tarjeta ya entró (globals.css, «Entrada del panel»).
+const DELAY = 420;
 
-// Llegadas de la semana que se muestran en la lista; el resto se ve en el calendario.
-const UPCOMING_MAX = 6;
+/* ───────────── Página ───────────── */
 
 export function Dashboard() {
-  const { data, today, now, cabinLabel, reload } = useAdmin();
+  const { data, today, now, reload } = useAdmin();
   const [creating, setCreating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const calTip = useLabelTip("Abrir el calendario");
   const R = data.reservations;
   const arr = R.filter((r) => r.checkIn === today && ARRIVING.includes(r.status));
   const dep = R.filter((r) => r.checkOut === today && DEPARTING.includes(r.status));
-  const upcoming = R.filter((r) => r.checkIn > today && r.checkIn <= addDays(today, 7) && ARRIVING.includes(r.status)).sort((a, b) =>
-    a.checkIn < b.checkIn ? -1 : 1,
-  );
-  // Pagos por completar: abonos de reservas sin confirmar (la llegada más cercana primero) y saldos de huéspedes en estadía.
-  const deadlineOf = (r: Reservation) => (r.status === "pending_deposit" ? r.depositDueAt : "");
-  const pend = R.filter((r) => r.status === "pending_deposit" || balanceDue(r)).sort((a, b) => (deadlineOf(a) < deadlineOf(b) ? -1 : 1));
-
-  const todo = [
-    arr.length ? plural(arr.length, "llegada por recibir", "llegadas por recibir") : "",
-    dep.length ? plural(dep.length, "salida por entregar", "salidas por entregar") : "",
-    pend.length ? plural(pend.length, "pago por completar", "pagos por completar") : "",
-  ].filter(Boolean);
 
   const refresh = async () => {
     setRefreshing(true);
@@ -120,84 +102,48 @@ export function Dashboard() {
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-x-8 gap-y-8 xl:grid-cols-[minmax(0,1fr)_336px] 2xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="flex min-w-0 flex-col gap-7">
-          <div {...enter(0)}>
-            <PageHeader
-              title={`${greeting(now)}, ${callName(displayName(data.me))}`}
-              description={`${fmtFullDate(today)}. ${todo.length ? `Hoy tienes ${listOf(todo)}.` : "Hoy no hay llegadas, salidas ni pagos pendientes."}`}
-              actions={
-                <div className="flex gap-2 xl:hidden">
-                  <Link href={paths.calendario()} className={buttonClass()}>
-                    <CalendarIcon size={16} />
-                    Calendario
-                  </Link>
-                  <Button variant="primary" icon={<PlusIcon size={14} />} onClick={() => setCreating(true)}>
-                    Nueva reserva
-                  </Button>
-                </div>
-              }
-            />
-          </div>
-          <Highlights arr={arr} dep={dep} pend={pend} />
-          <div {...enter(5)}>
-            <TodayBoard arr={arr} dep={dep} />
-          </div>
-          <div {...enter(6)}>
-            <PendingList pend={pend} />
-          </div>
+      <header {...enter(0)} className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium text-ink-muted first-letter:uppercase">{fmtFullDate(today)}</p>
+          <h1 className="mt-1 text-[clamp(1.5rem,2.4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-ink">
+            {`${greeting(now)}, ${callName(displayName(data.me))}`}
+          </h1>
         </div>
+        <div className="flex items-center gap-2">
+          <IconButton label="Actualizar los datos" variant="secondary" data-gesture="refresh" onClick={refresh} disabled={refreshing}>
+            <RefreshIcon size={17} className={refreshing ? "animate-spin-fast" : ""} />
+          </IconButton>
+          <Link href={paths.calendario()} aria-label="Abrir el calendario" data-gesture="calendar" {...calTip} className={iconButtonClass("secondary")}>
+            <CalendarIcon size={17} />
+          </Link>
+          <Button variant="primary" data-tour="new-reservation" icon={<PlusIcon size={14} />} onClick={() => setCreating(true)}>
+            Nueva reserva
+          </Button>
+        </div>
+      </header>
 
-        <aside aria-label="Mes, agenda de hoy y próximas llegadas" className="flex min-w-0 flex-col gap-6">
-          <div {...enter(1.5)}>
-            <MiniCalendar />
-          </div>
-          <div {...enter(2.5, "pop")} className="flex items-center gap-2">
-            <Button variant="primary" size="lg" className="flex-1" icon={<PlusIcon size={15} />} onClick={() => setCreating(true)}>
-              Nueva reserva
-            </Button>
-            <IconButton label="Actualizar los datos" variant="secondary" size="lg" data-gesture="refresh" onClick={refresh} disabled={refreshing}>
-              <RefreshIcon size={18} className={refreshing ? "animate-spin-fast" : ""} />
-            </IconButton>
-            <Link href={paths.calendario()} aria-label="Abrir el calendario" data-gesture="calendar" {...calTip} className={iconButtonClass("secondary", "lg")}>
-              <CalendarIcon size={18} />
-            </Link>
-          </div>
-          <div {...enter(3.5)}>
-            <Agenda arr={arr} dep={dep} pend={pend} />
-          </div>
-          <div {...enter(4.5)}>
-            <ListSection
-              id="d-up"
-              title="Próximas llegadas"
-              count={upcoming.length}
-              empty="No hay llegadas en los próximos 7 días."
-              icon={<CalendarIcon size={18} />}
-              footer={
-                upcoming.length > UPCOMING_MAX && (
-                  <Link href={paths.calendario()} className="self-start text-[13px] font-semibold text-ink underline-offset-2 hover:underline">
-                    {`Y ${upcoming.length - UPCOMING_MAX} más: ver el calendario`}
-                  </Link>
-                )
-              }
-            >
-              {upcoming.slice(0, UPCOMING_MAX).map((r) => {
-                const x = rowOf(r, cabinLabel);
-                return (
-                  <Row
-                    key={r.code}
-                    href={paths.reserva(r.code)}
-                    icon={<CalendarIcon size={17} />}
-                    accent="blue"
-                    title={r.guest.fullName}
-                    meta={`${x.cabin} · ${x.nights}`}
-                    right={<Chip>{r.checkIn === addDays(today, 1) ? "Mañana" : fmtDate(r.checkIn)}</Chip>}
-                  />
-                );
-              })}
-            </ListSection>
-          </div>
-        </aside>
+      <Pulse arr={arr} dep={dep} />
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div {...enter(2)} className="min-w-0 xl:col-span-8">
+          <Revenue />
+        </div>
+        <div {...enter(2.6)} className="min-w-0 xl:col-span-4">
+          <ToCollect />
+        </div>
+        <div {...enter(3.2)} className="min-w-0 xl:col-span-8">
+          <Occupancy />
+        </div>
+        <div {...enter(3.8)} className="flex min-w-0 flex-col gap-4 xl:col-span-4">
+          <Sources />
+        </div>
+        <div {...enter(4.4)} className="min-w-0 xl:col-span-8">
+          <TodayTable arr={arr} dep={dep} />
+        </div>
+        <div {...enter(5)} className="flex min-w-0 flex-col gap-4 xl:col-span-4">
+          <Upcoming />
+          <Guests />
+        </div>
       </div>
 
       <ModalPresence>{creating && <NewReservationDialog draft={{}} onClose={() => setCreating(false)} />}</ModalPresence>
@@ -205,442 +151,590 @@ export function Dashboard() {
   );
 }
 
-/* ───────────── Piezas ───────────── */
+/* ───────────── Pulso del día ───────────── */
 
-// Etiqueta blanca de hora o fecha al final de una fila.
-function Chip({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <span className={`flex-none rounded-full bg-paper px-2.5 py-1 text-[12px] font-bold text-ink tabular-nums ${className}`}>{children}</span>;
-}
-
-// Cifra pequeña con su rótulo; la destacada lleva la línea debajo.
-function Stat({ value, label, strong = false }: { value: ReactNode; label: string; strong?: boolean }) {
-  return (
-    <div className={`min-w-0 pb-1.5 ${strong ? "border-b-2 border-ink" : "border-b-2 border-transparent"}`}>
-      <p className="text-[16px] leading-tight font-bold text-ink tabular-nums">{value}</p>
-      <p className="mt-1 line-clamp-2 text-[10.5px] leading-tight font-semibold tracking-[.05em] text-ink/65 uppercase">{label}</p>
-    </div>
-  );
-}
-
-// Tarjeta pastel de los indicadores principales.
-function Highlight({
-  id,
-  accent,
-  shape,
-  title,
-  action,
-  order,
-  className = "",
-  children,
-}: {
-  id: string;
-  order: number;
-  accent: Accent;
-  shape: DecoShape;
-  title: string;
-  action?: ReactNode;
-  className?: string;
-  children: ReactNode;
-}) {
+// Una franja con lo esencial de hoy, separada por divisores: quién llega, quién sale, quién está, la ocupación de esta
+// noche y lo que falta por cobrar.
+function Pulse({ arr, dep }: { arr: Reservation[]; dep: Reservation[] }) {
+  const { data, today } = useAdmin();
+  const tonight = occupancy(data, today);
+  const inHouse = data.reservations.filter((r) => r.status === "checked_in");
+  const guests = inHouse.reduce((n, r) => n + r.adults + r.children, 0);
+  const toCollect = data.reservations.reduce((s, r) => s + pendingOf(r).total, 0);
+  const [fill] = useTweened([tonight.pc], { delay: DELAY, duration: 900 });
+  const cells: { label: string; value: ReactNode; hint: string; icon: ReactNode }[] = [
+    { label: "Llegan hoy", value: <Count value={arr.length} delay={DELAY} />, hint: arr.length ? "por recibir" : "sin llegadas", icon: <LoginIcon size={16} /> },
+    { label: "Salen hoy", value: <Count value={dep.length} delay={DELAY} />, hint: dep.length ? "por entregar" : "sin salidas", icon: <LogoutIcon size={16} /> },
+    { label: "En estadía", value: <Count value={inHouse.length} delay={DELAY} />, hint: plural(guests, "huésped", "huéspedes"), icon: <HomeIcon size={16} /> },
+    { label: "Por cobrar", value: <Count value={toCollect} format={money} delay={DELAY} />, hint: "abonos y saldos", icon: <WalletIcon size={16} /> },
+  ];
   return (
     <section
-      aria-labelledby={id}
-      {...enter(order, "pop")}
-      className={`relative isolate flex min-h-[200px] min-w-0 flex-col gap-4 overflow-hidden rounded-[24px] p-5 ${ACCENT[accent].bg} ${className}`}
+      {...enter(1)}
+      data-tour="pulse"
+      aria-label="Resumen de hoy"
+      className="grid grid-cols-2 overflow-hidden rounded-[22px] bg-panel ring-1 ring-line ring-inset sm:grid-cols-3 lg:grid-cols-5"
     >
-      <Deco accent={accent} shape={shape} className="-top-7 -right-7 size-[140px] rotate-[16deg]" />
-      <div className="flex items-start justify-between gap-3">
-        <h2 id={id} className="text-[17px] leading-tight font-semibold tracking-[-0.01em] text-ink">
-          {title}
-        </h2>
-        {action}
+      {cells.map((c) => (
+        <div key={c.label} className="flex items-center gap-3 border-line px-5 py-4 not-last:border-r max-lg:nth-[2n]:border-r-0 max-sm:border-b">
+          <span aria-hidden="true" className="grid size-9 flex-none place-items-center rounded-full bg-paper text-ink ring-1 ring-line">
+            {c.icon}
+          </span>
+          <Figure label={c.label} value={c.value} hint={c.hint} />
+        </div>
+      ))}
+      <div className="col-span-2 flex flex-col justify-center gap-2 px-5 py-4 sm:col-span-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="truncate text-[12px] font-medium text-ink-muted">Ocupación hoy</p>
+          <p className="flex-none text-[19px] leading-tight font-semibold tracking-[-0.02em] whitespace-nowrap text-ink">
+            <Count value={tonight.pc} format={(n) => `${n} %`} delay={DELAY} />
+          </p>
+        </div>
+        <div
+          role="meter"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={tonight.pc}
+          aria-label="Ocupación esta noche"
+          className="h-2 overflow-hidden rounded-full"
+          style={{ background: "color-mix(in srgb, var(--color-chart-a) 18%, transparent)" }}
+        >
+          <span className="block h-full rounded-full" style={{ width: `${fill}%`, background: "var(--color-chart-a)" }} />
+        </div>
+        <p className="text-[11.5px] text-ink-subtle">{`${tonight.busy} de ${plural(tonight.total, "cabaña ocupada", "cabañas ocupadas")}`}</p>
       </div>
-      {children}
     </section>
   );
 }
 
-// Cuándo empiezan a moverse las cifras y gráficas de cada tarjeta: cuando la tarjeta ya entró (globals.css, «Entrada del
-// panel»: 120 ms + turno × 70 ms) y un poco más.
-const DATA_DELAY = { today: 440, occ: 500, pay: 550, week: 610 };
-const pct = (n: number) => `${n} %`;
+/* ───────────── Dinero generado ───────────── */
 
-function Highlights({ arr, dep, pend }: { arr: Reservation[]; dep: Reservation[]; pend: Reservation[] }) {
+// Tarjeta oscura con la cifra principal del tablero: lo cobrado este mes, su variación contra el mismo tramo del mes
+// anterior, el año, el ticket, el ingreso por noche, las noches vendidas y los últimos 12 meses en columnas.
+function Revenue() {
   const { data, today } = useAdmin();
   const tip = useTip();
-  const tonight = occupancy(data, today);
-  const inHouse = data.reservations.filter((r) => r.status === "checked_in").length;
-
-  // Llegadas por día en las próximas dos semanas (barras); los días sin llegadas, punteados.
-  const next = Array.from({ length: 14 }, (_, i) => {
-    const day = addDays(today, i);
-    return { day, n: data.reservations.filter((r) => r.checkIn === day && ARRIVING.concat(["checked_in"]).includes(r.status)).length };
-  });
-  const maxN = Math.max(1, ...next.map((d) => d.n));
-  // Las barras crecen desde la base una tras otra; si cambian los datos, suben o bajan a su nueva altura.
+  const m = useMemo(() => {
+    const records = recordsByCode(data.payments);
+    const pays = data.reservations.flatMap((r) => paymentsOf(r, records.get(r.code)));
+    const sum = (from: string, to: string) => pays.reduce((s, p) => (p.date >= from && p.date <= to ? s + p.amount : s), 0);
+    const first = monthStart(today);
+    const prevFirst = monthStart(today, -1);
+    const day = parseISO(today).getUTCDate();
+    const prevTo = addDays(prevFirst, day - 1) > monthEnd(prevFirst) ? monthEnd(prevFirst) : addDays(prevFirst, day - 1);
+    const mtd = sum(first, today);
+    const prevMtd = sum(prevFirst, prevTo);
+    const ytd = sum(`${today.slice(0, 4)}-01-01`, today);
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const f = monthStart(today, i - 11);
+      const d = parseISO(f);
+      return { key: f, label: MS[d.getUTCMonth()], full: `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`, value: sum(f, monthEnd(f)) };
+    });
+    // Estadías que llegan este mes ya concretadas: valor, noches y reservas.
+    const stays = data.reservations.filter((r) => SECURED.includes(r.status) && r.checkIn >= first && r.checkIn <= monthEnd(first));
+    const nights = stays.reduce((n, r) => n + nightsBetween(r.checkIn, r.checkOut), 0);
+    const value = stays.reduce((s, r) => s + valueOf(r), 0);
+    return {
+      mtd,
+      change: delta(mtd, prevMtd),
+      ytd,
+      months,
+      nights,
+      ticket: stays.length ? Math.round(value / stays.length) : 0,
+      adr: nights ? Math.round(value / nights) : 0,
+      monthLabel: MONTHS[parseISO(first).getUTCMonth()],
+    };
+  }, [data, today]);
+  const max = Math.max(1, ...m.months.map((x) => x.value));
   const heights = useTweened(
-    next.map((d) => (d.n ? 36 + (54 * d.n) / maxN : 36)),
-    { delay: DATA_DELAY.today, duration: 800, stagger: 40 },
+    m.months.map((x) => (x.value / max) * 100),
+    { delay: DELAY + 120, duration: 900, stagger: 35 },
   );
-
-  // Ocupación de dos semanas atrás a dos semanas adelante (línea), con hoy marcado.
-  const span = Array.from({ length: 29 }, (_, i) => ({ day: addDays(today, i - 14), ...occupancy(data, addDays(today, i - 14)) }));
-  const week = span.slice(14, 21);
-  const avg7 = Math.round(week.reduce((s, d) => s + d.pc, 0) / week.length);
-  const max30 = Math.max(...span.slice(14).map((d) => d.pc));
-
-  const deposits = pend.filter((r) => r.status === "pending_deposit");
-  const balances = pend.filter((r) => r.status !== "pending_deposit");
-  const proofs = data.proofs.filter((p) => p.status === "pending").length;
-  const toCollect = data.reservations.reduce((s, r) => s + pendingOf(r).total, 0);
-
-  // Próximos 7 días: llegadas, salidas, noches libres y baños fuera de servicio hoy.
-  const nextWeek = Array.from({ length: 7 }, (_, i) => addDays(today, i + 1));
-  const weekArr = data.reservations.filter((r) => nextWeek.includes(r.checkIn) && ARRIVING.includes(r.status)).length;
-  const weekDep = data.reservations.filter((r) => nextWeek.includes(r.checkOut) && DEPARTING.includes(r.status)).length;
-  const freeNights = nextWeek.reduce((n, d) => {
-    const o = occupancy(data, d);
-    return n + Math.max(0, o.total - o.busy);
-  }, 0);
-  const bathAlerts = (data.bathrooms ?? []).filter(
-    (b) => b.status !== "available" || (data.bathroomBlocks ?? []).some((k) => k.bathroomId === b.id && k.from <= today && today <= k.to),
-  ).length;
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <Highlight id="d-hl-today" order={1} accent="yellow" shape="sun" title="Hoy:">
-          <div className="grid grid-cols-3 gap-3 pr-10">
-            <Stat value={<Count value={arr.length} delay={DATA_DELAY.today} />} label="Llegan" strong />
-            <Stat value={<Count value={dep.length} delay={DATA_DELAY.today} />} label="Salen" />
-            <Stat value={<Count value={inHouse} delay={DATA_DELAY.today} />} label="En estadía" />
-          </div>
-          <div className="mt-auto">
-            <ol aria-label="Llegadas de los próximos 14 días" className="flex h-[88px] items-end gap-[5px]">
-              {next.map((d, i) => (
-                <li
-                  key={d.day}
-                  aria-label={`${fmtDate(d.day)}: ${plural(d.n, "llegada", "llegadas")}`}
-                  {...tip(
-                    () => (
-                      <span>
-                        <strong>{i === 0 ? "Hoy" : fmtDate(d.day)}</strong> · {plural(d.n, "llegada", "llegadas")}
-                      </span>
-                    ),
-                    { anchor: (el) => el.firstElementChild?.firstElementChild as HTMLElement | null },
-                  )}
-                  className="flex h-full flex-1 items-end justify-center"
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`relative block w-full max-w-[11px] rounded-full ${d.n ? "bg-ink" : "border-[1.5px] border-dashed border-ink/45"}`}
-                    style={{ height: `${heights[i]}%` }}
-                  >
-                    {/* Un poco arriba de la barra: de aquí sale el tooltip. */}
-                    <span className="absolute -top-2.5 left-1/2 size-0" />
-                  </span>
-                </li>
-              ))}
-            </ol>
-            <div aria-hidden="true" className="mt-2 flex justify-between text-[11px] font-semibold text-ink/70">
-              <span>Hoy</span>
-              <span>{fmtDate(next[next.length - 1].day)}</span>
-            </div>
-          </div>
-        </Highlight>
-
-        <Highlight id="d-hl-occ" order={1.8} accent="pink" shape="cabin" title="Ocupación:">
-          <div className="grid grid-cols-3 gap-3 pr-10 sm:max-w-[360px]">
-            <Stat value={<Count value={tonight.pc} format={pct} delay={DATA_DELAY.occ} />} label={`Esta noche (${tonight.busy} de ${tonight.total})`} strong />
-            <Stat value={<Count value={avg7} format={pct} delay={DATA_DELAY.occ} />} label="Promedio 7 días" />
-            <Stat value={<Count value={max30} format={pct} delay={DATA_DELAY.occ} />} label="Máximo 15 días" />
-          </div>
-          <OccupancyLine span={span} />
-        </Highlight>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <Highlight
-          id="d-hl-pay"
-          order={2.6}
-          accent="green"
-          shape="coin"
-          title="Por cobrar:"
-          action={
-            <Link
-              href={paths.pagos({ vista: "por-cobrar" })}
-              className="rounded-full bg-paper/70 px-3 py-1 text-[12.5px] font-semibold text-ink transition-colors hover:bg-paper"
-            >
-              Ver pagos
-            </Link>
-          }
-          className="min-h-[164px]"
-        >
-          <p className="text-[clamp(1.6rem,2.6vw,2.1rem)] leading-none font-bold tracking-[-0.03em] text-ink tabular-nums">
-            <Count value={toCollect} format={cop} delay={DATA_DELAY.pay} />
+    <section aria-labelledby="d-rev" className="flex h-full min-w-0 flex-col gap-6 rounded-[22px] bg-ink p-6 text-paper">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h2 id="d-rev" className="text-[13px] font-medium text-paper/70 first-letter:uppercase">
+            {`Dinero generado en ${m.monthLabel}`}
+          </h2>
+          <p className="mt-2 text-[clamp(2.4rem,4.4vw,3.4rem)] leading-none font-semibold tracking-[-0.04em]">
+            <Count value={m.mtd} format={cop} delay={DELAY} />
           </p>
-          <div className="mt-auto grid grid-cols-3 gap-3 sm:max-w-[420px]">
-            <Stat value={<Count value={deposits.length} delay={DATA_DELAY.pay} />} label="Abonos" />
-            <Stat value={<Count value={balances.length} delay={DATA_DELAY.pay} />} label="Saldos" />
-            <Stat value={<Count value={proofs} delay={DATA_DELAY.pay} />} label="Comprobantes" />
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Delta value={m.change} against="el mismo tramo del mes anterior" onDark />
+            {m.change !== null && <span className="text-[12px] text-paper/60">vs. el mismo tramo del mes anterior</span>}
           </div>
-        </Highlight>
+        </div>
+        <Link href={paths.finanzas()} className="inline-flex items-center gap-1 rounded-full bg-paper/10 px-3 py-1.5 text-[12.5px] font-medium text-paper transition-colors hover:bg-paper/20">
+          Finanzas
+          <ArrowRightIcon size={13} />
+        </Link>
+      </div>
 
-        <Highlight
-          id="d-hl-week"
-          order={3.4}
-          accent="blue"
-          shape="calendar"
-          title="Próximos 7 días:"
-          action={
-            <Link
-              href={paths.calendario()}
-              className="rounded-full bg-paper/70 px-3 py-1 text-[12.5px] font-semibold text-ink transition-colors hover:bg-paper"
-            >
-              Calendario
-            </Link>
-          }
-          className="min-h-[164px]"
-        >
-          <p className="text-[clamp(1.6rem,2.6vw,2.1rem)] leading-none font-bold tracking-[-0.03em] text-ink tabular-nums">
-            <Count value={weekArr} format={(n) => plural(n, "llegada", "llegadas")} delay={DATA_DELAY.week} />
-          </p>
-          <div className="mt-auto grid grid-cols-3 gap-3 pr-8">
-            <Stat value={<Count value={weekDep} delay={DATA_DELAY.week} />} label="Salidas" />
-            <Stat value={<Count value={freeNights} delay={DATA_DELAY.week} />} label="Noches libres" />
-            <Stat value={<Count value={bathAlerts} delay={DATA_DELAY.week} />} label="Baños con aviso" />
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+        {[
+          { k: `En ${today.slice(0, 4)}`, v: <Count value={m.ytd} format={money} delay={DELAY} /> },
+          { k: "Ticket promedio", v: <Count value={m.ticket} format={money} delay={DELAY} /> },
+          { k: "Ingreso por noche", v: <Count value={m.adr} format={money} delay={DELAY} /> },
+          { k: "Noches vendidas", v: <Count value={m.nights} delay={DELAY} /> },
+        ].map((x) => (
+          <div key={x.k} className="min-w-0 border-l border-paper/15 pl-3">
+            <dt className="truncate text-[12px] text-paper/60">{x.k}</dt>
+            <dd className="mt-1 text-[18px] leading-tight font-semibold tracking-[-0.02em]">{x.v}</dd>
           </div>
-        </Highlight>
-      </div>
-    </div>
-  );
-}
-
-// Curva suave (Catmull-Rom → Bézier) por los puntos.
-function smooth(pts: [number, number][]) {
-  let d = `M${pts[0][0]},${pts[0][1].toFixed(1)}`;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] ?? pts[i];
-    const [p1, p2] = [pts[i], pts[i + 1]];
-    const p3 = pts[i + 2] ?? p2;
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
-    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-    d += ` C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0]},${p2[1].toFixed(1)}`;
-  }
-  return d;
-}
-
-// Ocupación diaria (la línea se aclara hacia adelante) con la marca de hoy, como en un monitor.
-function OccupancyLine({ span }: { span: { day: string; pc: number; busy: number; total: number }[] }) {
-  const tip = useTip();
-  const mid = Math.floor(span.length / 2);
-  const W = 280;
-  const step = W / (span.length - 1);
-  const y = (pc: number) => 88 - pc * 0.76;
-  // La línea sale de la base y sube o baja hasta la ocupación de cada día; si cambia, se mueve suave a la nueva forma.
-  const pcs = useTweened(
-    span.map((d) => d.pc),
-    { delay: DATA_DELAY.occ, duration: 1200, stagger: 12 },
-  );
-  const pts = pcs.map((pc, i) => [i * step, y(pc)] as [number, number]);
-  const ticks = [0, 7, mid, mid + 7, span.length - 1];
-  return (
-    <figure className="mt-auto" aria-label={`Ocupación diaria: hoy ${span[mid].pc} %`}>
-      <div className="relative h-[104px]">
-        <svg viewBox={`0 0 ${W} 100`} preserveAspectRatio="none" aria-hidden="true" className="absolute inset-0 size-full overflow-visible">
-          <path d={smooth(pts.slice(0, mid + 1))} fill="none" stroke="var(--color-ink)" strokeWidth={1.75} vectorEffect="non-scaling-stroke" />
-          <path d={smooth(pts.slice(mid))} fill="none" stroke="var(--color-ink)" strokeOpacity={0.4} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
-        </svg>
-        {/* Marca de hoy: punto y línea punteada hasta el eje. */}
-        <span
-          aria-hidden="true"
-          className="absolute bottom-0 w-0 border-l-[1.5px] border-dashed border-ink/55"
-          style={{ left: "50%", top: `${y(pcs[mid])}%` }}
-        />
-        <span
-          aria-hidden="true"
-          className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink ring-[3px] ring-pink"
-          style={{ left: "50%", top: `${y(pcs[mid])}%` }}
-        />
-        {/* Zonas invisibles por día para el detalle al pasar el mouse. */}
-        <ol aria-hidden="true" className="absolute inset-0 flex">
-          {span.map((d, i) => (
-            <li
-              key={d.day}
-              className="h-full flex-1"
-              {...tip(
-                () => (
-                  <span>
-                    <strong>{fmtDate(d.day)}</strong> · {d.pc} % · {d.busy} de {d.total} cabañas
-                  </span>
-                ),
-                { anchor: (el) => el.firstElementChild as HTMLElement | null },
-              )}
-            >
-              {/* Un poco arriba del punto de ese día en la línea: el tooltip sale de aquí y no de lo alto de la zona. */}
-              <span className="absolute size-0" style={{ left: `${(i / (span.length - 1)) * 100}%`, top: `calc(${y(pcs[i])}% - 10px)` }} />
-            </li>
-          ))}
-        </ol>
-      </div>
-      <div aria-hidden="true" className="mt-2 grid grid-cols-5 text-[11px] font-semibold text-ink/70">
-        {ticks.map((t, i) => (
-          <span key={t} className={`${i === 0 ? "text-left" : i === ticks.length - 1 ? "text-right" : "text-center"} ${t === mid ? "font-bold text-ink" : ""}`}>
-            {t === mid ? "Hoy" : fmtDate(span[t].day)}
-          </span>
         ))}
-      </div>
-    </figure>
-  );
-}
+      </dl>
 
-/* ───────────── Listas ───────────── */
-
-function ListSection({
-  id,
-  title,
-  count,
-  empty,
-  icon,
-  actions,
-  footer,
-  children,
-}: {
-  id: string;
-  title: string;
-  count: number;
-  empty: string;
-  icon: ReactNode;
-  actions?: ReactNode;
-  footer?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section aria-labelledby={id} className="flex min-w-0 flex-col gap-3">
-      <div className="flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <h2 id={id} className="flex items-center gap-2 text-[18px] leading-tight font-semibold tracking-[-0.015em] text-ink">
-          {title} <CountBadge n={count} />
-        </h2>
-        {actions}
-      </div>
-      {count ? <ul className="flex flex-col gap-2">{children}</ul> : <EmptyState compact icon={icon} title={empty} />}
-      {footer}
+      {/* Últimos 12 meses: una sola serie; el mes en curso resaltado y los anteriores atenuados. */}
+      <figure className="mt-auto" aria-label="Dinero cobrado en los últimos 12 meses">
+        <ol className="flex h-[132px] items-end gap-1.5 border-b border-paper/15">
+          {m.months.map((x, i) => {
+            const current = i === m.months.length - 1;
+            return (
+              <li
+                key={x.key}
+                aria-label={`${x.full}: ${cop(x.value)}`}
+                {...tip(
+                  () => (
+                    <span>
+                      <strong className="first-letter:uppercase">{x.full}</strong> · {cop(x.value)}
+                    </span>
+                  ),
+                  { anchor: (el) => el.firstElementChild as HTMLElement | null },
+                )}
+                className="flex h-full flex-1 items-end justify-center"
+              >
+                <span
+                  aria-hidden="true"
+                  className={`block w-full max-w-[24px] rounded-t-[4px] transition-colors ${current ? "bg-paper" : "bg-paper/25 hover:bg-paper/45"}`}
+                  style={{ height: `${Math.max(x.value ? 3 : 1, heights[i])}%` }}
+                />
+              </li>
+            );
+          })}
+        </ol>
+        <div aria-hidden="true" className="mt-2 flex gap-1.5">
+          {m.months.map((x, i) => (
+            <span key={x.key} className={`flex-1 text-center text-[11px] ${i === m.months.length - 1 ? "font-semibold text-paper" : "text-paper/50"}`}>
+              {x.label}
+            </span>
+          ))}
+        </div>
+      </figure>
     </section>
   );
 }
 
-// Fila de las listas del inicio: icono en círculo de color, nombre, detalle y una etiqueta al final.
-function Row({
-  href,
-  onClick,
-  selected = false,
-  icon,
-  accent,
-  title,
-  meta,
-  right,
-}: {
-  href?: string;
-  onClick?: () => void;
-  selected?: boolean;
-  icon: ReactNode;
-  accent: Accent;
-  title: string;
-  meta: string;
-  right?: ReactNode;
-}) {
-  const cls = `group flex w-full min-w-0 items-center gap-3 rounded-[18px] py-2.5 pr-3 pl-2.5 text-left transition-colors duration-150 ${selected ? "bg-pink" : "bg-panel hover:bg-line/80"}`;
-  const body = (
-    <>
-      <span aria-hidden="true" className={`grid size-10 flex-none place-items-center rounded-full text-ink ${selected ? "bg-paper/70" : ACCENT[accent].bg}`}>
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14px] leading-snug font-semibold text-ink">{title}</span>
-        <span className={`block truncate text-[12.5px] leading-snug ${selected ? "text-ink/75" : "text-ink-muted"}`}>{meta}</span>
-      </span>
-      {right}
-    </>
-  );
+/* ───────────── Por cobrar ───────────── */
+
+function ToCollect() {
+  const { data, now } = useAdmin();
+  const tip = useTip();
+  const R = data.reservations;
+  const deadlineOf = (r: Reservation) => (r.status === "pending_deposit" ? r.depositDueAt : "");
+  const pend = R.filter((r) => r.status === "pending_deposit" || balanceDue(r)).sort((a, b) => (deadlineOf(a) < deadlineOf(b) ? -1 : 1));
+  const deposits = R.reduce((s, r) => s + pendingOf(r).deposit, 0);
+  const balances = R.reduce((s, r) => s + pendingOf(r).balance, 0);
+  const total = deposits + balances;
+  const proofs = data.proofs.filter((p) => p.status === "pending");
+  const parts = [
+    { key: "deposit", label: "Abonos", value: deposits, color: "var(--color-chart-a)" },
+    { key: "balance", label: "Saldos", value: balances, color: "var(--color-chart-b)" },
+  ];
+
   return (
-    <li>
-      {href ? (
-        <Link href={href} className={cls}>
-          {body}
-          <ChevronRightIcon size={15} className="flex-none text-ink-subtle transition-transform duration-150 motion-safe:group-hover:translate-x-0.5" />
-        </Link>
-      ) : (
-        <button type="button" onClick={onClick} aria-pressed={selected} className={cls}>
-          {body}
-        </button>
+    <Panel id="d-collect" title="Por cobrar" action={<MoreLink href={paths.pagos({ vista: "por-cobrar" })}>Pagos</MoreLink>}>
+      <p className="text-[30px] leading-none font-semibold tracking-[-0.03em] text-ink">
+        <Count value={total} format={cop} delay={DELAY} />
+      </p>
+      {/* Barra dividida en abonos y saldos (2 px de aire entre partes), con su leyenda y los valores. */}
+      {total > 0 && (
+        <div className="flex flex-col gap-2.5">
+          <div role="img" aria-label={parts.map((p) => `${p.label}: ${cop(p.value)}`).join(", ")} className="flex h-2 gap-[2px]">
+            {parts
+              .filter((p) => p.value > 0)
+              .map((p) => (
+                <span
+                  key={p.key}
+                  {...tip(() => (
+                    <span>
+                      <strong>{p.label}</strong> · {cop(p.value)} · {Math.round((p.value / total) * 100)} %
+                    </span>
+                  ))}
+                  className="h-full rounded-full"
+                  style={{ width: `${(p.value / total) * 100}%`, background: p.color }}
+                />
+              ))}
+          </div>
+          <ul className="flex flex-wrap gap-x-5 gap-y-1">
+            {parts.map((p) => (
+              <li key={p.key} className="flex items-center gap-1.5 text-[12.5px] text-ink-muted">
+                <span aria-hidden="true" className="size-2 rounded-full" style={{ background: p.color }} />
+                {p.label}
+                <span className="font-semibold text-ink">{money(p.value)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
-    </li>
+      {proofs.length > 0 && (
+        <Link
+          href={paths.pagos()}
+          className="flex items-center gap-2 rounded-[14px] bg-info-soft px-3 py-2 text-[12.5px] font-medium text-info transition-opacity hover:opacity-85"
+        >
+          <FileTextIcon size={15} />
+          {plural(proofs.length, "comprobante por revisar", "comprobantes por revisar")}
+          <ArrowRightIcon size={13} className="ml-auto" />
+        </Link>
+      )}
+      {pend.length ? (
+        <ul className="-mx-2 flex flex-col">
+          {pend.slice(0, 4).map((r) => {
+            const bd = balanceDue(r);
+            const deadline = deadlineOf(r);
+            const urgent = deadline && (Date.parse(deadline) - now) / 6e4 < 60;
+            return (
+              <li key={r.code}>
+                <Link href={paths.reserva(r.code)} className="flex items-center gap-3 rounded-[12px] px-2 py-2 transition-colors hover:bg-panel">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-medium text-ink">{r.guest.fullName}</span>
+                    <span className="block truncate text-[11.5px] text-ink-muted">
+                      {bd ? `Saldo · en estadía` : `Abono · llega ${fmtDate(r.checkIn)}`}
+                    </span>
+                  </span>
+                  <span className="flex flex-none flex-col items-end gap-0.5">
+                    <span className="text-[13px] font-semibold text-ink tabular-nums">{money(bd ? bd.amount : r.quote.deposit)}</span>
+                    {deadline && (
+                      <span className={`inline-flex items-center gap-1 text-[11px] font-medium tabular-nums ${urgent ? "text-error" : "text-ink-subtle"}`}>
+                        <ClockIcon size={11} />
+                        <span className="sr-only">La retención vence en </span>
+                        {countdown(deadline)}
+                      </span>
+                    )}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="mt-auto text-[13px] text-ink-muted">No hay abonos ni saldos pendientes.</p>
+      )}
+    </Panel>
   );
 }
 
-type Move = { r: Reservation; kind: "llegada" | "salida" | "estadia"; time: string };
-type MoveFilter = "todo" | "llegada" | "salida" | "estadia";
-const MOVE_META: Record<Move["kind"], { label: string; accent: Accent; icon: ReactNode }> = {
-  llegada: { label: "Llegada", accent: "pink", icon: <LoginIcon size={17} /> },
-  salida: { label: "Salida", accent: "blue", icon: <LogoutIcon size={17} /> },
-  estadia: { label: "En estadía", accent: "green", icon: <HomeIcon size={17} /> },
+/* ───────────── Ocupación ───────────── */
+
+// Las próximas dos semanas en columnas: el alto es la ocupación de cada noche y debajo, las llegadas del día.
+function Occupancy() {
+  const { data, today } = useAdmin();
+  const tip = useTip();
+  const days = Array.from({ length: 14 }, (_, i) => {
+    const day = addDays(today, i);
+    return {
+      day,
+      ...occupancy(data, day),
+      arrivals: data.reservations.filter((r) => r.checkIn === day && ARRIVING.concat(["checked_in"]).includes(r.status)).length,
+    };
+  });
+  const week = days.slice(0, 7);
+  const avg7 = Math.round(week.reduce((s, d) => s + d.pc, 0) / week.length);
+  const free7 = week.reduce((n, d) => n + Math.max(0, d.total - d.busy), 0);
+  const peak = days.reduce((a, b) => (b.pc > a.pc ? b : a), days[0]);
+  const heights = useTweened(
+    days.map((d) => d.pc),
+    { delay: DELAY + 200, duration: 900, stagger: 30 },
+  );
+
+  return (
+    <Panel id="d-occ" title="Ocupación de las próximas dos semanas" action={<MoreLink href={paths.calendario()}>Calendario</MoreLink>}>
+      <div className="grid grid-cols-3 gap-4 sm:max-w-[460px]">
+        <Figure label="Promedio 7 días" value={<Count value={avg7} format={(n) => `${n} %`} delay={DELAY} />} />
+        <Figure label="Noches libres (7 días)" value={<Count value={free7} delay={DELAY} />} />
+        <Figure label="Noche más llena" value={`${peak.pc} %`} hint={peak.day === today ? "hoy" : fmtDate(peak.day)} />
+      </div>
+      <figure aria-label="Ocupación por noche en los próximos 14 días" className="mt-auto">
+        <div className="relative">
+          {/* Líneas guía al 50 y 100 %. */}
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-[150px]">
+            {[0, 50].map((t) => (
+              <span key={t} className="absolute inset-x-0 border-t border-line" style={{ top: `${t}%` }}>
+                <span className="absolute -top-2 right-0 bg-paper pl-1 text-[10.5px] text-ink-subtle tabular-nums">{`${100 - t} %`}</span>
+              </span>
+            ))}
+          </div>
+          <ol className="relative flex h-[150px] items-end gap-1.5 border-b border-line-strong pr-9">
+            {days.map((d, i) => (
+              <li
+                key={d.day}
+                aria-label={`${fmtDate(d.day)}: ${d.pc} %, ${plural(d.arrivals, "llegada", "llegadas")}`}
+                {...tip(
+                  () => (
+                    <span>
+                      <strong>{i === 0 ? "Hoy" : fmtDate(d.day)}</strong> · {d.pc} % · {d.busy} de {d.total} cabañas · {plural(d.arrivals, "llegada", "llegadas")}
+                    </span>
+                  ),
+                  { anchor: (el) => el.firstElementChild as HTMLElement | null },
+                )}
+                className="flex h-full flex-1 items-end justify-center"
+              >
+                <span
+                  aria-hidden="true"
+                  className="block w-full max-w-[24px] rounded-t-[4px] transition-opacity hover:opacity-80"
+                  style={{
+                    height: `${Math.max(d.pc ? 3 : 1.5, heights[i])}%`,
+                    background: i === 0 ? "var(--color-chart-a)" : "color-mix(in srgb, var(--color-chart-a) 45%, var(--color-paper))",
+                  }}
+                />
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div aria-hidden="true" className="mt-2 flex gap-1.5 pr-9">
+          {days.map((d, i) => {
+            const date = parseISO(d.day);
+            return (
+              <span key={d.day} className="flex flex-1 flex-col items-center gap-1">
+                <span className={`text-[11px] tabular-nums ${i === 0 ? "font-semibold text-ink" : "text-ink-muted"}`}>
+                  {i === 0 ? "Hoy" : date.getUTCDate()}
+                </span>
+                <span className={`grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-semibold tabular-nums ${d.arrivals ? "bg-ink text-paper" : "text-transparent"}`}>
+                  {d.arrivals || 0}
+                </span>
+              </span>
+            );
+          })}
+        </div>
+        <figcaption className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-ink-subtle">
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden="true" className="h-2.5 w-2.5 rounded-[3px]" style={{ background: "var(--color-chart-a)" }} />
+            Ocupación por noche (hoy en el tono fuerte)
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden="true" className="size-2.5 rounded-full bg-ink" />
+            Número de llegadas del día
+          </span>
+        </figcaption>
+      </figure>
+    </Panel>
+  );
+}
+
+/* ───────────── Canales y cabañas ───────────── */
+
+// De dónde llegan las estadías de este mes (directas o Booking) y cuánto cobró cada cabaña.
+function Sources() {
+  const { data, today } = useAdmin();
+  const tip = useTip();
+  const first = monthStart(today);
+  const last = monthEnd(first);
+  const stays = data.reservations.filter((r) => r.checkIn >= first && r.checkIn <= last && (SECURED.includes(r.status) || r.status === "pending_deposit"));
+  const booking = stays.filter(isFromBooking).length;
+  const channels = [
+    { key: "direct", label: "Directas", value: stays.length - booking, color: "var(--color-chart-a)" },
+    { key: "booking", label: "Booking", value: booking, color: "var(--color-chart-b)" },
+  ];
+  const records = recordsByCode(data.payments);
+  const byCabin = data.cabinTypes
+    .map((c) => ({
+      id: c.id,
+      label: c.nombre,
+      value: data.reservations
+        .filter((r) => r.cabinTypeId === c.id)
+        .flatMap((r) => paymentsOf(r, records.get(r.code)))
+        .reduce((s, p) => (p.date >= first && p.date <= today ? s + p.amount : s), 0),
+    }))
+    .sort((a, b) => b.value - a.value);
+  const top = Math.max(1, ...byCabin.map((c) => c.value));
+  const widths = useTweened(
+    byCabin.map((c) => (c.value / top) * 100),
+    { delay: DELAY + 260, duration: 900, stagger: 60 },
+  );
+
+  return (
+    <>
+      <Panel id="d-src" title="Reservas del mes por canal">
+        <p className="text-[13px] text-ink-muted">
+          <span className="text-[22px] font-semibold tracking-[-0.02em] text-ink">{stays.length}</span>{" "}
+          {stays.length === 1 ? "estadía llega" : "estadías llegan"} este mes
+        </p>
+        {stays.length > 0 && (
+          <div className="flex flex-col gap-2.5">
+            <div role="img" aria-label={channels.map((c) => `${c.label}: ${c.value}`).join(", ")} className="flex h-7 gap-[2px]">
+              {channels
+                .filter((c) => c.value > 0)
+                .map((c) => {
+                  const share = Math.round((c.value / stays.length) * 100);
+                  return (
+                    <span
+                      key={c.key}
+                      {...tip(() => (
+                        <span>
+                          <strong>{c.label}</strong> · {c.value} · {share} %
+                        </span>
+                      ))}
+                      className="flex h-full items-center rounded-[4px] px-2 text-[11.5px] font-semibold text-white"
+                      style={{ width: `${share}%`, background: c.color }}
+                    >
+                      {share >= 18 ? `${share} %` : ""}
+                    </span>
+                  );
+                })}
+            </div>
+            <ul className="flex flex-wrap gap-x-5 gap-y-1">
+              {channels.map((c) => (
+                <li key={c.key} className="flex items-center gap-1.5 text-[12.5px] text-ink-muted">
+                  <span aria-hidden="true" className="size-2 rounded-full" style={{ background: c.color }} />
+                  {c.label}
+                  <span className="font-semibold text-ink">{c.value}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Panel>
+
+      <Panel id="d-cab" title="Cobrado por cabaña este mes" className="flex-1">
+        {byCabin.some((c) => c.value) ? (
+          <ul className="flex flex-col gap-3">
+            {byCabin.map((c, i) => (
+              <li key={c.id} className="flex flex-col gap-1.5">
+                <div className="flex items-baseline justify-between gap-3 text-[12.5px]">
+                  <span className="truncate font-medium text-ink">{c.label}</span>
+                  <span className="flex-none font-semibold text-ink tabular-nums">{money(c.value)}</span>
+                </div>
+                <span aria-hidden="true" className="block h-2 rounded-full bg-panel">
+                  <span className="block h-full rounded-full" style={{ width: `${widths[i]}%`, background: "var(--color-chart-a)" }} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-[13px] text-ink-muted">Aún no hay pagos este mes.</p>
+        )}
+      </Panel>
+    </>
+  );
+}
+
+/* ───────────── Movimiento de hoy ───────────── */
+
+type Move = { r: Reservation; kind: "llegada" | "salida" | "estadia" | "plazo"; time: string };
+type MoveFilter = "todo" | Move["kind"];
+const MOVE_META: Record<Move["kind"], { label: string; icon: ReactNode; dot: string }> = {
+  llegada: { label: "Llegada", icon: <LoginIcon size={14} />, dot: "bg-pink" },
+  salida: { label: "Salida", icon: <LogoutIcon size={14} />, dot: "bg-blue" },
+  estadia: { label: "En estadía", icon: <HomeIcon size={14} />, dot: "bg-green" },
+  plazo: { label: "Vence abono", icon: <ClockIcon size={14} />, dot: "bg-yellow" },
 };
 
-// Quién llega, quién sale y quién está alojado hoy, con el detalle de la reserva elegida al lado.
-function TodayBoard({ arr, dep }: { arr: Reservation[]; dep: Reservation[] }) {
-  const { data, today, cabinLabel } = useAdmin();
+// Todo lo que pasa hoy en una tabla ordenada por hora: llegadas, salidas, estadías en curso y abonos que vencen hoy.
+function TodayTable({ arr, dep }: { arr: Reservation[]; dep: Reservation[] }) {
+  const { data, today, now, cabinLabel } = useAdmin();
   const s = data.site.settings;
   const [filter, setFilter] = useState<MoveFilter>("todo");
-  const [picked, setPicked] = useState<string | null>(null);
   const staying = data.reservations.filter((r) => r.status === "checked_in" && r.checkIn < today && r.checkOut > today);
+  const endOfDay = Date.parse(`${today}T23:59:59-05:00`);
+  const due = data.reservations.filter((r) => r.status === "pending_deposit" && Date.parse(r.depositDueAt) <= endOfDay && Date.parse(r.depositDueAt) > now);
   const moves: Move[] = [
     ...arr.map((r) => ({ r, kind: "llegada" as const, time: r.estimatedArrival || s.checkInStart })),
     ...dep.map((r) => ({ r, kind: "salida" as const, time: s.checkOutTime })),
+    ...due.map((r) => ({ r, kind: "plazo" as const, time: hhmm(r.depositDueAt) })),
     ...staying.map((r) => ({ r, kind: "estadia" as const, time: "" })),
   ].sort((a, b) => ((a.time || "99") < (b.time || "99") ? -1 : 1));
   const list = moves.filter((m) => filter === "todo" || m.kind === filter);
-  const sel = list.find((m) => `${m.kind}:${m.r.code}` === picked) ?? list[0];
   const count = (k: Move["kind"]) => moves.filter((m) => m.kind === k).length;
 
   return (
-    <section aria-labelledby="d-moves" className="flex min-w-0 flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <h2 id="d-moves" className="flex items-center gap-2 text-[18px] leading-tight font-semibold tracking-[-0.015em] text-ink">
-          Movimiento de hoy <CountBadge n={moves.length} />
-        </h2>
+    <Panel
+      id="d-today"
+      title={`Hoy, ${fmtDate(today)}`}
+      action={
         <Segmented
           label="Mostrar"
           size="sm"
           value={filter}
           onChange={setFilter}
           options={[
-            { value: "todo", label: "Todo" },
+            { value: "todo", label: "Todo", count: moves.length },
             { value: "llegada", label: "Llegadas", count: count("llegada") },
             { value: "salida", label: "Salidas", count: count("salida") },
             { value: "estadia", label: "En estadía", count: count("estadia") },
           ]}
         />
-      </div>
+      }
+    >
       {list.length ? (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1fr)]">
-          <ul className="flex min-w-0 flex-col gap-2">
-            {list.map((m) => {
-              const meta = MOVE_META[m.kind];
-              return (
-                <Row
-                  key={`${m.kind}:${m.r.code}`}
-                  onClick={() => setPicked(`${m.kind}:${m.r.code}`)}
-                  selected={sel === m}
-                  icon={meta.icon}
-                  accent={meta.accent}
-                  title={m.r.guest.fullName}
-                  meta={`${meta.label} · ${cabinLabel(m.r.cabinTypeId, m.r.unit)}`}
-                  right={<Chip>{m.time || `Sale ${fmtDate(m.r.checkOut)}`}</Chip>}
-                />
-              );
-            })}
-          </ul>
-          {sel && <MoveDetail m={sel} />}
+        <div className="-mx-5 overflow-x-auto">
+          <table className="w-full min-w-[620px] border-collapse text-left text-[13px]">
+            <thead>
+              <tr className="border-y border-line text-[11.5px] font-medium text-ink-muted">
+                <th scope="col" className="w-[72px] py-2 pl-5 font-medium">
+                  Hora
+                </th>
+                <th scope="col" className="py-2 font-medium">
+                  Huésped
+                </th>
+                <th scope="col" className="py-2 font-medium">
+                  Movimiento
+                </th>
+                <th scope="col" className="py-2 font-medium">
+                  Pago
+                </th>
+                <th scope="col" className="py-2 pr-5 text-right font-medium">
+                  <span className="sr-only">Acciones</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((m) => {
+                const meta = MOVE_META[m.kind];
+                const pay = paymentState(m.r);
+                return (
+                  <tr key={`${m.kind}:${m.r.code}`} className="border-b border-line last:border-b-0 hover:bg-panel/70">
+                    <td className="py-3 pl-5 font-semibold text-ink tabular-nums">{m.time || "—"}</td>
+                    <td className="max-w-[220px] py-3 pr-3">
+                      <Link href={paths.reserva(m.r.code)} className="block truncate font-medium text-ink hover:underline">
+                        {m.r.guest.fullName}
+                      </Link>
+                      <span className="block truncate text-[11.5px] text-ink-muted">{cabinLabel(m.r.cabinTypeId, m.r.unit)}</span>
+                    </td>
+                    <td className="py-3 pr-3">
+                      <span className="inline-flex items-center gap-1.5 text-ink">
+                        <span aria-hidden="true" className={`grid size-6 place-items-center rounded-full text-ink ${meta.dot}`}>
+                          {meta.icon}
+                        </span>
+                        {m.kind === "estadia" ? `Sale ${fmtDate(m.r.checkOut)}` : meta.label}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-3">
+                      <Badge tone={pay.tone}>{m.kind === "plazo" ? `Abono ${money(m.r.quote.deposit)}` : pay.label}</Badge>
+                    </td>
+                    <td className="py-3 pr-5">
+                      <span className="flex justify-end gap-1">
+                        {m.r.guest.phone && (
+                          <a
+                            href={waTo(m.r.guest.phone)}
+                            target="_blank"
+                            rel="noopener"
+                            aria-label={`WhatsApp a ${m.r.guest.fullName}`}
+                            className={iconButtonClass("ghost", "sm")}
+                          >
+                            <WhatsAppIcon size={15} />
+                          </a>
+                        )}
+                        <Link href={paths.reserva(m.r.code)} aria-label={`Ver la reserva ${m.r.code}`} className={iconButtonClass("ghost", "sm")}>
+                          <ArrowRightIcon size={15} />
+                        </Link>
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       ) : (
         <EmptyState
@@ -649,357 +743,95 @@ function TodayBoard({ arr, dep }: { arr: Reservation[]; dep: Reservation[] }) {
           title={filter === "todo" ? "Hoy no hay llegadas, salidas ni huéspedes en estadía." : "Nada en este filtro hoy."}
         />
       )}
-    </section>
+    </Panel>
   );
 }
 
-// Detalle de la reserva elegida en «Movimiento de hoy».
-function MoveDetail({ m }: { m: Move }) {
-  const { cabinLabel } = useAdmin();
-  const r = m.r;
-  const due = pendingOf(r).total;
-  const people = r.adults + r.children;
-  const rows: { k: string; v: ReactNode }[] = [
-    { k: "Estadía", v: `${fmtDate(r.checkIn)} → ${fmtDate(r.checkOut)} · ${plural(nightsBetween(r.checkIn, r.checkOut), "noche", "noches")}` },
-    { k: "Huéspedes", v: `${plural(people, "persona", "personas")}${r.children ? ` (${plural(r.children, "niño", "niños")})` : ""}` },
-    { k: "Llegada", v: r.estimatedArrival ? `Hacia las ${r.estimatedArrival}` : "Sin hora estimada" },
-    { k: "Pagos", v: `${cop(r.paid)} de ${cop(r.quote.total)}${due ? ` · faltan ${cop(due)}` : " · al día"}` },
-  ];
-  if (r.specialRequests) rows.push({ k: "Solicitudes", v: r.specialRequests });
+/* ───────────── Próximas llegadas ───────────── */
+
+// Llegadas de los próximos 7 días agrupadas por día.
+function Upcoming() {
+  const { data, today, cabinLabel } = useAdmin();
+  const list = data.reservations
+    .filter((r) => r.checkIn > today && r.checkIn <= addDays(today, 7) && ARRIVING.includes(r.status))
+    .sort((a, b) => (a.checkIn < b.checkIn ? -1 : 1));
+  const days = [...new Set(list.map((r) => r.checkIn))];
   return (
-    <article aria-labelledby="d-move-title" className="flex min-w-0 flex-col gap-4 rounded-[22px] bg-pink p-5 motion-safe:animate-fade-in">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 id="d-move-title" className="truncate text-[16px] font-bold text-ink">
-            <Link href={paths.reserva(r.code)} className="underline decoration-ink/40 underline-offset-[3px] hover:decoration-ink">
-              {r.guest.fullName}
-            </Link>
-          </h3>
-          <p className="mt-0.5 truncate text-[12.5px] font-medium text-ink/75">{cabinLabel(r.cabinTypeId, r.unit)}</p>
-        </div>
-        <span className="flex-none rounded-full bg-paper px-2.5 py-1 text-[11.5px] font-bold tracking-[.04em] text-ink tabular-nums">{r.code}</span>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        <StatusPill status={r.status} size="sm" className="ring-1 ring-ink/10" />
-        {r.pet?.hasPet && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-pink-deep/60 px-2.5 py-0.5 text-[12px] font-semibold text-ink">
-            <PawIcon size={13} /> Mascota
-          </span>
-        )}
-        {r.decoration?.requested && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-pink-deep/60 px-2.5 py-0.5 text-[12px] font-semibold text-ink">
-            <GiftIcon size={13} /> Decoración
-          </span>
-        )}
-        {due > 0 && <span className="rounded-full bg-pink-deep/60 px-2.5 py-0.5 text-[12px] font-semibold text-ink">{`Saldo ${cop(due)}`}</span>}
-      </div>
-      <dl className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-2.5 text-[13px]">
-        {rows.map((x) => (
-          <div key={x.k} className="contents">
-            <dt className="text-ink/65">{x.k}</dt>
-            <dd className="font-medium break-words text-ink">{x.v}</dd>
-          </div>
-        ))}
-      </dl>
-      <div className="mt-auto flex flex-wrap gap-2">
-        <Link href={paths.reserva(r.code)} className={buttonClass("primary", "sm")}>
-          Ver la reserva
-          <ArrowRightIcon size={14} />
-        </Link>
-        {r.guest.phone && (
-          <a href={waTo(r.guest.phone)} target="_blank" rel="noopener" className={buttonClass("ghost", "sm", "bg-paper/60 hover:not-disabled:bg-paper")}>
-            <WhatsAppIcon size={15} />
-            WhatsApp
-          </a>
-        )}
-      </div>
-    </article>
-  );
-}
-
-function PendingList({ pend }: { pend: Reservation[] }) {
-  const { data, now, cabinLabel } = useAdmin();
-  const proofFor = (code: string) => data.proofs.find((p) => p.reservationCode === code && p.status === "pending");
-  return (
-    <ListSection
-      id="d-pend"
-      title="Pagos por completar"
-      count={pend.length}
-      empty="No hay abonos ni saldos pendientes."
-      icon={<WalletIcon size={18} />}
-      actions={
-        <Link
-          href={paths.pagos({ vista: "por-cobrar" })}
-          className="text-[13px] font-semibold text-ink-muted underline-offset-2 hover:text-ink hover:underline"
-        >
-          Ver todos
-        </Link>
-      }
-    >
-      {pend.slice(0, 6).map((r) => {
-        const x = rowOf(r, cabinLabel);
-        const bd = balanceDue(r);
-        const deadline = r.status === "pending_deposit" ? r.depositDueAt : "";
-        const minutes = deadline ? (Date.parse(deadline) - now) / 6e4 : 0;
-        const proof = proofFor(r.code);
-        return (
-          <Row
-            key={r.code}
-            href={paths.reserva(r.code)}
-            icon={proof ? <FileTextIcon size={17} /> : <WalletIcon size={17} />}
-            accent={bd ? "green" : "yellow"}
-            title={r.guest.fullName}
-            meta={bd ? `Saldo ${cop(bd.amount)} · en estadía` : `Abono ${x.deposit} · llega ${fmtDate(r.checkIn)}`}
-            right={
-              proof ? (
-                <Badge tone="info" icon={<FileTextIcon size={12} />}>
-                  Comprobante
-                </Badge>
-              ) : bd ? (
-                <Chip>{cop(bd.amount)}</Chip>
-              ) : (
-                <span
-                  className={`inline-flex flex-none items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold tabular-nums ${minutes < 10 ? "bg-error-soft text-error" : "bg-paper text-ink"}`}
-                >
-                  <ClockIcon size={13} />
-                  <span className="sr-only">La retención vence en </span>
-                  {countdown(deadline)}
-                </span>
-              )
-            }
-          />
-        );
-      })}
-    </ListSection>
-  );
-}
-
-/* ───────────── Mes ───────────── */
-
-const WEEKDAYS = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"];
-
-// Mes con las llegadas marcadas: un día abre el calendario en ese día.
-function MiniCalendar() {
-  const { data, today } = useAdmin();
-  const [month, setMonth] = useState(today.slice(0, 7) + "-01");
-  const todayTip = useLabelTip("Volver al mes actual");
-  const first = parseISO(month);
-  const lead = (first.getUTCDay() + 6) % 7;
-  const start = addDays(month, -lead);
-  const daysInMonth = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
-  const weeks = Math.ceil((lead + daysInMonth) / 7);
-  const shift = (n: number) => {
-    const d = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + n, 1));
-    setMonth(d.toISOString().slice(0, 10));
-  };
-  // Llegadas de cada día, separando las de Booking: las reservas creadas desde Booking y las noches que aún no tienen datos.
-  const arrivals = new Map<string, { own: number; booking: number }>();
-  const add = (day: string, kind: "own" | "booking") => {
-    const a = arrivals.get(day) ?? { own: 0, booking: 0 };
-    arrivals.set(day, { ...a, [kind]: a[kind] + 1 });
-  };
-  data.reservations.forEach((r) => ARRIVING.concat(["checked_in", "completed"]).includes(r.status) && add(r.checkIn, isFromBooking(r) ? "booking" : "own"));
-  staysWithoutData(data.channelStays ?? [], today).forEach((s) => add(s.checkIn, "booking"));
-  const label = `${MONTHS[first.getUTCMonth()]} ${first.getUTCFullYear()}`;
-
-  return (
-    <section aria-label={`Calendario de ${label}`} className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <IconButton label="Mes anterior" size="sm" onClick={() => shift(-1)}>
-          <ChevronLeftIcon size={18} />
-        </IconButton>
-        <button
-          type="button"
-          onClick={() => setMonth(today.slice(0, 7) + "-01")}
-          {...todayTip}
-          className="rounded-full bg-ink px-3.5 py-1 text-[13px] font-semibold text-paper first-letter:uppercase"
-        >
-          {label}
-        </button>
-        <IconButton label="Mes siguiente" size="sm" onClick={() => shift(1)}>
-          <ChevronRightIcon size={18} />
-        </IconButton>
-      </div>
-      <div className="grid grid-cols-7 gap-y-1 text-center">
-        {WEEKDAYS.map((w) => (
-          <span key={w} aria-hidden="true" className="mx-auto mb-1 rounded-full bg-panel px-1.5 py-0.5 text-[11px] font-semibold text-ink-muted">
-            {w}
-          </span>
-        ))}
-        {Array.from({ length: weeks }, (_, w) => {
-          const weekStart = addDays(start, w * 7);
-          return Array.from({ length: 7 }, (_, i) => {
-            const day = addDays(weekStart, i);
-            const inMonth = day.slice(0, 7) === month.slice(0, 7);
-            const { own, booking } = arrivals.get(day) ?? { own: 0, booking: 0 };
-            const n = own + booking;
-            const isToday = day === today;
+    <Panel id="d-up" title="Próximas llegadas" action={<MoreLink href={paths.calendario()}>Ver todas</MoreLink>}>
+      {days.length ? (
+        <ol className="flex flex-col gap-3">
+          {days.slice(0, 4).map((day) => {
+            const date = parseISO(day);
             return (
-              <Link
-                key={day}
-                href={paths.calendario({ vista: "dia", fecha: day })}
-                aria-label={`${fmtDate(day)}${n ? `: ${plural(n, "llegada", "llegadas")}${booking ? `, ${booking} de Booking` : ""}` : ""}`}
-                className={`relative mx-auto grid size-9 place-items-center rounded-full text-[13px] tabular-nums transition-colors ${
-                  isToday
-                    ? "bg-ink font-bold text-paper"
-                    : inMonth
-                      ? day < today
-                        ? "text-ink-subtle hover:bg-panel"
-                        : "text-ink hover:bg-panel"
-                      : "text-ink-subtle/50 hover:bg-panel"
-                }`}
-              >
-                {parseISO(day).getUTCDate()}
-                {n > 0 && (
-                  <span aria-hidden="true" className="absolute bottom-[3px] flex gap-0.5">
-                    {own > 0 && <span className={`size-1.5 rounded-full ${isToday ? "bg-paper" : "bg-ink"}`} />}
-                    {booking > 0 && <span className="size-1.5 rounded-full bg-blue" />}
-                  </span>
-                )}
-              </Link>
+              <li key={day} className="flex gap-3">
+                <span className="flex w-11 flex-none flex-col items-center rounded-[12px] bg-panel py-1.5 ring-1 ring-line">
+                  <span className="text-[10.5px] font-medium text-ink-muted uppercase">{MS[date.getUTCMonth()]}</span>
+                  <span className="text-[16px] leading-tight font-semibold text-ink">{date.getUTCDate()}</span>
+                </span>
+                <ul className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
+                  {list
+                    .filter((r) => r.checkIn === day)
+                    .map((r) => (
+                      <li key={r.code}>
+                        <Link href={paths.reserva(r.code)} className="group block min-w-0">
+                          <span className="block truncate text-[13px] font-medium text-ink group-hover:underline">{r.guest.fullName}</span>
+                          <span className="block truncate text-[11.5px] text-ink-muted">
+                            {`${cabinLabel(r.cabinTypeId, r.unit)} · ${plural(nightsBetween(r.checkIn, r.checkOut), "noche", "noches")}${day === addDays(today, 1) ? " · mañana" : ""}`}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                </ul>
+              </li>
             );
-          });
-        })}
-      </div>
-      <p aria-hidden="true" className="flex items-center justify-center gap-4 text-[11.5px] font-medium text-ink-muted">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-1.5 rounded-full bg-ink" />
-          Reservas
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-1.5 rounded-full bg-blue" />
-          Booking
-        </span>
-      </p>
-    </section>
-  );
-}
-
-/* ───────────── Agenda de hoy ───────────── */
-
-type AgendaItem = {
-  key: string;
-  time: string;
-  r: Reservation;
-  title: string;
-  meta: string;
-  accent: Accent;
-  icon: ReactNode;
-  kind: "llegada" | "salida" | "plazo";
-};
-type AgendaFilter = "todo" | AgendaItem["kind"];
-
-// Lo que pasa hoy, en orden de hora, con la hora actual marcada; lo que ya pasó se atenúa.
-function Agenda({ arr, dep, pend }: { arr: Reservation[]; dep: Reservation[]; pend: Reservation[] }) {
-  const { data, today, now, cabinLabel } = useAdmin();
-  const s = data.site.settings;
-  const [filter, setFilter] = useState<AgendaFilter>("todo");
-  const nowTime = hhmm(new Date(now).toISOString());
-  const items: AgendaItem[] = [
-    ...arr.map((r) => ({
-      key: `a${r.code}`,
-      time: r.estimatedArrival || s.checkInStart,
-      r,
-      title: r.guest.fullName,
-      meta: `Llegada · ${cabinLabel(r.cabinTypeId, r.unit)}`,
-      accent: "pink" as const,
-      icon: <LoginIcon size={16} />,
-      kind: "llegada" as const,
-    })),
-    ...dep.map((r) => ({
-      key: `s${r.code}`,
-      time: s.checkOutTime,
-      r,
-      title: r.guest.fullName,
-      meta: `Salida · ${cabinLabel(r.cabinTypeId, r.unit)}`,
-      accent: "blue" as const,
-      icon: <LogoutIcon size={16} />,
-      kind: "salida" as const,
-    })),
-    ...pend
-      .filter(
-        (r) => r.status === "pending_deposit" && r.depositDueAt.slice(0, 10) <= today && Date.parse(r.depositDueAt) < Date.parse(`${today}T23:59:59-05:00`),
-      )
-      .map((r) => ({
-        key: `p${r.code}`,
-        time: hhmm(r.depositDueAt),
-        r,
-        title: r.guest.fullName,
-        meta: `Llega sin abono · vence hoy · abono ${cop(r.quote.deposit)}`,
-        accent: "yellow" as const,
-        icon: <ClockIcon size={16} />,
-        kind: "plazo" as const,
-      })),
-  ]
-    .filter((x) => filter === "todo" || x.kind === filter)
-    .sort((a, b) => (a.time < b.time ? -1 : 1));
-  const nowAt = items.findIndex((x) => x.time > nowTime);
-  const marker = (
-    <li key="now" aria-label={`Hora actual: ${nowTime}`} className="flex items-center gap-2 py-1">
-      <span className="w-[46px] flex-none">
-        <span className="rounded-full bg-pink px-1.5 py-0.5 text-[11px] font-bold text-ink tabular-nums">{nowTime}</span>
-      </span>
-      <span aria-hidden="true" className="h-0 flex-1 border-t-[1.5px] border-dashed border-ink/50" />
-    </li>
-  );
-
-  return (
-    <section aria-labelledby="d-agenda" className="flex flex-col gap-3">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <h2 id="d-agenda" className="text-[18px] leading-tight font-semibold tracking-[-0.015em] text-ink">
-            {fmtDate(today)}
-          </h2>
-          <p className="mt-0.5 text-[13px] text-ink-muted">Agenda de hoy</p>
-        </div>
-        <span id="d-agenda-filter" className="sr-only">
-          Mostrar en la agenda
-        </span>
-        {/* El desplegable del panel, en píldora negra: el disparador es el del filtro, la lista es la de siempre. */}
-        <Combobox
-          value={filter}
-          onChange={(v) => setFilter(v as AgendaFilter)}
-          describedBy="d-agenda-filter"
-          options={[
-            { value: "todo", label: "Todo" },
-            { value: "llegada", label: "Llegadas" },
-            { value: "salida", label: "Salidas" },
-            { value: "plazo", label: "Plazos" },
-          ]}
-          className="min-h-8! w-auto! min-w-[112px] rounded-full! border-ink! bg-ink! py-0! pr-3! pl-3.5! text-[12.5px]! font-semibold text-paper! hover:border-ink! focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-ink)_18%,transparent)]!"
-        />
-      </div>
-      {items.length ? (
-        <ol className="flex flex-col gap-2">
-          {items.map((x, i) => {
-            const past = x.time <= nowTime;
-            return [
-              i === nowAt ? marker : null,
-              <li key={x.key} className={`flex items-start gap-2 transition-opacity ${past ? "opacity-55 hover:opacity-100" : ""}`}>
-                <span className="w-[46px] flex-none pt-3 text-[12px] font-semibold text-ink-muted tabular-nums">{x.time}</span>
-                <Link
-                  href={paths.reserva(x.r.code)}
-                  className="flex min-w-0 flex-1 items-center gap-3 rounded-[18px] bg-panel p-3 transition-colors hover:bg-line/80"
-                >
-                  <span aria-hidden="true" className={`grid size-9 flex-none place-items-center rounded-full text-ink ${ACCENT[x.accent].bg}`}>
-                    {x.icon}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-[13.5px] font-semibold text-ink">{x.title}</span>
-                    <span className="block truncate text-[12px] text-ink-muted">{x.meta}</span>
-                  </span>
-                </Link>
-              </li>,
-            ];
           })}
-          {nowAt === -1 && marker}
         </ol>
       ) : (
-        <EmptyState compact icon={<ClockIcon size={18} />} title="Sin movimientos programados hoy." />
+        <p className="text-[13px] text-ink-muted">No hay llegadas en los próximos 7 días.</p>
       )}
-      <Link href={paths.calendario()} className={buttonClass("primary", "lg", "w-full")}>
-        Ver el calendario
+    </Panel>
+  );
+}
+
+/* ───────────── Huéspedes ───────────── */
+
+function Guests() {
+  const { data, today } = useAdmin();
+  const clients = useMemo(() => buildClients(data.reservations, data.clients, today), [data.reservations, data.clients, today]);
+  const fresh = clients.filter((c) => c.isNew).length;
+  const recurring = clients.filter((c) => c.isRecurring).length;
+  const nights30 = data.reservations
+    .filter((r) => SECURED.includes(r.status) && r.checkOut > addDays(today, -30) && r.checkIn <= today)
+    .reduce((n, r) => n + nightsBetween(r.checkIn, r.checkOut), 0);
+  const bathAlerts = (data.bathrooms ?? []).filter(
+    (b) => b.status !== "available" || (data.bathroomBlocks ?? []).some((k) => k.bathroomId === b.id && k.from <= today && today <= k.to),
+  ).length;
+  const rows: { icon: ReactNode; label: string; value: number; href: string }[] = [
+    { icon: <UserPlusIcon size={15} />, label: "Clientes nuevos (30 días)", value: fresh, href: paths.clientes() },
+    { icon: <UsersIcon size={15} />, label: "Clientes que repiten", value: recurring, href: paths.clientes() },
+    { icon: <MoonIcon size={15} />, label: "Noches alojadas (30 días)", value: nights30, href: paths.finanzas() },
+    { icon: <BathIcon size={15} />, label: "Baños con aviso", value: bathAlerts, href: paths.bloqueos() },
+  ];
+  return (
+    <Panel id="d-guests" title="Huéspedes y operación">
+      <ul className="-mx-2 flex flex-col">
+        {rows.map((x) => (
+          <li key={x.label}>
+            <Link href={x.href} className="flex items-center gap-3 rounded-[12px] px-2 py-2 transition-colors hover:bg-panel">
+              <span aria-hidden="true" className="grid size-8 flex-none place-items-center rounded-full bg-panel text-ink ring-1 ring-line">
+                {x.icon}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{x.label}</span>
+              <span className="text-[15px] font-semibold text-ink tabular-nums">
+                <Count value={x.value} delay={DELAY} />
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <Link href={paths.clientes()} className={buttonClass("secondary", "md", "mt-auto w-full")}>
+        Ver clientes
       </Link>
-    </section>
+    </Panel>
   );
 }

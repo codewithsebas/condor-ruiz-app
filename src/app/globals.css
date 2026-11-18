@@ -157,6 +157,13 @@
   --animate-paw-step: ec-paw-step 4.6s ease-out infinite both;
   --animate-star: ec-star 4.5s ease-in-out infinite;
   --animate-smoke: ec-smoke 9s linear infinite;
+  --animate-steam: ec-steam 3.6s ease-out infinite;
+  --animate-lamp-glow: ec-lamp-glow 3.2s ease-in-out infinite;
+  --animate-lamp-flicker: ec-lamp-flicker 5.3s linear infinite;
+  --animate-window-glow: ec-window-glow 4.7s ease-in-out infinite;
+  --animate-lamp-off: ec-lamp-off 16s linear infinite;
+  --animate-window-off: ec-window-off 16s linear infinite;
+  --animate-zzz: ec-zzz 16s linear infinite;
   --animate-icon-draw: ec-icon-draw 1s cubic-bezier(0.4, 0, 0.2, 1) both;
   --animate-progress: ec-progress linear both;
   --animate-fog-drift: ec-fog-drift 46s ease-in-out infinite alternate;
@@ -260,6 +267,169 @@
 
   /* Fumarola del Nevado (pie de página): cada bocanada sale del cráter, sube y se abre hacia la derecha, crece y se
      disuelve. Va en unidades del SVG (footer-cabins.tsx). */
+  /* Vapor del jacuzzi (pie de página): cada voluta sale del agua, sube ondulando, se ensancha y se desvanece. La
+     deriva lateral llega por --steam-x (footer-cabins.tsx). */
+  /* Luces de las cabañas (pie de página): el halo del farolito late, el bombillo titila de vez en cuando y el ventanal
+     respira un brillo cálido. Los tres ciclos tienen largos distintos para que el conjunto no se vea mecánico. */
+  @keyframes ec-lamp-glow {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 0.3;
+    }
+    50% {
+      transform: scale(1.45);
+      opacity: 0.6;
+    }
+  }
+  @keyframes ec-lamp-flicker {
+    0%,
+    40%,
+    44%,
+    47%,
+    78%,
+    81%,
+    100% {
+      opacity: 1;
+    }
+    42% {
+      opacity: 0.55;
+    }
+    45.5% {
+      opacity: 0.75;
+    }
+    79.5% {
+      opacity: 0.6;
+    }
+  }
+  @keyframes ec-window-glow {
+    0%,
+    100% {
+      opacity: 0;
+    }
+    30% {
+      opacity: 0.22;
+    }
+    45% {
+      opacity: 0.1;
+    }
+    70% {
+      opacity: 0.28;
+    }
+  }
+
+  /* A dormir: el farol (y su resplandor en el prado) se apaga con un último parpadeo; el interior se va a penumbra un
+     instante después, se queda así un rato y todo vuelve a encenderse. Mismo ciclo y desfase en ambos. */
+  @keyframes ec-lamp-off {
+    0%,
+    58%,
+    59.5%,
+    92%,
+    100% {
+      opacity: 1;
+    }
+    58.8% {
+      opacity: 0.3;
+    }
+    60.5%,
+    90% {
+      opacity: 0;
+    }
+  }
+  @keyframes ec-window-off {
+    0%,
+    60%,
+    91.5%,
+    100% {
+      opacity: 0;
+    }
+    65%,
+    89% {
+      opacity: 0.82;
+    }
+  }
+
+  /* Zzz de la cabaña dormida: en el mismo ciclo de 16 s, aparece ya con el interior a oscuras y sube culebreando como
+     una serpiente: una onda senoidal continua (onda y media de vaivén) con la zeta inclinada hacia donde avanza, creciendo
+     hasta desvanecerse antes de que vuelva la luz. Fotogramas muestreados de la onda; se reproduce en lineal. */
+  @keyframes ec-zzz {
+    0%,
+    64% {
+      transform: translate(0px, 0px) scale(0.6) rotate(18deg);
+      opacity: 0;
+    }
+    64.9% {
+      transform: translate(5px, -8.8px) scale(0.63) rotate(15deg);
+    }
+    65.7% {
+      transform: translate(8.3px, -17.5px) scale(0.67) rotate(6.9deg);
+      opacity: 1;
+    }
+    66.6% {
+      transform: translate(8.8px, -26.3px) scale(0.7) rotate(-3.5deg);
+    }
+    67.4% {
+      transform: translate(6.4px, -35px) scale(0.74) rotate(-12.7deg);
+    }
+    68.3% {
+      transform: translate(1.8px, -43.8px) scale(0.77) rotate(-17.7deg);
+    }
+    69.2% {
+      transform: translate(-3.4px, -52.5px) scale(0.81) rotate(-16.6deg);
+    }
+    70% {
+      transform: translate(-7.5px, -61.3px) scale(0.84) rotate(-10deg);
+    }
+    70.9% {
+      transform: translate(-9px, -70px) scale(0.88) rotate(0deg);
+    }
+    71.7% {
+      transform: translate(-7.5px, -78.8px) scale(0.91) rotate(10deg);
+    }
+    72.6% {
+      transform: translate(-3.4px, -87.5px) scale(0.94) rotate(16.6deg);
+    }
+    73.5% {
+      transform: translate(1.8px, -96.3px) scale(0.98) rotate(17.7deg);
+      opacity: 0.9;
+    }
+    74.3% {
+      transform: translate(6.4px, -105px) scale(1.01) rotate(12.7deg);
+    }
+    75.2% {
+      transform: translate(8.8px, -113.8px) scale(1.05) rotate(3.5deg);
+    }
+    76% {
+      transform: translate(8.3px, -122.5px) scale(1.08) rotate(-6.9deg);
+    }
+    76.9% {
+      transform: translate(5px, -131.3px) scale(1.12) rotate(-15deg);
+    }
+    77.75%,
+    100% {
+      transform: translate(0px, -140px) scale(1.15) rotate(-18deg);
+      opacity: 0;
+    }
+  }
+
+  @keyframes ec-steam {
+    0% {
+      transform: translate(0, 4px) scale(0.5, 0.6);
+      opacity: 0;
+    }
+    25% {
+      opacity: 0.7;
+    }
+    60% {
+      transform: translate(calc(var(--steam-x, 0px) * -0.4), -14px) scale(1, 1);
+      opacity: 0.5;
+    }
+    100% {
+      transform: translate(var(--steam-x, 0px), -30px) scale(1.5, 1.25);
+      opacity: 0;
+    }
+  }
+
   @keyframes ec-smoke {
     0% {
       transform: translate(0, 0) scale(0.35);
@@ -568,7 +738,7 @@
     background: var(--color-canvas);
   }
 
-  /* Panel: su tipografía (Plus Jakarta Sans, app/admin/layout.tsx), sus colores de estado (los pasteles del panel; el
+  /* Panel: su tipografía (Inter, app/admin/layout.tsx), sus colores de estado (los pasteles del panel; el
      sitio conserva los suyos) y un solo grosor de trazo para todos los iconos. */
   .admin-theme {
     font-family: var(--font-admin), system-ui, sans-serif;
@@ -578,16 +748,16 @@
     --color-status-confirmed: var(--color-green);
     --color-status-rescheduled: var(--color-blue);
     --color-status-checked-in: var(--color-pink);
-    --color-status-completed: #ddd5c3;
-    --color-status-cancelled: #f0a693;
-    --color-status-expired: #d3ccbd;
-    --color-status-block: #8a857b;
+    --color-status-completed: #e7e8ec;
+    --color-status-cancelled: #f6c1b5;
+    --color-status-expired: #e1e2e7;
+    --color-status-block: #8e9098;
     /* Barras del calendario (calendar/shared.tsx): el pastel pleno de cada estado; --bar-mix oscurece los contornos. */
     --bar-pending: var(--color-yellow);
     --bar-confirmed: var(--color-green);
     --bar-rescheduled: var(--color-blue);
     --bar-checked-in: var(--color-pink);
-    --bar-completed: #e3dccb;
+    --bar-completed: #e4e5e9;
     --bar-mix: #000;
   }
   .admin-theme [data-icon] {
@@ -640,16 +810,16 @@
     --shadow-overlay: 0 28px 60px -20px rgb(0 0 0 / 0.75), 0 0 0 1px rgb(255 255 255 / 0.07);
   }
   :root[data-admin-theme="dark"] .admin-theme {
-    --color-status-completed: #3a362f;
-    --color-status-cancelled: #5c2e25;
-    --color-status-expired: #312e29;
-    --color-status-block: #6f6a61;
+    --color-status-completed: #2c2d31;
+    --color-status-cancelled: #5c2e27;
+    --color-status-expired: #26272b;
+    --color-status-block: #676870;
     /* En oscuro, las barras toman el tono profundo de cada pastel: se distinguen del fondo y la tinta crema se lee. */
     --bar-pending: var(--color-yellow-deep);
     --bar-confirmed: var(--color-green-deep);
     --bar-rescheduled: var(--color-blue-deep);
     --bar-checked-in: var(--color-pink-deep);
-    --bar-completed: #48433b;
+    --bar-completed: #3a3b40;
     --bar-mix: #fff;
   }
 
@@ -899,7 +1069,7 @@
     padding: 0 14px;
     border-width: 1px;
     border-color: var(--color-line-strong);
-    border-radius: 14px;
+    border-radius: 12px;
     background-color: var(--color-paper);
     color: var(--color-ink);
     font-size: 13px;
@@ -909,7 +1079,7 @@
       background-color 0.15s ease;
   }
   /* Desplegables y selectores (botones con forma de campo) en píldora, como los botones del panel. Los campos de texto
-     conservan el radio de 14 px. */
+     conservan el radio de 12 px. */
   .field-input.field-compact:is(button, select) {
     border-radius: 9999px;
   }
@@ -959,7 +1129,7 @@
   select.field-input.field-compact {
     appearance: none;
     padding-right: 36px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2366615a' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236c6d75' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 14px center;
   }
@@ -1000,14 +1170,14 @@
   }
 }
 
-/* Fondo del panel: una mancha muy difuminada arriba a la derecha (madera en claro, azul en oscuro), fija al hacer scroll. Es un degradado y no
-   filter: blur(), así no le cuesta nada al navegador. El tono sale del token, por lo que se adapta a claro y oscuro. */
+/* Fondo del panel: un brillo frío muy difuminado arriba a la izquierda, detrás de la barra lateral (verde agua en
+   claro, blanco tenue en oscuro), fijo al hacer scroll. Es un degradado y no filter: blur(), así no le cuesta nada al navegador. */
 .admin-root {
-  --glow: color-mix(in srgb, #c4a274 45%, transparent);
+  --glow: color-mix(in srgb, #cfe4e6 85%, transparent);
   isolation: isolate;
 }
 :root[data-admin-theme="dark"] .admin-root {
-  --glow: color-mix(in srgb, var(--color-blue-deep) 34%, transparent);
+  --glow: color-mix(in srgb, #ffffff 12%, transparent);
 }
 .admin-root::before {
   content: "";
@@ -1015,12 +1185,237 @@
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(70vw 80vh at 100% 0%, var(--glow), transparent 72%);
+  background: radial-gradient(60vw 70vh at 0% 0%, var(--glow), transparent 70%);
+}
+
+/* Lista de módulos de la barra lateral: en vez de cortarse en seco, los enlaces se desvanecen en los bordes por donde
+   queda más lista (arriba cuando ya bajaste, abajo cuando falta por ver). Con scroll-driven animations el difuminado
+   aparece solo en el borde que tiene contenido escondido; sin ellas, queda fijo abajo. */
+@property --nav-fade-top {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --nav-fade-bottom {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+.nav-fade {
+  --nav-fade-top: 0px;
+  --nav-fade-bottom: 40px;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--nav-fade-top),
+    #000 calc(100% - var(--nav-fade-bottom)),
+    transparent 100%
+  );
+}
+@supports (animation-timeline: scroll()) {
+  .nav-fade {
+    --nav-fade-bottom: 0px;
+    animation: ec-nav-fade linear both;
+    animation-timeline: scroll(self);
+  }
+}
+@keyframes ec-nav-fade {
+  0% {
+    --nav-fade-top: 0px;
+    --nav-fade-bottom: 40px;
+  }
+  8% {
+    --nav-fade-top: 40px;
+  }
+  92% {
+    --nav-fade-bottom: 40px;
+  }
+  100% {
+    --nav-fade-top: 40px;
+    --nav-fade-bottom: 0px;
+  }
+}
+
+/* Guía del panel (onboarding.tsx): lo que explica el paso y su enlace del menú, con un anillo por dentro del borde
+   (por fuera lo recortaría la lista con scroll del menú) que late en color. Todo lo resaltado se ve igual. */
+[data-tour-on] {
+  outline: 2px solid var(--color-yellow-deep);
+  outline-offset: -2px;
+  scroll-margin: 120px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* El anillo aparece de a poco y después late. */
+  [data-tour-on] {
+    animation:
+      ec-tour-ring-in 0.45s ease-out both,
+      ec-tour-ring 1.6s ease-in-out 0.45s infinite;
+  }
+  /* Tarjeta: sube al abrir y baja al cerrar; el contenido de cada paso entra deslizándose. Velo: se funde. */
+  .tour-card {
+    animation: ec-tour-card-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .tour-card[data-leaving] {
+    animation: ec-tour-card-out 0.26s ease-in both;
+  }
+  .tour-step {
+    animation: ec-tour-step 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) var(--tour-delay, 0ms) both;
+  }
+  .tour-veil {
+    animation: ec-fade-in 0.4s ease-out both;
+  }
+  .tour-veil[data-leaving] {
+    animation: ec-tour-veil-out 0.26s ease-in both;
+  }
+  /* «Terminar»: el velo se cierra casi del todo y, ya en el dashboard, se desvanece despacio. */
+  .tour-veil path {
+    transition: fill 0.24s ease-out;
+  }
+  /* Al pasar a un paso de otra página: lo mismo que «Terminar», más rápido. */
+  .tour-veil[data-switching] path {
+    fill: rgb(10 9 8 / 0.94);
+    transition-duration: 0.14s;
+  }
+  .tour-veil[data-finishing] path {
+    fill: rgb(10 9 8);
+    transition-duration: 0.42s;
+  }
+  .tour-veil[data-finishing][data-leaving] {
+    animation: ec-tour-veil-out 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+}
+/* Mensaje de despedida de la guía: cada pieza baja desde arriba, una tras otra; el cóndor llega planeando; el nombre
+   lleva un degradado ámbar que brilla una vez; detrás, un resplandor cálido. Al irse, todo baja y se desvanece. */
+.tour-farewell-glow {
+  background: radial-gradient(closest-side, rgb(243 200 122 / 0.16), rgb(243 200 122 / 0.05) 55%, transparent 75%);
+}
+.tour-farewell-name {
+  background: linear-gradient(100deg, #f7dca0 0%, #e9b45a 35%, #fff4d6 50%, #e9b45a 65%, #c98b2e 100%);
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tour-farewell [data-f] {
+    animation: ec-farewell-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) var(--d, 0ms) both;
+  }
+  .tour-farewell .tour-farewell-condor {
+    animation-name: ec-farewell-glide;
+    animation-duration: 0.9s;
+  }
+  .tour-farewell .tour-farewell-name {
+    animation:
+      ec-farewell-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) var(--d, 0ms) both,
+      ec-farewell-shine 1.6s ease-in-out calc(var(--d, 0ms) + 0.5s) both;
+  }
+  .tour-farewell-glow {
+    animation: ec-farewell-glow 1.2s ease-out both;
+  }
+  .tour-farewell[data-out] {
+    animation: ec-farewell-out 0.42s cubic-bezier(0.4, 0, 1, 1) both;
+  }
+}
+@keyframes ec-farewell-in {
+  from {
+    opacity: 0;
+    transform: translateY(-28px);
+  }
+}
+@keyframes ec-farewell-glide {
+  from {
+    opacity: 0;
+    transform: translate(-60px, -40px) rotate(-6deg) scale(0.9);
+  }
+}
+@keyframes ec-farewell-shine {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0% 0;
+  }
+}
+@keyframes ec-farewell-glow {
+  from {
+    opacity: 0;
+    scale: 0.6;
+  }
+}
+@keyframes ec-farewell-out {
+  to {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+}
+@keyframes ec-tour-ring-in {
+  from {
+    outline-color: transparent;
+  }
+}
+@keyframes ec-tour-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+}
+@keyframes ec-tour-card-out {
+  to {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+@keyframes ec-tour-step {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+}
+@keyframes ec-tour-veil-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes ec-tour-ring {
+  0%,
+  100% {
+    outline-color: var(--color-yellow-deep);
+  }
+  50% {
+    outline-color: color-mix(in srgb, var(--color-yellow-deep) 45%, transparent);
+  }
+}
+
+/* Tarjeta de la guía: invertida respecto al panel para que resalte. En claro va negra (con los colores del tema oscuro
+   adentro: texto claro y botón principal blanco); en oscuro, blanca (con los del tema claro). */
+.tour-card {
+  --color-paper: #171614;
+  --color-panel: #272623;
+  --color-line: #302e2a;
+  --color-line-strong: #5a564f;
+  --color-ink: #f3efe6;
+  --color-ink-muted: #aba59a;
+  --color-ink-subtle: #847e74;
+  background: var(--color-paper);
+  border: 1.5px solid #171614;
+  box-shadow: var(--shadow-overlay);
+}
+:root[data-admin-theme="dark"] .tour-card {
+  --color-paper: #ffffff;
+  --color-panel: #efe9dd;
+  --color-line: #e2dacb;
+  --color-line-strong: #cec5b3;
+  --color-ink: #171614;
+  --color-ink-muted: #66615a;
+  --color-ink-subtle: #857f75;
+  border-color: #ffffff;
+  box-shadow: 0 28px 70px -12px rgb(0 0 0 / 0.85);
 }
 
 /* Entrada del panel: al abrirlo (shell.tsx pone data-entering en .admin-root durante el primer segundo y medio), la barra
    lateral y sus módulos llegan desde la izquierda, el encabezado baja y las tarjetas suben una tras otra. Cada pieza
-   marca su tipo en data-enter y su turno en --i. Después de la entrada (o con movimiento reducido) no se anima nada. */
+   marca su tipo en data-enter y su turno en --i. Solo se mueven, sin desvanecerse: están visibles desde el principio.
+   Después de la entrada (o con movimiento reducido) no se anima nada. */
 @media (prefers-reduced-motion: no-preference) {
   [data-entering] [data-enter] {
     animation: ec-enter-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -1037,28 +1432,36 @@
     --enter-base: 60ms;
     animation-name: ec-enter-down;
   }
+  /* Entrada al cambiar de página (y al pasar de paso en la guía del panel): más rápida y fundiéndose desde el fondo. */
+  [data-entering][data-enter-fast] [data-enter] {
+    animation-name: ec-enter-fade;
+    animation-duration: 0.28s;
+    animation-delay: calc(var(--i, 0) * 22ms);
+  }
+}
+@keyframes ec-enter-fade {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
 }
 @keyframes ec-enter-rise {
   from {
-    opacity: 0;
     transform: translateY(14px);
   }
 }
 @keyframes ec-enter-pop {
   from {
-    opacity: 0;
     transform: translateY(18px) scale(0.96);
   }
 }
 @keyframes ec-enter-side {
   from {
-    opacity: 0;
     transform: translateX(-20px);
   }
 }
 @keyframes ec-enter-down {
   from {
-    opacity: 0;
     transform: translateY(-12px);
   }
 }
@@ -1073,6 +1476,9 @@
   z-index: -1;
   pointer-events: none;
   backdrop-filter: blur(24px);
+  /* Sigue las esquinas redondeadas del área de trabajo (el encabezado las hereda en escritorio). */
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
   mask-image: linear-gradient(to bottom, #000 60%, transparent), linear-gradient(to right, transparent, #000 32px);
   mask-composite: intersect;
 }
@@ -1191,6 +1597,38 @@
     &[data-nav="booking"] svg > :nth-child(3) {
       animation: ec-nav-pop 0.45s ease-out 0.15s both;
     }
+    /* Contenido del sitio: los renglones de la hoja se escriben uno tras otro. */
+    &[data-nav="contenido"] svg > :nth-child(n + 2) {
+      transform-origin: 0 50%;
+      animation: ec-nav-grow 0.35s ease-out both;
+    }
+    &[data-nav="contenido"] svg > :nth-child(3) {
+      animation-delay: 90ms;
+    }
+    &[data-nav="contenido"] svg > :nth-child(4) {
+      animation-delay: 180ms;
+    }
+    /* Configuración: las perillas de los deslizadores se mueven, cada una hacia su lado. */
+    &[data-nav="configuracion"] svg > :nth-child(2),
+    &[data-nav="configuracion"] svg > :nth-child(4) {
+      animation: ec-nav-slide-l 0.55s ease-in-out both;
+    }
+    &[data-nav="configuracion"] svg > :nth-child(3) {
+      animation: ec-nav-slide-r 0.55s ease-in-out 60ms both;
+    }
+    &[data-nav="configuracion"] svg > :nth-child(4) {
+      animation-delay: 120ms;
+    }
+  }
+}
+@keyframes ec-nav-slide-l {
+  45% {
+    transform: translateX(-4px);
+  }
+}
+@keyframes ec-nav-slide-r {
+  45% {
+    transform: translateX(4px);
   }
 }
 /* En pantallas táctiles no hay hover: el :hover que queda pegado al tocar no anima el icono. */
@@ -1460,5 +1898,85 @@
   }
   :hover > [data-deco="calendar"] > rect {
     transform: translateY(-1.5px);
+  }
+}
+
+/* Deslizador del panel (RangeSlider en admin/ui.tsx): pista redonda con la parte elegida rellena (--range-fill, 0–100 %),
+   pulgar blanco con anillo del color del deslizador (--range-color) y el anillo de foco del panel al usar el teclado. */
+@layer components {
+  .panel-range {
+    --range-color: var(--color-ink);
+    --range-track: color-mix(in srgb, var(--color-ink) 10%, transparent);
+    appearance: none;
+    width: 100%;
+    height: 28px;
+    background: transparent;
+    cursor: pointer;
+    touch-action: pan-y;
+  }
+  .panel-range:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .panel-range:focus {
+    outline: none;
+  }
+  .panel-range::-webkit-slider-runnable-track {
+    height: 8px;
+    border-radius: 999px;
+    background: linear-gradient(to right, var(--range-color) var(--range-fill, 0%), var(--range-track) var(--range-fill, 0%));
+  }
+  .panel-range::-moz-range-track {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--range-track);
+  }
+  .panel-range::-moz-range-progress {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--range-color);
+  }
+  .panel-range::-webkit-slider-thumb {
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    margin-top: -7px;
+    border-radius: 999px;
+    background: var(--color-paper);
+    border: 3px solid var(--range-color);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .panel-range::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: var(--color-paper);
+    border: 3px solid var(--range-color);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .panel-range:not(:disabled):hover::-webkit-slider-thumb,
+  .panel-range:not(:disabled):active::-webkit-slider-thumb {
+    transform: scale(1.12);
+  }
+  .panel-range:not(:disabled):hover::-moz-range-thumb,
+  .panel-range:not(:disabled):active::-moz-range-thumb {
+    transform: scale(1.12);
+  }
+  .panel-range:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--range-color) 25%, transparent);
+  }
+  .panel-range:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--range-color) 25%, transparent);
+  }
+  /* Cada pseudo-elemento en su regla: un selector que un navegador no conoce anula toda la regla. */
+  @media (prefers-reduced-motion: reduce) {
+    .panel-range::-webkit-slider-thumb {
+      transition: none;
+    }
+    .panel-range::-moz-range-thumb {
+      transition: none;
+    }
   }
 }

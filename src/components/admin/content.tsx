@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type DragEvent, type FocusEvent, type ReactNode } from "react";
 import {
@@ -52,7 +53,7 @@ import { CONTENT_GROUPS, CONTENT_SECTIONS, MODULES, isContentSection, paths, typ
 import { PhotoCropper } from "@/components/admin/photo-cropper";
 import { ServicesManager } from "@/components/admin/services";
 import { adminInput } from "@/components/admin/shared";
-import { Button, Card, CardHeader, Field, FieldError, GroupedNavTabs, IconButton, ModalPresence, PageHeader, SaveBar, Spinner } from "@/components/admin/ui";
+import { Button, Card, CardHeader, Field, FieldError, GroupedNavTabs, IconButton, ModalPresence, SaveBar, Spinner, enter } from "@/components/admin/ui";
 
 /* ───────────── Una ruta por zona del sitio, un solo formulario ───────────── */
 
@@ -262,11 +263,21 @@ export function ContentLayout({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider value={ctx}>
-      <PageHeader title={MODULES.contenido.label} description="Edita a la izquierda y mira a la derecha cómo va quedando la página antes de publicarla." />
-      <GroupedNavTabs
-        label="Secciones del sitio"
-        current={section ?? ""}
-        groups={CONTENT_GROUPS.map((g) => ({
+      <header {...enter(0)} className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium text-ink-muted">Edita y mira al lado cómo va quedando la página antes de publicarla</p>
+          <h1 className="mt-1 text-[clamp(1.5rem,2.4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-ink">{MODULES.contenido.label}</h1>
+        </div>
+        <span
+          className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12.5px] font-medium ring-1 ring-inset ${dirty ? "bg-warning-soft text-warning ring-warning/20" : "bg-success-soft text-success ring-success/20"}`}
+        >
+          <span aria-hidden="true" className={`size-2 rounded-full ${dirty ? "bg-warning" : "bg-success"}`} />
+          {dirty ? `${changed.length === 1 ? "1 sección" : `${changed.length} secciones`} sin publicar` : "Todo publicado"}
+        </span>
+      </header>
+      {/* En pantallas angostas, las secciones en una fila que se desplaza; en el computador, el índice a la izquierda. */}
+      <div className="lg:hidden">
+        <GroupedNavTabs label="Secciones del sitio" current={section ?? ""} groups={CONTENT_GROUPS.map((g) => ({
           label: g,
           tabs: CONTENT_SECTIONS.filter((x) => x.group === g).map((x) => ({
             id: x.id,
@@ -276,19 +287,37 @@ export function ContentLayout({ children }: { children: ReactNode }) {
             count: counts[x.id],
             changed: changed.includes(x.id),
           })),
-        }))}
-      />
-      <div className={`grid grid-cols-1 items-start gap-5 ${withPreview ? "xl:grid-cols-[minmax(440px,1fr)_minmax(0,1.2fr)]" : ""}`}>
+        }))} />
+      </div>
+      <div
+        className={`grid grid-cols-1 items-start gap-5 ${withPreview ? "lg:grid-cols-[208px_minmax(0,1fr)] 2xl:grid-cols-[208px_minmax(400px,1fr)_minmax(0,1.15fr)]" : "lg:grid-cols-[208px_minmax(0,1fr)]"}`}
+      >
+        <SectionIndex current={section} counts={counts} changed={changed} />
         <div onFocusCapture={onFocusCapture} className="flex min-w-0 flex-col gap-4">
-          {meta && <p className="text-[13.5px] leading-relaxed text-ink-muted">{meta.where}</p>}
+          {meta && section && (
+            <section {...enter(1)} aria-label={`Editando: ${meta.label}`} className="flex items-start gap-4 rounded-[22px] bg-ink p-5 text-paper">
+              <span aria-hidden="true" className="grid size-10 flex-none place-items-center rounded-full bg-paper/10 [&_svg]:size-[18px]">
+                {ICONS[section]}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] text-paper/60">{`Editando · ${meta.group}`}</p>
+                <h2 className="mt-0.5 text-[20px] leading-tight font-semibold tracking-[-0.02em]">{meta.label}</h2>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-paper/70">{meta.where}</p>
+              </div>
+              {changed.includes(section) && (
+                <span className="flex-none rounded-full bg-[#fdf0d8] px-2.5 py-1 text-[11.5px] font-semibold text-[#8a5600]">Sin publicar</span>
+              )}
+            </section>
+          )}
           <div key={section} className="flex flex-col gap-4 motion-safe:animate-fade-in">
             {children}
           </div>
         </div>
+        {/* Vista previa: al lado en pantallas muy anchas; en las demás, a pantalla completa con el botón flotante. */}
         {withPreview && <ContentPreview data={preview} zone={zone} dirty={dirty} open={previewOpen} onClose={() => setPreviewOpen(false)} onEdit={editZone} />}
       </div>
       {withPreview && (
-        <div className="fixed right-4 bottom-[calc(var(--savebar-h,0px)+16px)] z-20 xl:hidden">
+        <div className="fixed right-4 bottom-[calc(var(--savebar-h,0px)+16px)] z-20 2xl:hidden">
           <Button variant="primary" icon={<EyeIcon size={15} />} onClick={() => setPreviewOpen(true)}>
             Ver cómo queda
           </Button>
@@ -296,7 +325,6 @@ export function ContentLayout({ children }: { children: ReactNode }) {
       )}
       {section && (dirty || !PHOTOS_ONLY.includes(section)) && (
         <SaveBar
-          wide
           dirty={dirty}
           onDiscard={() => {
             setF(saved);
@@ -307,6 +335,48 @@ export function ContentLayout({ children }: { children: ReactNode }) {
         />
       )}
     </Ctx.Provider>
+  );
+}
+
+// Índice de secciones del sitio (computador): por grupos, fijo al bajar; marca la actual, las que tienen errores y las que
+// tienen cambios sin publicar.
+function SectionIndex({ current, counts, changed }: { current: ContentSectionId | null; counts: Record<string, number>; changed: ContentSectionId[] }) {
+  return (
+    <nav {...enter(0.5)} aria-label="Secciones del sitio" className="hidden lg:block">
+      <div className="sticky top-28 flex flex-col gap-4 rounded-[22px] bg-paper p-2 ring-1 ring-line ring-inset">
+        {CONTENT_GROUPS.map((g) => (
+          <div key={g} role="group" aria-label={g} className="flex flex-col gap-0.5">
+            <p className="px-3 pt-1.5 pb-1 text-[11.5px] font-medium text-ink-subtle">{g}</p>
+            {CONTENT_SECTIONS.filter((x) => x.group === g).map((x) => {
+              const on = x.id === current;
+              return (
+                <Link
+                  key={x.id}
+                  href={paths.contenido(x.id)}
+                  aria-current={on ? "page" : undefined}
+                  className={`flex items-center gap-2.5 rounded-full px-3 py-2 text-[13px] font-medium transition-colors ${on ? "bg-ink text-paper" : "text-ink hover:bg-panel"}`}
+                >
+                  <span aria-hidden="true" className={on ? "text-paper" : "text-ink-muted"}>
+                    {ICONS[x.id]}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{x.label}</span>
+                  {counts[x.id] ? (
+                    <span className="rounded-full bg-error px-1.5 text-[11px] font-semibold text-paper tabular-nums">
+                      {counts[x.id]}
+                      <span className="sr-only"> con errores</span>
+                    </span>
+                  ) : changed.includes(x.id) ? (
+                    <span title="Con cambios sin publicar" className="size-2 rounded-full bg-warning">
+                      <span className="sr-only"> (con cambios sin publicar)</span>
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </nav>
   );
 }
 

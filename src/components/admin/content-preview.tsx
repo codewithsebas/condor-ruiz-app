@@ -80,7 +80,7 @@ export function ContentPreview({
   return (
     <aside
       aria-label="Vista previa del sitio"
-      className={`${open ? "max-xl:flex" : "max-xl:hidden"} flex min-w-0 flex-col gap-2 bg-canvas max-xl:fixed max-xl:inset-0 max-xl:z-50 max-xl:p-3 xl:sticky xl:top-[84px] xl:h-[calc(100dvh-84px-var(--savebar-h,0px)-16px)] xl:bg-transparent`}
+      className={`${open ? "max-2xl:flex" : "max-2xl:hidden"} flex min-w-0 flex-col gap-2 bg-canvas max-2xl:fixed max-2xl:inset-0 max-2xl:z-50 max-2xl:p-3 2xl:sticky 2xl:top-[104px] 2xl:h-[calc(100dvh-104px-var(--savebar-h,0px)-16px)] 2xl:bg-transparent`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="flex min-w-0 flex-wrap items-center gap-x-2 text-[13px] text-ink-muted">
@@ -105,7 +105,7 @@ export function ContentPreview({
               </button>
             ))}
           </div>
-          <span className="xl:hidden">
+          <span className="2xl:hidden">
             <IconButton label="Cerrar la vista previa" onClick={onClose}>
               <CloseIcon size={17} />
             </IconButton>

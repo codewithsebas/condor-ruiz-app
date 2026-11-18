@@ -124,7 +124,7 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
 
       <div className="relative flex flex-1 flex-col justify-center gutter-1360 pt-[clamp(20px,4vh,72px)]">
         {/* Invitación final */}
-        <div className="reveal-on-scroll flex flex-wrap items-end justify-between gap-x-10 gap-y-6 border-b-2 border-dotted border-on-dark/20 pb-[clamp(16px,3.4vh,44px)]">
+        <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-6 border-b-2 border-dotted border-on-dark/20 pb-[clamp(16px,3.4vh,44px)]">
           <p className="display max-w-[16ch] text-[clamp(2.2rem,min(5vw,9vh),5.2rem)] leading-[.9] lg:max-w-none">
             ¿Listo para despertar <span className="text-accent">frente al nevado?</span>
           </p>
@@ -219,7 +219,7 @@ export function SiteFooterView({ c, texts }: { c: SiteConfig; texts: SiteTexts; 
           alto acotado y el espacio que sobra se lo lleva la parte de arriba; en celular el pie crece con su contenido. */}
       <div aria-hidden="true" className="relative flex flex-none flex-col">
         {/* El nombre, enorme y detrás de todo: se desvanece hacia abajo, donde lo tapan las cabañas y el Nevado. */}
-        <p className="display reveal-on-scroll flex-none bg-linear-to-b from-accent via-accent/75 to-accent/5 bg-clip-text gutter-1360 pt-[.08em] text-[clamp(3.4rem,min(12vw,19vh),12.5rem)] leading-[.84] whitespace-nowrap text-transparent">
+        <p className="display flex-none bg-linear-to-b from-accent via-accent/75 to-accent/5 bg-clip-text gutter-1360 pt-[.08em] text-[clamp(3.4rem,min(12vw,19vh),12.5rem)] leading-[.84] whitespace-nowrap text-transparent">
           El Cóndor del Ruiz
         </p>
         {/* Cabañas y Nevado, delante del nombre. */}

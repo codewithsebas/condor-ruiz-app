@@ -12,7 +12,7 @@ export function PanelFooter({ className = "" }: { className?: string }) {
     >
       <p>{`© ${todayISO().slice(0, 4)} ${holder}. Todos los derechos reservados.`}</p>
       <p>
-        Desarrollado por <span className="font-semibold text-ink-muted">Joab Giraldo</span>
+        Desarrollado en Murillo por <span className="font-semibold text-ink-muted">Joab Giraldo</span>
       </p>
     </footer>
   );

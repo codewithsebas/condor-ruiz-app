@@ -6,8 +6,9 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { BrandName, Logo } from "@/components/brand/logo";
+import { CondorAlado } from "@/components/brand/condor-alado";
 import { Marca } from "@/components/brand/marca";
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, InfoIcon, MenuIcon, RefreshIcon, SearchIcon, SettingsIcon, WarningIcon } from "@/components/ui/icons";
+import { CloseIcon, InfoIcon, MenuIcon, RefreshIcon, SearchIcon, SettingsIcon, WarningIcon } from "@/components/ui/icons";
 import { useSite } from "@/components/site/site-provider";
 import { api } from "@/lib/client/api";
 import { offlineEnabled } from "@/lib/offline/config";
@@ -20,15 +21,17 @@ import { todayISO } from "@/lib/format";
 import { PANEL_THEME_CSS } from "@/components/admin/panel-theme";
 import { themeCss, type SiteTheme } from "@/lib/theme";
 import type { AdminData, PanelRole } from "@/lib/types";
+import { isAdminRole } from "@/lib/permissions";
 import { AdminProvider, type AdminCtx } from "@/components/admin/context";
 import { DateRangePicker } from "@/components/admin/date-picker";
 import { PanelFooter } from "@/components/admin/footer";
 import { TipProvider, useLabelTip, useTip } from "@/components/ui/floating";
-import { PanelSkeleton } from "@/components/admin/skeletons";
+import { ModuleSkeleton, PanelSkeleton } from "@/components/admin/skeletons";
 import { NotificationCenter, chime, soundFor, unlockAudio, useRealtime } from "@/components/admin/notifications";
-import { PREF, usePref, writePref } from "@/components/admin/prefs";
 import { ThemeMenu, syncBrowserBar, useApplyTheme } from "@/components/admin/appearance";
+import { PREF, readPref, usePref, writePref } from "@/components/admin/prefs";
 import { BookingSyncButton } from "@/components/admin/booking-calendars";
+import { Onboarding } from "@/components/admin/onboarding";
 import { CONTENT_SECTIONS, MODULES, MODULE_IDS, NAV_GROUPS, canOpen, clientKeyOf, legacyPath, moduleOf, paths, type ModuleId } from "@/components/admin/routes";
 import { AccessDenied, AccountMenu } from "@/components/admin/account";
 import { GlobalSearch } from "@/components/admin/global-search";
@@ -46,7 +49,6 @@ import {
   Modal,
   ModalPresence,
   iconButtonClass,
-  PageSkeleton,
   Toasts,
   type Crumb,
   type ToastMsg,
@@ -305,32 +307,29 @@ function ConfirmDialog({
 
 type Badges = Partial<Record<ModuleId, { n: number; label: string }>>;
 
-// Elemento del menú de la barra lateral negra. `mini`: solo el icono (barra contraída), con el nombre en el título y
-// para lectores de pantalla.
+// Elemento del menú de la barra lateral (clara, sobre el fondo con brillo).
+// `mini`: barra contraída, solo el icono centrado (el nombre va en el tooltip y para lectores de pantalla).
 const navItem = (mini: boolean) =>
-  `group relative flex items-center rounded-full text-left text-[14px] leading-tight font-medium transition-colors duration-150 ${
-    mini ? "mx-auto size-10 justify-center" : "min-h-[38px] w-full gap-3 px-3.5 py-1.5 pointer-coarse:min-h-11"
+  `group relative flex items-center rounded-full text-left text-[13.5px] leading-tight font-medium transition-[background-color,color,box-shadow] duration-150 ${
+    mini ? "mx-auto size-11 justify-center" : "min-h-[42px] w-full gap-3 px-3.5 py-1.5 pointer-coarse:min-h-11"
   }`;
-const navIcon = "text-white/55 transition-colors group-hover:text-white/90";
-// Booking lleva su azul (el del tema claro del panel, fijo porque la barra es oscura en los dos temas y en el oscuro ese
-// token se oscurece): el icono, y al pasar el mouse un fondo azul tan suave como el gris de las demás filas.
-const bookingIcon = "text-[#91a9e0] transition-colors group-hover:text-[#dbe5f8]";
-const bookingHover = "text-white/72 hover:bg-[#b6c8ef]/20 hover:text-white";
-// Tooltips de la barra lateral contraída: al lado, desde el borde de la barra, y sin esperar.
+// Tooltip de la barra contraída: a la derecha del icono, con el nombre y, si hay, lo pendiente.
 const SIDE_TIP = { placement: "right", delay: 60 } as const;
-
 function NavTip({ label, badge }: { label: string; badge?: { n: number; label: string } }) {
   return (
     <span className="flex flex-col gap-0.5 whitespace-nowrap">
-      <span className="flex items-center gap-2 text-[13px] font-semibold">
-        {label}
-        {badge?.n ? <span className="rounded-full bg-pink px-1.5 text-[11px] font-bold text-ink tabular-nums">{badge.n}</span> : null}
-      </span>
+      <span className="text-[13px] font-semibold">{label}</span>
       {badge?.n ? <span className="text-[11.5px] opacity-70">{`${badge.n} ${badge.label}`}</span> : null}
     </span>
   );
 }
-
+const navIcon = "text-ink transition-colors";
+// Booking lleva su lila: el icono, y al pasar el mouse un fondo lila suave.
+const bookingIcon = "text-info transition-colors";
+const bookingHover = "text-ink hover:bg-blue-soft";
+// Módulo actual: píldora blanca con una sombra muy suave (en oscuro, el gris de las tarjetas).
+const navActive = "bg-paper text-ink shadow-[0_1px_2px_rgb(20_20_22/0.06),0_2px_8px_-2px_rgb(20_20_22/0.08)] [[data-admin-theme=dark]_&]:bg-panel";
+const navIdle = "text-ink hover:bg-paper/60 [[data-admin-theme=dark]_&]:hover:bg-panel/60";
 // Menú de módulos por grupos: el mismo en la barra lateral (escritorio) y en el cajón (móvil y tableta).
 function NavList({
   current,
@@ -357,16 +356,16 @@ function NavList({
       {groups.map(({ g, ids }, gi) => (
         <div key={g} className="flex flex-col gap-0.5">
           {mini ? (
-            gi > 0 && <span aria-hidden="true" className="mx-auto mb-2 block h-px w-6 bg-white/12" />
+            gi > 0 && <span aria-hidden="true" className="mx-auto mb-2 block h-px w-6 bg-line-strong" />
           ) : (
-            <p className="px-3.5 pb-1 text-[12.5px] font-medium text-white/45">{g}</p>
+            <p className="px-3.5 pb-1.5 text-[12.5px] font-medium text-ink-subtle">{g}</p>
           )}
           {ids.map((id) => {
             const { label, icon: Icon, href } = MODULES[id];
             const active = current === id;
             const b = badges[id];
             // Junto a Booking (solo administradores, que son quienes leen Booking), un botón para leerlo ya.
-            const reloadBooking = id === "booking" && role === "admin" && !mini;
+            const reloadBooking = id === "booking" && isAdminRole(role) && !mini;
             const link = (
               <Link
                 key={id}
@@ -376,15 +375,14 @@ function NavList({
                 data-nav={id}
                 {...enter(1 + order++ * 0.5, "side")}
                 {...(mini ? tip(() => <NavTip label={label} badge={b} />, SIDE_TIP) : {})}
-                className={`${navItem(mini)} ${reloadBooking ? "pr-10" : ""} ${active ? `text-pink ${mini ? "bg-white/10" : ""}` : id === "booking" ? bookingHover : "text-white/72 hover:bg-white/7 hover:text-white"}`}
+                className={`${navItem(mini)} ${reloadBooking ? "pr-10" : ""} ${active ? navActive : id === "booking" ? bookingHover : navIdle}`}
               >
-                {active && !mini && <span aria-hidden="true" className="absolute top-1/2 left-0 h-5 w-[3px] -translate-y-1/2 rounded-full bg-pink" />}
-                <Icon size={19} className={id === "booking" ? bookingIcon : active ? "text-pink" : navIcon} />
+                <Icon size={22} className={id === "booking" ? bookingIcon : navIcon} />
                 <span className={mini ? "sr-only" : "flex-1"}>{label}</span>
                 {b?.n ? (
                   mini ? (
                     <>
-                      <span aria-hidden="true" className="absolute top-1.5 right-1.5 size-2.5 rounded-full bg-pink ring-2 ring-ink" />
+                      <span aria-hidden="true" className="absolute top-1 right-1 size-2.5 rounded-full bg-pink ring-2 ring-canvas" />
                       <span className="sr-only">{`${b.n} ${b.label}`}</span>
                     </>
                   ) : (
@@ -408,52 +406,37 @@ function NavList({
   );
 }
 
-// Barra lateral de escritorio: panel negro redondeado, separado del borde. Se contrae a solo iconos (preferencia de
-// este navegador); su ancho, en --admin-sidebar, lo usan también las barras fijas al pie (SaveBar).
-function Sidebar({
-  current,
-  badges,
-  role,
-  mini,
-  onToggle,
-}: {
-  current: ModuleId | null;
-  badges: Badges;
-  role: PanelRole;
-  mini: boolean;
-  onToggle: () => void;
-}) {
+// Barra lateral de escritorio: clara, directamente sobre el fondo con su brillo frío. Con el botón de menú del encabezado
+// o con Ctrl + B (preferencia de este navegador) se contrae a una columna de iconos; su ancho, en --admin-sidebar, lo
+// usan también las barras fijas al pie (SaveBar).
+function Sidebar({ current, badges, role, mini }: { current: ModuleId | null; badges: Badges; role: PanelRole; mini: boolean }) {
   const tip = useTip();
   return (
-    <aside {...enter(0, "side")} className="sticky top-0 z-40 hidden h-dvh w-(--admin-sidebar) flex-none p-3 transition-[width] duration-200 lg:block">
-      <div
-        data-tip-edge
-        className="admin-dark relative flex h-full flex-col rounded-[28px] bg-sidebar text-white [[data-admin-theme=dark]_&]:ring-1 [[data-admin-theme=dark]_&]:ring-white/8"
-      >
+    <aside
+      {...enter(0, "side")}
+      className="sticky top-0 z-40 hidden h-dvh w-(--admin-sidebar) flex-none p-3 transition-[width] duration-200 motion-reduce:transition-none lg:block"
+    >
+      <div data-tip-edge className="relative flex h-full flex-col text-ink">
+        {/* Abierta: el cóndor a todo el ancho y debajo el nombre «Cabañas / EL CÓNDOR DEL RUIZ». Contraída: los dos, pequeños y centrados. */}
         <Link
           href={paths.dashboard}
-          aria-label={mini ? `${config.name}: ir al dashboard` : undefined}
+          aria-label={`${config.name}: ir al dashboard`}
           {...(mini ? tip(() => <NavTip label="Ir al dashboard" />, SIDE_TIP) : {})}
-          className={`flex min-w-0 items-center gap-3 rounded-[20px] pt-6 pb-5 ${mini ? "justify-center px-1" : "px-5"}`}
+          className={`flex min-w-0 items-center rounded-[20px] pt-3 pb-6 ${mini ? "justify-center px-0" : "px-3.5"}`}
         >
-          {/* Abierto: solo el nombre «Cabañas / EL CÓNDOR DEL RUIZ». Contraído: solo el símbolo, del ancho de la barra. */}
-          {mini ? <Marca parte="simbolo" width={54} /> : <Marca parte="nombre" width={176} />}
+          {mini ? (
+            <span className="flex flex-col items-center gap-1.5">
+              <CondorAlado width={64} />
+              <Marca parte="nombre" width={62} />
+            </span>
+          ) : (
+            <span className="flex flex-col items-center gap-4">
+              <CondorAlado width={196} />
+              <Marca parte="nombre" width={150} />
+            </span>
+          )}
         </Link>
-        {/* Centrado con el logo: 24 px de margen + medio logo − 14 px (medio botón): 33 px abierto (nombre de 46 de alto),
-            21 px contraído (símbolo de 23 de alto; el botón sale casi entero de la barra para no taparlo). Dorado pastel fijo en
-            los dos modos: la barra lateral es negra siempre y el dorado oscuro del modo oscuro no se vería. */}
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label={mini ? "Expandir el menú" : "Contraer el menú"}
-          data-gesture={mini ? "next" : "prev"}
-          {...tip(() => <NavTip label={mini ? "Expandir el menú" : "Contraer el menú"} />, SIDE_TIP)}
-          aria-expanded={!mini}
-          className={`absolute grid size-7 ${mini ? "top-[21px] -right-[25px]" : "top-[33px] -right-3.5"} place-items-center rounded-full bg-[#f5d462] text-[#171614] ring-[3px] ring-canvas transition-colors hover:bg-[#e9bf38]`}
-        >
-          {mini ? <ChevronRightIcon size={15} /> : <ChevronLeftIcon size={15} />}
-        </button>
-        <div className={`no-scrollbar flex-1 overflow-y-auto pb-4 ${mini ? "px-2" : "px-3"}`}>
+        <div className={`nav-fade no-scrollbar flex-1 overflow-y-auto pb-4 ${mini ? "px-0" : "px-1"}`}>
           <NavList current={current} badges={badges} role={role} mini={mini} />
         </div>
       </div>
@@ -461,11 +444,22 @@ function Sidebar({
   );
 }
 
+// Botón del encabezado que oculta o muestra la barra lateral (también con Ctrl + B o ⌘ + B).
+function SidebarToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const label = open ? "Contraer el menú" : "Expandir el menú";
+  const tip = useLabelTip(`${label} · Ctrl + B`);
+  return (
+    <button type="button" onClick={onToggle} aria-label={label} aria-expanded={open} {...tip} className={iconButtonClass("secondary")}>
+      <MenuIcon size={18} />
+    </button>
+  );
+}
+
 // Atajo a Configuración en el encabezado.
 function SettingsLink() {
   const tip = useLabelTip("Configuración");
   return (
-    <Link href={paths.configuracion} aria-label="Configuración" data-gesture="settings" {...tip} className={iconButtonClass("primary")}>
+    <Link href={paths.configuracion} aria-label="Configuración" data-gesture="settings" {...tip} className={iconButtonClass("secondary")}>
       <SettingsIcon size={18} />
     </Link>
   );
@@ -532,7 +526,19 @@ function Panel({
   const [now, setNow] = useState(() => Date.now());
   const [menu, setMenu] = useState(false);
   const [searching, setSearching] = useState(false);
-  const mini = usePref(PREF.sidebar, "full") === "mini";
+  // Barra lateral abierta o cerrada (preferencia de este navegador). Ctrl + B (⌘ + B en Mac) la alterna.
+  const sideOpen = usePref(PREF.sidebar, "open") !== "closed";
+  const toggleSide = useCallback(() => writePref(PREF.sidebar, readPref(PREF.sidebar, "open") === "closed" ? "open" : "closed"), []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        toggleSide();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleSide]);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const firstPath = useRef(true);
   // Entrada del panel (globals.css): las piezas con data-enter se animan solo mientras dura; navegar después no las repite.
@@ -713,27 +719,32 @@ function Panel({
   }, [engine, onLoggedOut]);
 
   const cabinMap = useMemo(() => new Map(data.cabinTypes.map((c) => [c.id, c])), [data.cabinTypes]);
-  const ctx: AdminCtx = {
-    data,
-    setData,
-    reload: load,
-    ask,
-    toast: showToast,
-    go,
-    openReservation,
-    onAuthError: authError,
-    logout,
-    live,
-    sync: engine,
-    today,
-    now,
-    cabin: (id) => cabinMap.get(id),
-    cabinLabel: (id, unit) => {
-      const c = cabinMap.get(id);
-      const name = c?.nombre ?? id;
-      return unit ? cabinName(c, unit) : name;
-    },
-  };
+  // Un solo objeto mientras no cambie nada de lo que lleva: así un render del shell que no lo toca (el menú, un aviso,
+  // la barra de guardado) no vuelve a dibujar todo lo que usa useAdmin().
+  const ctx: AdminCtx = useMemo(
+    () => ({
+      data,
+      setData,
+      reload: load,
+      ask,
+      toast: showToast,
+      go,
+      openReservation,
+      onAuthError: authError,
+      logout,
+      live,
+      sync: engine,
+      today,
+      now,
+      cabin: (id) => cabinMap.get(id),
+      cabinLabel: (id, unit) => {
+        const c = cabinMap.get(id);
+        const name = c?.nombre ?? id;
+        return unit ? cabinName(c, unit) : name;
+      },
+    }),
+    [data, setData, load, ask, showToast, go, openReservation, authError, logout, live, engine, today, now, cabinMap],
+  );
 
   const badges: Badges = {
     reservas: { n: data.reservations.filter((r) => r.status === "pending_deposit").length, label: "pendientes de abono" },
@@ -741,10 +752,24 @@ function Panel({
     pagos: { n: data.proofs.filter((p) => p.status === "pending").length, label: "comprobantes por revisar" },
     notificaciones: { n: unread, label: "sin leer" },
   };
-  // El calendario usa todo el ancho de la pantalla; su alto crece con las filas y se desplaza con la página.
-  const fullWidth = mod === "calendario" || mod === "contenido";
   // La sección de contenido conserva su formulario al cambiar de pestaña: no se vuelve a montar.
   const pageKey = mod === "contenido" ? "contenido" : pathname;
+  // Al cambiar de página, su contenido entra con la animación de llegada del panel, más rápida y fundiéndose desde el
+  // fondo (globals.css: [data-enter-fast]). Solo el contenido: la barra lateral y el encabezado no se mueven.
+  const mainRef = useRef<HTMLElement>(null);
+  const shownPage = useRef(pageKey);
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main || shownPage.current === pageKey) return;
+    shownPage.current = pageKey;
+    main.setAttribute("data-entering", "");
+    main.setAttribute("data-enter-fast", "");
+    const t = setTimeout(() => {
+      main.removeAttribute("data-entering");
+      main.removeAttribute("data-enter-fast");
+    }, 1100);
+    return () => clearTimeout(t);
+  }, [pageKey]);
 
   return (
     <AdminProvider value={ctx}>
@@ -757,11 +782,12 @@ function Panel({
         <div
           className="admin-root min-h-dvh bg-canvas text-[15px] text-ink lg:flex"
           data-entering={entering ? "" : undefined}
-          style={{ "--admin-sidebar": mini ? "88px" : "252px" } as CSSProperties}
+          style={{ "--admin-sidebar": sideOpen ? "252px" : "88px" } as CSSProperties}
         >
-          <Sidebar current={mod} badges={badges} role={data.me.role} mini={mini} onToggle={() => writePref(PREF.sidebar, mini ? "full" : "mini")} />
+          <Sidebar current={mod} badges={badges} role={data.me.role} mini={!sideOpen} />
 
-          <div className="flex min-w-0 flex-1 flex-col">
+          {/* Área de trabajo: blanca y redondeada, separada del borde en escritorio (la barra lateral queda sobre el fondo). */}
+          <div className={`flex min-w-0 flex-1 flex-col bg-paper lg:my-3 lg:mr-3 lg:min-h-[calc(100dvh-24px)] lg:rounded-[28px] lg:ring-1 lg:ring-line`}>
             {/* Móvil y tableta: menú en cajón, marca, búsqueda y notificaciones */}
             <header {...enter(0, "down")} className="admin-surface admin-header sticky top-0 z-30 flex flex-none flex-col lg:hidden">
               <div className="flex h-16 items-center justify-between gap-2 px-3">
@@ -777,7 +803,7 @@ function Panel({
                 </div>
                 <div className="flex items-center gap-1.5">
                   <SyncChip compact />
-                  <ThemeMenu compact />
+                  <ThemeMenu />
                   <IconButton
                     label={searching ? "Cerrar la búsqueda" : "Buscar"}
                     variant="secondary"
@@ -798,33 +824,37 @@ function Panel({
             </header>
 
             {/* Escritorio: búsqueda, apariencia, notificaciones, configuración y cuenta */}
-            <header className="admin-surface admin-header sticky top-0 z-20 hidden flex-none items-center gap-4 px-8 pt-4 pb-3 lg:flex">
-              <div {...enter(0, "down")} className="w-full max-w-[620px]">
-                <GlobalSearch className="w-full" />
-              </div>
-              {/* Los botones bajan uno tras otro, después del buscador. */}
-              <div className="ml-auto flex items-center gap-2">
-                <span {...enter(1, "down")}>
-                  <SyncChip />
-                </span>
-                <span {...enter(1.6, "down")} className="flex">
-                  <ThemeMenu />
-                </span>
-                <span {...enter(2.2, "down")} className="flex">
-                  <NotificationCenter />
-                </span>
-                <span {...enter(2.8, "down")} className="flex">
-                  <SettingsLink />
-                </span>
-                <span {...enter(3.4, "down")} className="flex">
-                  <AccountMenu onLogout={logout} />
-                </span>
+            <header className="admin-surface admin-header sticky top-0 z-20 hidden flex-none px-6 pt-5 pb-3 lg:block lg:rounded-t-[28px]">
+              <div className="flex h-16 items-center gap-3 rounded-full bg-paper px-3 ring-1 ring-line">
+                <SidebarToggle open={sideOpen} onToggle={toggleSide} />
+                <div {...enter(0, "down")} className="w-full max-w-[520px]">
+                  <GlobalSearch className="w-full" />
+                </div>
+                {/* Los botones bajan uno tras otro, después del buscador. */}
+                <div className="ml-auto flex items-center gap-2">
+                  <span {...enter(1, "down")}>
+                    <SyncChip />
+                  </span>
+                  <span {...enter(1.6, "down")} className="flex">
+                    <ThemeMenu />
+                  </span>
+                  <span {...enter(2.2, "down")} className="flex">
+                    <NotificationCenter />
+                  </span>
+                  <span {...enter(2.8, "down")} className="flex">
+                    <SettingsLink />
+                  </span>
+                  <span {...enter(3.4, "down")} className="flex">
+                    <AccountMenu onLogout={logout} />
+                  </span>
+                </div>
               </div>
             </header>
 
             {/* Con una barra de guardado (fija al pie), el final de la página deja libre su alto para no quedar tapado. */}
             <main
-              className={`admin-surface mx-auto flex w-full ${fullWidth ? "max-w-none" : "max-w-[1440px]"} min-w-0 flex-1 flex-col gap-6 px-4 pt-3 pb-6 lg:px-8 lg:pt-3 [.admin-root:has([data-savebar])_&]:pb-[calc(var(--savebar-h,64px)+24px)]`}
+              ref={mainRef}
+              className="admin-surface flex w-full min-w-0 flex-1 flex-col gap-6 px-4 pt-3 pb-6 lg:px-6 lg:pt-3 [.admin-root:has([data-savebar])_&]:pb-[calc(var(--savebar-h,64px)+24px)]"
             >
               {loadError && (
                 <Callout tone="warning" role="alert">
@@ -836,8 +866,8 @@ function Panel({
                   </div>
                 </Callout>
               )}
-              <div key={pageKey} {...(mod === "dashboard" ? {} : enter(2))} className="flex flex-col gap-6 motion-safe:animate-fade-in">
-                <Suspense fallback={<PageSkeleton />}>{mod && !canOpen(data.me.role, mod) ? <AccessDenied module={mod} /> : children}</Suspense>
+              <div key={pageKey} {...(mod === "dashboard" ? {} : enter(2))} className="flex flex-col gap-6">
+                <Suspense fallback={<ModuleSkeleton />}>{mod && !canOpen(data.me.role, mod) ? <AccessDenied module={mod} /> : children}</Suspense>
               </div>
               <PanelFooter />
             </main>
@@ -851,21 +881,21 @@ function Panel({
                 dismissOnBackdrop
                 initialFocus="#mn-close"
                 motion="drawer"
-                className="m-0 mr-auto h-dvh max-h-none w-[min(300px,86vw)] rounded-r-[28px] bg-sidebar! p-0 lg:hidden"
+                className="m-0 mr-auto h-dvh max-h-none w-[min(300px,86vw)] rounded-r-[28px] bg-canvas! p-0 lg:hidden"
               >
-                <div className="admin-dark flex h-full flex-col bg-sidebar text-white">
+                <div className="flex h-full flex-col text-ink">
                   <div className="flex items-center justify-between gap-2 px-5 pt-5 pb-5">
                     <span className="flex min-w-0 items-center gap-2.5">
-                      <Marca parte="nombre" width={168} />
+                      <CondorAlado width={170} />
                     </span>
                     <h2 id="mn-title" className="sr-only">
                       Menú del panel
                     </h2>
-                    <IconButton id="mn-close" label="Cerrar el menú" onClick={() => setMenu(false)} className="text-white hover:bg-white/10">
+                    <IconButton id="mn-close" label="Cerrar el menú" variant="secondary" onClick={() => setMenu(false)}>
                       <CloseIcon size={20} />
                     </IconButton>
                   </div>
-                  <div className="no-scrollbar flex-1 overflow-y-auto px-3 pb-4">
+                  <div className="nav-fade no-scrollbar flex-1 overflow-y-auto px-3 pb-4">
                     <NavList current={mod} badges={badges} role={data.me.role} onNavigate={() => setMenu(false)} />
                   </div>
                 </div>
@@ -874,6 +904,7 @@ function Panel({
           </ModalPresence>
 
           <Toasts toast={toast} onDismiss={() => setToast(null)} />
+          <Onboarding />
           <ModalPresence>
             {confirm && <ConfirmDialog cf={confirm} onChange={(p) => setConfirm({ ...confirm, ...p })} onCancel={() => setConfirm(null)} onOk={runConfirm} />}
           </ModalPresence>

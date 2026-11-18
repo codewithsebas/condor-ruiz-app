@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BookingIcon, CalendarIcon, ClockIcon, CloseIcon, FileTextIcon, HomeIcon, LoginIcon, PlusIcon, SearchIcon, WhatsAppIcon } from "@/components/ui/icons";
-import { useLabelTip } from "@/components/ui/floating";
+import { useLabelTip, useTip } from "@/components/ui/floating";
 import { StatusPill } from "@/components/ui/status-pill";
 import { paymentState, pendingOf } from "@/lib/admin-metrics";
-import { STATUS, addDays, cop, isISO, monthStart, plural } from "@/lib/format";
+import { MS, STATUS, WD_MIN, addDays, cop, isISO, monthStart, parseISO, plural } from "@/lib/format";
 import { lastOfMonth, monthOptions } from "@/components/admin/calendar/shared";
 import { CHANNEL_NAME, isFromBooking, staysWithoutData } from "@/lib/booking";
-import { LIST_CARD_BASE } from "@/components/admin/list-table";
 import type { ChannelStay, Reservation, ReservationStatus } from "@/lib/types";
 import { BookingStayDialog, BookingStaysPending } from "@/components/admin/booking-stay";
 import { Combobox } from "@/components/ui/combobox";
@@ -22,7 +21,8 @@ import { ARRIVING, DEPARTING, adminInput, norm, rowOf } from "@/components/admin
 import { SyncMark } from "@/components/admin/sync";
 import { useReservationActions } from "@/components/admin/reservation-detail";
 import { ACTION_ICON, ActionMenu, inMenu, type ActionKind } from "@/components/admin/action-menu";
-import { Badge, Button, Card, EmptyState, IconButton, ModalPresence, StatCard, iconButtonClass } from "@/components/admin/ui";
+import { Badge, Button, EmptyState, IconButton, ModalPresence, Segmented, enter, iconButtonClass } from "@/components/admin/ui";
+import { Panel } from "@/components/admin/board";
 
 // Más reciente primero; si dos se crearon a la vez (un grupo), desempata el código para que el orden no salte.
 const newestFirst = (a: Reservation, b: Reservation) => b.createdAt.localeCompare(a.createdAt) || b.code.localeCompare(a.code);
@@ -33,7 +33,7 @@ type Sort = "creada-desc" | "llegada-desc" | "llegada-asc" | "valor-desc";
 
 // Lista de reservas. Los filtros viven en la URL: al abrir una reserva y volver, la lista sigue igual.
 export function ReservationsView() {
-  const { data, today, openReservation, cabinLabel } = useAdmin();
+  const { data, today } = useAdmin();
   const [q, setQ] = useParam("q", "");
   const [view, setView] = useParam<View>("estado", "");
   const [cabin, setCabin] = useParam("cabana", "");
@@ -98,33 +98,48 @@ export function ReservationsView() {
     <>
       <ModalPresence>{creating && <NewReservationDialog draft={{}} onClose={() => setCreating(false)} />}</ModalPresence>
 
-      {/* Como el calendario: el título del mismo tamaño y, debajo, los filtros y «Nueva reserva» con su mismo alto. */}
-      <div className="flex flex-col gap-3">
-        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-          <div className="min-w-0">
-            <h1 id="ad-title" tabIndex={-1} className="text-[25px] leading-tight font-bold tracking-[-0.03em] text-ink focus:outline-none">
-              {MODULES.reservas.label}
-            </h1>
-            <p className="text-[14.5px] text-ink-muted">{MODULES.reservas.description}</p>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            {active && (
-              <Button size="sm" variant="ghost" icon={<CloseIcon size={14} />} onClick={clear}>
-                Limpiar filtros
-              </Button>
-            )}
-            <Button variant="primary" icon={<PlusIcon size={15} />} onClick={() => setCreating(true)}>
-              Nueva reserva
+      <header {...enter(0)} className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium text-ink-muted">{MODULES.reservas.description}</p>
+          <h1 id="ad-title" tabIndex={-1} className="mt-1 text-[clamp(1.5rem,2.4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-ink focus:outline-none">
+            {MODULES.reservas.label}
+          </h1>
+        </div>
+        <div className="flex items-center gap-2">
+          {active && (
+            <Button size="sm" variant="ghost" icon={<CloseIcon size={14} />} onClick={clear}>
+              Limpiar filtros
             </Button>
-          </div>
-        </header>
-        <ReservationStats />
-        <form
-          role="search"
-          aria-label="Filtrar reservas"
-          onSubmit={(e) => e.preventDefault()}
-          className="grid grid-cols-2 items-center gap-2 md:grid-cols-3 xl:grid-cols-[minmax(0,1.5fr)_repeat(5,minmax(0,1fr))]"
-        >
+          )}
+          <Button variant="primary" icon={<PlusIcon size={15} />} onClick={() => setCreating(true)}>
+            Nueva reserva
+          </Button>
+        </div>
+      </header>
+
+      <ReservationStats onView={setView} />
+
+      <div className="flex flex-col gap-3">
+        {/* Vistas rápidas: todas, las de trabajo y cada estado, con su cantidad. */}
+        <Segmented
+          label="Mostrar"
+          value={view}
+          onChange={setView}
+          className="w-full"
+          options={[
+            { value: "" as View, label: "Todas", count: data.reservations.length },
+            { value: "proximas" as View, label: "Próximas llegadas", count: data.reservations.filter((r) => ["pending_deposit", "confirmed", "rescheduled"].includes(r.status) && r.checkIn >= today).length },
+            { value: "comprobantes" as View, label: "Comprobantes", count: proofCodes.size },
+            ...(missing ? [{ value: "booking-sin-datos" as View, label: "Booking sin datos", count: missing }] : []),
+            ...(Object.entries(STATUS) as [ReservationStatus, (typeof STATUS)[ReservationStatus]][]).map(([v, s]) => ({
+              value: v as View,
+              label: s.label,
+              count: byStatus(v),
+              icon: <span aria-hidden="true" className="size-2 rounded-full ring-1 ring-ink/15" style={{ background: s.bg }} />,
+            })),
+          ]}
+        />
+        <form role="search" aria-label="Filtrar reservas" onSubmit={(e) => e.preventDefault()} className="grid grid-cols-2 items-center gap-2 md:grid-cols-3 xl:grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,1fr))]">
           <div className="relative col-span-2 min-w-0 md:col-span-3 xl:col-span-1">
             <label htmlFor="res-q" className="sr-only">
               Buscar reservas
@@ -136,29 +151,7 @@ export function ReservationsView() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Nombre, código, correo, celular o documento"
-              className={`${adminInput} pl-8!`}
-            />
-          </div>
-          <div className="min-w-0">
-            <label htmlFor="res-estado" className="sr-only">
-              Estado
-            </label>
-            <Combobox
-              id="res-estado"
-              value={view}
-              onChange={(v) => setView(v as View)}
-              options={[
-                { value: "", label: "Todas las reservas" },
-                { value: "comprobantes", label: "Comprobantes por revisar", description: plural(proofCodes.size, "reserva", "reservas") },
-                { value: "proximas", label: "Próximas llegadas", description: "Pendientes, confirmadas y reprogramadas" },
-                { value: "booking-sin-datos", label: "Booking sin datos", description: plural(missing, "estadía por completar", "estadías por completar") },
-                ...(Object.entries(STATUS) as [ReservationStatus, (typeof STATUS)[ReservationStatus]][]).map(([v, s]) => ({
-                  value: v,
-                  label: s.label,
-                  color: s.bg,
-                  description: plural(byStatus(v), "reserva", "reservas"),
-                })),
-              ]}
+              className={`${adminInput} rounded-full! pl-8!`}
             />
           </div>
           <div className="min-w-0">
@@ -170,10 +163,7 @@ export function ReservationsView() {
               value={cabin}
               onChange={setCabin}
               icon={<HomeIcon size={14} className="text-ink-muted" />}
-              options={[
-                { value: "", label: "Todas las cabañas" },
-                ...data.cabinTypes.map((c) => ({ value: c.id, label: c.nombre, description: c.activa ? undefined : "Inactiva" })),
-              ]}
+              options={[{ value: "", label: "Todas las cabañas" }, ...data.cabinTypes.map((c) => ({ value: c.id, label: c.nombre, description: c.activa ? undefined : "Inactiva" }))]}
             />
           </div>
           <div className="min-w-0">
@@ -233,130 +223,111 @@ export function ReservationsView() {
       {view === "booking-sin-datos" ? (
         <BookingStaysPending onComplete={setStaying} />
       ) : list.length > 0 ? (
-        // La tabla necesita 1060 px: según el espacio real (con el menú lateral abierto o cerrado), tabla o tarjetas.
-        <div className="@container flex flex-col gap-4">
-          <Card className={`hidden @min-[1060px]:block ${LIST_CARD_BASE}`}>
-            <table className="w-full text-[14px] [&_td]:px-3 [&_th]:px-3">
-              <thead className="border-b border-line bg-canvas/70 text-left text-[12px] font-semibold text-ink-muted">
-                <tr>
-                  {["Reserva", "Huésped", "Cabaña", "Fechas", "Total", "Pago", "Estado"].map((h) => (
-                    <th key={h} scope="col" className={`px-4 py-2.5 font-semibold ${h === "Total" ? "text-right" : ""}`}>
-                      {h}
-                    </th>
-                  ))}
-                  <th scope="col" className="px-4 py-2.5 text-right font-semibold">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {paged.rows.map((r) => {
-                  const x = rowOf(r, cabinLabel);
-                  const pay = paymentState(r);
-                  return (
-                    <tr
-                      key={r.code}
-                      onClick={() => openReservation(r.code)}
-                      className={`group cursor-pointer transition-colors ${r.code === latest ? "bg-yellow-soft/70 hover:bg-yellow-soft" : "hover:bg-canvas/70"}`}
-                    >
-                      <td className="px-4 py-3">
-                        <Link
-                          href={paths.reserva(r.code)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="rounded-sm font-bold whitespace-nowrap text-ink underline-offset-2 hover:underline"
-                        >
-                          {x.code}
-                        </Link>
-                        {r.source === "import" &&
-                          (isFromBooking(r) ? (
-                            <span className="flex items-center gap-1 text-[11.5px] whitespace-nowrap text-ink-muted">
-                              <BookingIcon size={12} className="flex-none" />
-                              {CHANNEL_NAME}
-                            </span>
-                          ) : (
-                            <span className="block text-[11.5px] text-ink-muted">{r.channel || "Importada"}</span>
-                          ))}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="block font-semibold text-ink">{x.name}</span>
-                        <span className="block text-[12.5px] text-ink-muted tabular-nums">{x.doc}</span>
-                      </td>
-                      <td className="px-4 py-3 text-ink">{x.cabin}</td>
-                      <td className="px-4 py-3">
-                        <span className="block whitespace-nowrap text-ink">{x.dates}</span>
-                        <span className="block text-[12.5px] text-ink-muted">{`${x.nights} · ${r.checkIn.slice(0, 4)}`}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold whitespace-nowrap text-ink tabular-nums">{x.total}</td>
-                      <td className="px-4 py-3">
-                        {proofCodes.has(r.code) ? (
-                          <Badge tone="info" icon={<FileTextIcon size={12} />}>
-                            Comprobante por revisar
-                          </Badge>
-                        ) : (
-                          <Badge tone={pay.tone}>{pay.label}</Badge>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="flex flex-col items-start gap-1">
-                          <StatusPill status={r.status} size="sm" />
-                          <SyncMark entity={`reservations:${r.code}`} />
-                        </span>
-                      </td>
-                      <td className="py-3 pr-4 pl-2">
-                        <RowActions r={r} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <Paginator p={paged} noun="reservas" className="border-t border-line px-4 py-3" />
-          </Card>
-          <ul className="grid grid-cols-1 gap-2.5 md:grid-cols-2 @min-[1060px]:hidden">
-            {paged.rows.map((r) => {
-              const x = rowOf(r, cabinLabel);
-              const pay = paymentState(r);
-              return (
-                <li key={r.code}>
-                  <Link
-                    href={paths.reserva(r.code)}
-                    className={`flex w-full flex-col gap-1.5 rounded-[20px] p-4 text-left ring-1 ring-line transition-colors ${r.code === latest ? "bg-yellow-soft/70 hover:bg-yellow-soft" : "bg-paper hover:bg-canvas"}`}
-                  >
-                    <span className="flex w-full items-center justify-between gap-2">
-                      <strong className="text-[13px] font-bold text-ink-muted">{x.code}</strong>
-                      <StatusPill status={r.status} size="sm" />
-                    </span>
-                    <span className="text-[15px] font-semibold text-ink">{x.name}</span>
-                    <span className="text-[13px] text-ink-muted">{`${x.cabin} · ${x.dates}`}</span>
-                    <span className="flex w-full flex-wrap items-center justify-between gap-2 text-[13px]">
-                      {proofCodes.has(r.code) ? <Badge tone="info">Comprobante por revisar</Badge> : <Badge tone={pay.tone}>{pay.label}</Badge>}
-                      <strong className="font-semibold text-ink tabular-nums">{x.total}</strong>
-                    </span>
-                    <SyncMark entity={`reservations:${r.code}`} />
-                  </Link>
-                </li>
-              );
-            })}
+        <>
+          <p className="text-[13px] text-ink-muted">
+            {plural(list.length, "reserva", "reservas")}
+            {list.length > 0 && (
+              <>
+                {" · valor total "}
+                <strong className="font-semibold text-ink">{cop(list.reduce((s, r) => s + r.quote.total, 0))}</strong>
+              </>
+            )}
+          </p>
+          <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
+            {paged.rows.map((r) => (
+              <Ticket key={r.code} r={r} latest={r.code === latest} proof={proofCodes.has(r.code)} />
+            ))}
           </ul>
-          <Paginator p={paged} noun="reservas" className="rounded-[20px] bg-paper px-4 py-3 ring-1 ring-line @min-[1060px]:hidden" />
-        </div>
+          <Paginator p={paged} noun="reservas" className="rounded-[18px] bg-paper px-4 py-3 ring-1 ring-line" />
+        </>
       ) : (
-        <Card className="p-4">
+        <Panel id="res-empty" title="Reservas">
           <EmptyState
             icon={<SearchIcon size={18} />}
             title={active ? "No hay reservas con esos filtros" : "Aún no hay reservas"}
             text={active ? "Prueba con otro estado, otras fechas u otro término de búsqueda." : "Las reservas que lleguen desde el sitio aparecerán aquí."}
             action={active ? <Button onClick={clear}>Limpiar filtros</Button> : undefined}
           />
-        </Card>
+        </Panel>
       )}
     </>
   );
 }
 
+// Reserva como un boleto: franja del color de su estado, código y canal, huésped, las fechas en grande con las noches,
+// el total y el pago; abajo, sus acciones.
+function Ticket({ r, latest, proof }: { r: Reservation; latest: boolean; proof: boolean }) {
+  const { cabinLabel } = useAdmin();
+  const x = rowOf(r, cabinLabel);
+  const pay = paymentState(r);
+  const d = (iso: string) => {
+    const date = parseISO(iso);
+    return { day: date.getUTCDate(), month: MS[date.getUTCMonth()], wd: WD_MIN[date.getUTCDay()] };
+  };
+  const a = d(r.checkIn);
+  const b = d(r.checkOut);
+  return (
+    <li className={`relative flex min-w-0 flex-col overflow-hidden rounded-[22px] bg-paper ring-1 ring-inset ${latest ? "ring-ink/30" : "ring-line"}`}>
+      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1.5" style={{ background: STATUS[r.status]?.bg }} />
+      <Link href={paths.reserva(r.code)} className="flex min-w-0 flex-col gap-3 p-5 pl-6 transition-colors hover:bg-panel/60">
+        <span className="flex items-start justify-between gap-2">
+          <span className="min-w-0">
+            <span className="flex items-center gap-2 text-[12px] font-semibold tracking-[.03em] text-ink-muted">
+              {x.code}
+              {latest && <Badge tone="info">Última</Badge>}
+              {r.source === "import" &&
+                (isFromBooking(r) ? (
+                  <span className="inline-flex items-center gap-1 font-medium">
+                    <BookingIcon size={12} />
+                    {CHANNEL_NAME}
+                  </span>
+                ) : (
+                  <span className="font-medium">{r.channel || "Importada"}</span>
+                ))}
+            </span>
+            <span className="mt-0.5 block truncate text-[15px] font-semibold text-ink">{x.name}</span>
+            <span className="block truncate text-[12px] text-ink-muted">{x.cabin}</span>
+          </span>
+          <StatusPill status={r.status} size="sm" />
+        </span>
+        {/* Fechas como en un boleto: llegada → salida, con las noches al centro. */}
+        <span className="flex items-center gap-2 rounded-[16px] bg-panel px-3.5 py-2.5 ring-1 ring-line ring-inset">
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="text-[11px] text-ink-muted">{`Llega · ${a.wd}`}</span>
+            <span className="text-[18px] leading-tight font-semibold text-ink">{`${a.day} ${a.month}`}</span>
+          </span>
+          <span className="flex flex-none flex-col items-center px-1 text-[11px] text-ink-muted">
+            <span aria-hidden="true" className="block h-px w-10 bg-line-strong" />
+            <span className="mt-1">{x.nights}</span>
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col items-end">
+            <span className="text-[11px] text-ink-muted">{`Sale · ${b.wd}`}</span>
+            <span className="text-[18px] leading-tight font-semibold text-ink">{`${b.day} ${b.month}`}</span>
+          </span>
+        </span>
+        <span className="flex flex-wrap items-center justify-between gap-2">
+          {proof ? (
+            <Badge tone="info" icon={<FileTextIcon size={12} />}>
+              Comprobante por revisar
+            </Badge>
+          ) : (
+            <Badge tone={pay.tone}>{pay.label}</Badge>
+          )}
+          <span className="text-[17px] font-semibold tracking-[-0.02em] text-ink">{x.total}</span>
+        </span>
+        <SyncMark entity={`reservations:${r.code}`} />
+      </Link>
+      <div className="mt-auto border-t border-line px-3 py-2 pl-4">
+        <RowActions r={r} />
+      </div>
+    </li>
+  );
+}
+
 // Resumen de todas las reservas: no cambia con los filtros de la lista. Llegadas y salidas se cuentan igual que en Inicio.
-function ReservationStats() {
+function ReservationStats({ onView }: { onView: (v: View) => void }) {
   const { data, today } = useAdmin();
+  const tip = useTip();
   const R = data.reservations;
   const arrivals = R.filter((r) => r.checkIn === today && ARRIVING.includes(r.status)).length;
   const departures = R.filter((r) => r.checkOut === today && DEPARTING.includes(r.status)).length;
@@ -365,25 +336,78 @@ function ReservationStats() {
   const week = addDays(today, 7);
   const thisWeek = upcoming.filter((r) => r.checkIn <= week).length;
   const unpaid = R.filter((r) => pendingOf(r).deposit > 0); // La misma cuenta de Pagos.
+  // Reservas vigentes por estado (barra en partes con el color de cada estado, su leyenda y su cantidad).
+  const live: ReservationStatus[] = ["pending_deposit", "confirmed", "rescheduled", "checked_in"];
+  const parts = live.map((s) => ({ s, n: R.filter((r) => r.status === s).length })).filter((p) => p.n);
+  const total = parts.reduce((n, p) => n + p.n, 0);
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <StatCard accent="blue" label="Llegadas hoy" value={arrivals} hint={arrivals ? "por recibir" : "Ninguna hoy"} icon={<LoginIcon size={15} />} />
-      <StatCard
-        accent="green"
-        label="En estadía"
-        value={inHouse}
-        hint={departures ? plural(departures, "salida hoy", "salidas hoy") : "Sin salidas hoy"}
-        icon={<HomeIcon size={15} />}
-      />
-      <StatCard accent="pink" label="Por llegar" value={upcoming.length} hint={`${thisWeek} en los próximos 7 días`} icon={<CalendarIcon size={15} />} />
-      <StatCard
-        accent="yellow"
-        label="Sin abono"
-        value={unpaid.length}
-        hint={unpaid.length ? `${cop(unpaid.reduce((s, r) => s + pendingOf(r).deposit, 0))} por recibir` : "Ninguno ahora"}
-        icon={<ClockIcon size={15} />}
-      />
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+      <section {...enter(1)} aria-label="Reservas vigentes" className="flex flex-col gap-4 rounded-[22px] bg-ink p-6 text-paper xl:col-span-5">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-[13px] font-medium text-paper/70">Reservas vigentes</h2>
+          <span aria-hidden="true" className="grid size-9 place-items-center rounded-full bg-paper/10">
+            <CalendarIcon size={16} />
+          </span>
+        </div>
+        <p className="flex items-baseline gap-2">
+          <span className="text-[56px] leading-none font-semibold tracking-[-0.04em]">{total}</span>
+          <span className="text-[14px] text-paper/60">{`de ${plural(R.length, "reserva", "reservas")}`}</span>
+        </p>
+        {total > 0 && (
+          <div className="mt-auto flex flex-col gap-2.5">
+            <div role="img" aria-label={parts.map((p) => `${STATUS[p.s].label}: ${p.n}`).join(", ")} className="flex h-2.5 gap-[2px]">
+              {parts.map((p) => (
+                <span
+                  key={p.s}
+                  {...tip(() => (
+                    <span>
+                      <strong>{STATUS[p.s].label}</strong> · {p.n}
+                    </span>
+                  ))}
+                  className="h-full rounded-full"
+                  style={{ width: `${(p.n / total) * 100}%`, background: STATUS[p.s].bg }}
+                />
+              ))}
+            </div>
+            <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
+              {parts.map((p) => (
+                <li key={p.s}>
+                  <button type="button" onClick={() => onView(p.s)} className="flex items-center gap-1.5 text-[12px] text-paper/70 transition-colors hover:text-paper">
+                    <span aria-hidden="true" className="size-2 rounded-full" style={{ background: STATUS[p.s].bg }} />
+                    {STATUS[p.s].label}
+                    <span className="font-semibold text-paper">{p.n}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+      <div className="grid min-w-0 grid-cols-2 gap-4 xl:col-span-7">
+        {[
+          { icon: <LoginIcon size={15} />, label: "Llegadas hoy", value: arrivals, hint: arrivals ? "por recibir" : "ninguna hoy" },
+          { icon: <HomeIcon size={15} />, label: "En estadía", value: inHouse, hint: departures ? plural(departures, "salida hoy", "salidas hoy") : "sin salidas hoy" },
+          { icon: <CalendarIcon size={15} />, label: "Por llegar", value: upcoming.length, hint: `${thisWeek} en los próximos 7 días` },
+          {
+            icon: <ClockIcon size={15} />,
+            label: "Sin abono",
+            value: unpaid.length,
+            hint: unpaid.length ? `${cop(unpaid.reduce((s, r) => s + pendingOf(r).deposit, 0))} por recibir` : "ninguno ahora",
+          },
+        ].map((t, i) => (
+          <section key={t.label} {...enter(1.5 + i * 0.4)} aria-label={t.label} className="flex min-w-0 flex-col gap-2 rounded-[22px] bg-paper p-5 ring-1 ring-line ring-inset">
+            <span className="flex items-center gap-2 text-[12.5px] font-medium text-ink-muted">
+              <span aria-hidden="true" className="grid size-7 flex-none place-items-center rounded-full bg-panel text-ink ring-1 ring-line">
+                {t.icon}
+              </span>
+              {t.label}
+            </span>
+            <p className="text-[28px] leading-none font-semibold tracking-[-0.03em] text-ink">{t.value}</p>
+            <p className="mt-auto truncate text-[12px] text-ink-subtle">{t.hint}</p>
+          </section>
+        ))}
+      </div>
     </div>
   );
 }

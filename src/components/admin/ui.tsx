@@ -1,7 +1,7 @@
 "use client";
 
-// Piezas reutilizables del panel: el sistema de diseño del panel (fondo crema, tarjetas arena, negro para las acciones
-// principales y pasteles para destacar). Todas las páginas del panel se arman con ellas.
+// Piezas reutilizables del panel: el sistema de diseño del panel (área de trabajo blanca, tarjetas gris claro con borde fino, negro
+// para las acciones principales y lo elegido, y pasteles suaves para destacar). Todas las páginas del panel se arman con ellas.
 import Link from "next/link";
 import {
   createContext,
@@ -104,11 +104,11 @@ type Size = "sm" | "md" | "lg";
 
 const VARIANT: Record<Variant, string> = {
   primary: "bg-ink text-paper hover:not-disabled:bg-ink/85",
-  secondary: "bg-paper/55 text-ink ring-1 ring-line-strong ring-inset hover:not-disabled:bg-paper hover:not-disabled:ring-ink-subtle",
-  ghost: "bg-transparent text-ink hover:not-disabled:bg-ink/6",
+  secondary: "bg-paper text-ink ring-1 ring-line-strong ring-inset hover:not-disabled:bg-panel hover:not-disabled:ring-ink-subtle/60",
+  ghost: "bg-transparent text-ink hover:not-disabled:bg-panel",
   danger: "bg-error text-paper hover:not-disabled:bg-[color-mix(in_srgb,var(--color-error)_86%,#000)]",
   "danger-ghost": "bg-transparent text-error hover:not-disabled:bg-error-soft",
-  accent: "bg-pink text-ink hover:not-disabled:bg-pink-deep",
+  accent: "bg-panel text-ink hover:not-disabled:bg-line",
 };
 // Todos los botones del panel miden lo mismo (36 px, letra de 13 px), igual que los desplegables (.field-compact).
 // Los tamaños se conservan como nombres para no tocar cada uso, pero ya no cambian la medida.
@@ -120,7 +120,7 @@ const PRESS = "transition-[background-color,color,box-shadow,transform] duration
 
 // Clases de botón para usar también en enlaces (<a>): píldora, sin borde salvo la variante secundaria.
 export const buttonClass = (variant: Variant = "secondary", size: Size = "md", extra = "") =>
-  `inline-flex items-center justify-center rounded-full ${VARIANT[variant]} ${SIZE[size]} font-semibold whitespace-nowrap select-none ${PRESS} disabled:cursor-not-allowed disabled:opacity-45 ${extra}`;
+  `inline-flex items-center justify-center rounded-full ${VARIANT[variant]} ${SIZE[size]} font-medium whitespace-nowrap select-none ${PRESS} disabled:cursor-not-allowed disabled:opacity-45 ${extra}`;
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: Size; loading?: boolean; icon?: ReactNode };
 
@@ -262,10 +262,10 @@ export function FieldError({ id, children }: { id?: string; children: ReactNode 
 
 /* ───────────── Contenedores ───────────── */
 
-// Tarjeta del panel: arena sobre el fondo crema, sin borde ni sombra.
+// Tarjeta del panel: gris casi blanco sobre el área de trabajo blanca, con un borde muy fino y sin sombra.
 export function Card({ className = "", children, ...rest }: HTMLAttributes<HTMLElement>) {
   return (
-    <section className={`rounded-[22px] bg-panel [--surface:var(--color-panel)] ${className}`} {...rest}>
+    <section className={`rounded-[20px] bg-panel ring-1 ring-line ring-inset [--surface:var(--color-panel)] ${className}`} {...rest}>
       {children}
     </section>
   );
@@ -298,7 +298,7 @@ export function CardHeader({
           </span>
         )}
         <div className={`min-w-0 ${icon && subtitle ? "pt-0.5" : ""}`}>
-          <h2 id={id} className="text-[16px] leading-tight font-bold tracking-[-0.01em] text-ink">
+          <h2 id={id} className="text-[15px] leading-tight font-semibold tracking-[-0.01em] text-ink">
             {title}
           </h2>
           {subtitle && <p className="mt-0.5 text-[13px] text-ink-muted">{subtitle}</p>}
@@ -369,29 +369,11 @@ export function ErrorState({
   );
 }
 
-// Esqueleto de una página del panel mientras se prepara (título, indicadores y bloque principal).
-export function PageSkeleton() {
-  return (
-    <div role="status" aria-label="Cargando la página" className="flex flex-col gap-5">
-      <div className="flex flex-col gap-2">
-        <Skeleton className="h-9 w-64" />
-        <Skeleton className="h-4 w-80 max-w-full" />
-      </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-[120px] rounded-[22px]" />
-        ))}
-      </div>
-      <Skeleton className="h-[320px] rounded-[22px]" />
-    </div>
-  );
-}
-
 const CALLOUT = {
-  info: { cls: "bg-paper/70 text-ink ring-1 ring-line ring-inset", icon: <InfoIcon size={17} /> },
-  warning: { cls: "bg-warning-soft text-warning", icon: <WarningIcon size={17} /> },
-  error: { cls: "bg-error-soft text-error", icon: <AlertIcon size={17} /> },
-  success: { cls: "bg-success-soft text-success", icon: <CheckIcon size={17} /> },
+  info: { cls: "bg-paper text-ink ring-1 ring-line ring-inset", icon: <InfoIcon size={17} /> },
+  warning: { cls: "bg-warning-soft text-warning ring-1 ring-warning/15 ring-inset", icon: <WarningIcon size={17} /> },
+  error: { cls: "bg-error-soft text-error ring-1 ring-error/15 ring-inset", icon: <AlertIcon size={17} /> },
+  success: { cls: "bg-success-soft text-success ring-1 ring-success/15 ring-inset", icon: <CheckIcon size={17} /> },
 };
 
 export function Callout({
@@ -406,7 +388,7 @@ export function Callout({
   role?: "alert" | "status";
 }) {
   return (
-    <div role={role} className={`flex items-start gap-2.5 rounded-[16px] px-4 py-3 text-[13.5px] leading-snug ${CALLOUT[tone].cls} ${className}`}>
+    <div role={role} className={`flex items-start gap-2.5 rounded-[14px] px-4 py-3 text-[13.5px] leading-snug ${CALLOUT[tone].cls} ${className}`}>
       <span aria-hidden="true" className="mt-px flex-none">
         {CALLOUT[tone].icon}
       </span>
@@ -420,7 +402,7 @@ export function Callout({
 export function CountBadge({ n, tone = "muted", label }: { n: number; tone?: "muted" | "attention"; label?: string }) {
   return (
     <span
-      className={`inline-grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[11.5px] font-bold tabular-nums ${tone === "attention" ? "bg-pink text-ink" : "bg-ink/8 text-ink-muted"}`}
+      className={`inline-grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[11.5px] font-bold tabular-nums ${tone === "attention" ? "bg-ink text-paper" : "bg-ink/7 text-ink-muted"}`}
     >
       <span>
         {n}
@@ -441,13 +423,11 @@ export function SaveBar({
   onDiscard,
   onSave,
   saveLabel,
-  wide = false,
 }: {
   dirty: boolean;
   onDiscard: () => void;
   onSave: () => void;
   saveLabel: string;
-  wide?: boolean; // en páginas a todo el ancho
 }) {
   const bar = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -468,7 +448,7 @@ export function SaveBar({
       data-savebar
       className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-canvas/92 pb-[env(safe-area-inset-bottom)] backdrop-blur supports-[backdrop-filter]:bg-canvas/80 lg:left-[var(--admin-sidebar,264px)]"
     >
-      <div className={`mx-auto flex ${wide ? "max-w-none" : "max-w-[1440px]"} flex-wrap items-center justify-between gap-3 px-4 py-3 lg:px-8`}>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 lg:px-8">
         <p aria-live="polite" className="flex items-center gap-2 text-[13.5px] font-medium text-ink-muted">
           <span aria-hidden="true" className={`size-2 rounded-full transition-colors ${dirty ? "bg-pink-deep" : "bg-line-strong"}`} />
           {dirty ? "Tienes cambios sin guardar" : "Sin cambios pendientes"}
@@ -703,8 +683,8 @@ export function PageHeader({ title, description, actions, children }: { title: s
 
 type Opt<T extends string> = { value: T; label: ReactNode; icon?: ReactNode; count?: number };
 
-// Opción única entre pocas alternativas (vista del calendario, filtros rápidos): píldoras, la elegida en negro y las
-// demás con borde punteado. Flechas para moverse.
+// Opción única entre pocas alternativas (vista del calendario, filtros rápidos): chips grises y el elegido en negro, con
+// una marca de verificación. Flechas para moverse.
 export function Segmented<T extends string>({
   options,
   value,
@@ -741,10 +721,15 @@ export function Segmented<T extends string>({
             tabIndex={on ? 0 : -1}
             onClick={() => onChange(o.value)}
             onKeyDown={(e) => move(e, i)}
-            className={`inline-flex flex-none items-center gap-1.5 rounded-full border font-semibold whitespace-nowrap transition-[background-color,color,border-color] duration-150 ${
+            className={`inline-flex flex-none items-center gap-1.5 rounded-full font-medium whitespace-nowrap transition-[background-color,color] duration-150 ${
               size === "sm" ? "h-7 px-3 text-[12.5px]" : "h-8 px-3.5 text-[13px] pointer-coarse:h-9"
-            } ${on ? "border-ink bg-ink text-paper" : "border-dashed border-line-strong text-ink-muted hover:border-ink-subtle hover:text-ink"}`}
+            } ${on ? "bg-ink text-paper" : "bg-panel text-ink-muted hover:bg-line hover:text-ink"}`}
           >
+            {on && !o.icon && (
+              <span aria-hidden="true" className="-ml-1 grid size-4 place-items-center rounded-full bg-paper text-ink">
+                <CheckIcon size={10} />
+              </span>
+            )}
             {o.icon}
             {o.label}
             {o.count !== undefined && <span className={`rounded-full px-1.5 text-[11px] tabular-nums ${on ? "bg-paper/20" : "bg-ink/7"}`}>{o.count}</span>}
@@ -768,11 +753,11 @@ export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs:
             role="tab"
             aria-selected={on}
             onClick={() => onChange(t.value)}
-            className={`inline-flex h-9 flex-none items-center gap-2 rounded-full px-4 text-[13.5px] font-semibold whitespace-nowrap transition-colors duration-150 ${on ? "bg-ink text-paper" : "text-ink-muted hover:bg-panel hover:text-ink"}`}
+            className={`inline-flex h-9 flex-none items-center gap-2 rounded-full px-4 text-[13.5px] font-medium whitespace-nowrap transition-colors duration-150 ${on ? "bg-ink text-paper" : "bg-panel text-ink-muted hover:bg-line hover:text-ink"}`}
           >
             {t.icon}
             {t.label}
-            {t.count !== undefined && t.count > 0 && <span className="rounded-full bg-pink px-1.5 text-[11px] text-ink tabular-nums">{t.count}</span>}
+            {t.count !== undefined && t.count > 0 && <span className={`rounded-full px-1.5 text-[11px] tabular-nums ${on ? "bg-paper text-ink" : "bg-ink text-paper"}`}>{t.count}</span>}
           </button>
         );
       })}
@@ -884,12 +869,12 @@ export const Skeleton = ({ className = "" }: { className?: string }) => (
 );
 
 const TONE = {
-  neutral: "bg-ink/7 text-ink",
+  neutral: "bg-panel text-ink ring-1 ring-line ring-inset",
   success: "bg-success-soft text-success",
   warning: "bg-warning-soft text-warning",
   danger: "bg-error-soft text-error",
   info: "bg-info-soft text-info",
-  accent: "bg-pink-soft text-ink",
+  accent: "bg-blue text-ink",
 };
 export type Tone = keyof typeof TONE;
 
@@ -906,7 +891,7 @@ export function Badge({ tone = "neutral", children, icon, className = "" }: { to
 
 // Indicador clave: valor grande, etiqueta y, si aplica, variación contra el periodo anterior (en %, o en puntos
 // porcentuales con `deltaUnit="pp"` cuando el valor ya es un porcentaje, como la ocupación).
-// `accent`: tarjeta pastel con su forma decorativa (indicadores principales); sin él, tarjeta arena.
+// `accent`: tarjeta pastel con su forma decorativa (indicadores principales); sin él, tarjeta gris clara.
 export function StatCard({
   label,
   value,
@@ -1053,6 +1038,85 @@ export function MoneyInput({ id, "aria-label": ariaLabel, value, onChange, inval
 }
 
 // Número pequeño con botones − / + (capacidad, unidades, huéspedes).
+// Deslizador del panel: pista rellena hasta el valor, escala opcional debajo (sin ocupar alto: así la pista queda a la
+// altura de un campo de 42px que esté al lado) y una marca opcional con el valor guardado cuando el actual es otro.
+// La posición de escala y marca descuenta el ancho del pulgar (22px), igual que el navegador.
+export function RangeSlider({
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+  step = 1,
+  label,
+  valueText,
+  color,
+  ticks,
+  tickLabel = (v) => String(v),
+  saved,
+  savedLabel = (v) => `Guardado: ${v}`,
+  describedBy,
+  disabled,
+  className = "",
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  label: string;
+  valueText?: string;
+  color?: string;
+  ticks?: number[];
+  tickLabel?: (v: number) => string;
+  saved?: number;
+  savedLabel?: (v: number) => string;
+  describedBy?: string;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const frac = (v: number) => (Math.min(max, Math.max(min, v)) - min) / (max - min || 1);
+  const at = (v: number) => `calc(11px + (100% - 22px) * ${frac(v)})`;
+  return (
+    <div className={`relative flex h-[42px] min-w-0 items-center pointer-coarse:h-11 ${className}`}>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={disabled}
+        aria-label={label}
+        aria-valuetext={valueText}
+        aria-describedby={describedBy}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="panel-range relative"
+        style={{ "--range-fill": `${frac(value) * 100}%`, ...(color ? { "--range-color": color } : {}) } as CSSProperties}
+      />
+      {saved !== undefined && saved !== value && (
+        <span
+          aria-hidden="true"
+          title={savedLabel(saved)}
+          className="pointer-events-none absolute top-[calc(50%-15px)] h-[6px] w-[2px] -translate-x-1/2 rounded-full bg-ink-muted motion-safe:animate-fade-in"
+          style={{ left: at(saved) }}
+        />
+      )}
+      {ticks && (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-[calc(50%+12px)] h-4 text-[11px] font-medium text-ink-muted tabular-nums">
+          {ticks.map((t) => (
+            <span
+              key={t}
+              className={`absolute -translate-x-1/2 transition-colors ${t === value ? "font-semibold text-ink" : ""}`}
+              style={{ left: at(t) }}
+            >
+              {tickLabel(t)}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Stepper({ id, value, onChange, min = 0, max = 99, unit, describedBy }: NumProps & { min?: number; max?: number; unit?: string }) {
   return (
     <div className="flex h-[42px] items-center rounded-full border border-line-strong bg-paper px-0.5 transition-[border-color,box-shadow] focus-within:border-focus focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-focus)_12%,transparent)] pointer-coarse:h-11">

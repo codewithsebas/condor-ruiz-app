@@ -11,7 +11,8 @@ import { fmtDate, plural, timeAgo, todayISO } from "@/lib/format";
 import type { ChannelCalendar, ChannelStay } from "@/lib/types";
 import { useAdmin } from "@/components/admin/context";
 import { adminInput } from "@/components/admin/shared";
-import { Badge, Button, Card, CardHeader, CopyButton, ErrorState, Field, IconButton, Skeleton } from "@/components/admin/ui";
+import { Badge, Button, Card, CardHeader, CopyButton, ErrorState, Field, IconButton } from "@/components/admin/ui";
+import { BookingRowSkeleton } from "@/components/admin/skeletons";
 
 const ERRORS: Record<string, string> = {
   INVALID_URL: "Pega el enlace de exportación de Booking: empieza por https://ical.booking.com/…",
@@ -66,7 +67,7 @@ export function BookingSyncButton({ className = "" }: { className?: string }) {
       aria-busy={syncing || undefined}
       disabled={offline}
       onClick={run}
-      className={`size-7! text-white/60 hover:bg-white/10! hover:text-white ${className}`}
+      className={`size-7! text-ink-muted hover:bg-paper! hover:text-ink ${className}`}
     >
       <RefreshIcon size={14} className={syncing ? "animate-spin-fast" : ""} />
     </IconButton>
@@ -116,7 +117,7 @@ export function BookingCalendars({ offline }: { offline: boolean }) {
   const linked = state?.calendars.filter((c) => c.importUrl).length ?? 0;
 
   return (
-    <Card className="flex flex-col gap-4 p-4 sm:p-5" aria-labelledby="bk-cal">
+    <Card data-tour="booking-ical" className="flex flex-col gap-4 p-4 sm:p-5" aria-labelledby="bk-cal">
       <CardHeader
         id="bk-cal"
         title="Calendarios de Booking.com"
@@ -157,11 +158,11 @@ export function BookingCalendars({ offline }: { offline: boolean }) {
           }}
         />
       ) : !state ? (
-        <div className="flex flex-col gap-2">
+        <ul aria-busy="true" className="divide-y divide-line">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-20" />
+            <BookingRowSkeleton key={i} />
           ))}
-        </div>
+        </ul>
       ) : (
         <ul className="divide-y divide-line">
           {state.calendars.map((c) => (

@@ -37,6 +37,27 @@ const PUFFS: [number, number, number][] = [
   [1678, -4, 21],
   [1710, 0, 17],
 ];
+// Desfase del ciclo «a dormir» (animate-lamp-off / animate-window-off, 16 s) de cada cabaña estándar, en orden: repartidos
+// para que se apaguen en momentos distintos, a veces dos a la vez.
+const NIGHT = ["-1s", "-12.4s", "-4.6s", "-15s"];
+// Zetas de sueño (coordenadas del símbolo de la cabaña): [x, y, tamaño, retraso extra (s)]. Salen del mismo punto,
+// separadas 1 s (casi media subida) para que no se peguen, y cada una un poco más grande.
+const ZZZ: [number, number, number, number][] = [
+  [118, 40, 18, 0],
+  [118, 40, 21, 1],
+  [118, 40, 24, 2],
+];
+
+// Vapor del jacuzzi: [x en la tina, retraso (s), deriva lateral al subir]. Dos volutas por columna, desfasadas, para
+// que siempre haya vapor saliendo (animate-steam, ciclo de 3,6 s).
+const STEAM: [number, number, number][] = [
+  [30, 0, -5],
+  [30, -1.8, 4],
+  [46, -0.6, 5],
+  [46, -2.4, -4],
+  [60, -1.2, 6],
+  [60, -3, -3],
+];
 
 // Pasto: tres capas de briznas curvas en el borde del prado (siguen su curva), de atrás (oscuras y bajas) a adelante
 // (claras y altas), cada una con degradado de la base a la punta; matas sueltas más abajo y unas florecitas. Posiciones
@@ -124,7 +145,15 @@ export function FooterCabins({ className = "" }: { className?: string }) {
 
         <symbol id="ft-cabana" viewBox="0 0 200 260" overflow="visible">
           {/* Resplandor de la luz sobre el prado */}
-          <ellipse cx="100" cy="246" rx="120" ry="30" fill="url(#ft-halo)" />
+          <ellipse
+            cx="100"
+            cy="246"
+            rx="120"
+            ry="30"
+            fill="url(#ft-halo)"
+            className="animate-lamp-off motion-reduce:animate-none"
+            style={{ animationDelay: "var(--night-delay, 0s)" }}
+          />
           {/* Techo: la A completa en teja, con el caballete redondeado */}
           <path d="M100 6 6 204h188z" fill="url(#ft-tejas)" stroke="#8a3a1c" strokeWidth="4" strokeLinejoin="round" />
           {/* Brillo del faldón izquierdo */}
@@ -139,10 +168,69 @@ export function FooterCabins({ className = "" }: { className?: string }) {
           <path d="M100 56 82 108l8 4 12-38z" fill="#fff" opacity=".35" />
           {/* Divisiones del vidrio y puerta */}
           <path d="M71 158h58M100 56v102M86 166v38M114 166v38M86 166h28" stroke="#2b2420" strokeWidth="3.5" strokeLinecap="round" />
-          {/* Farolito bajo el caballete */}
+          {/* Calidez que respira dentro del ventanal, como luz de chimenea */}
+          <path
+            d="M100 56 58 204h84z"
+            fill="#ffe9b0"
+            opacity="0"
+            className="animate-window-glow motion-reduce:animate-none"
+            style={{ animationDelay: "var(--lamp-delay, 0s)" }}
+          />
+          {/* Hora de dormir: cuando el farol se apaga, el interior se oscurece en penumbra azul de noche y luego vuelve a
+              encenderse. Desfase propio por cabaña en --night-delay. */}
+          <path
+            d="M100 56 58 204h84z"
+            fill="#272536"
+            opacity="0"
+            className="animate-window-off motion-reduce:animate-none"
+            style={{ animationDelay: "var(--night-delay, 0s)" }}
+          />
+          {/* Farolito bajo el caballete: el bombillo titila y su halo late. Cada cabaña trae su desfase en --lamp-delay
+              (la variable atraviesa el <use>), para que no parpadeen todas a la vez. */}
           <path d="M100 40v8" stroke="#2b2420" strokeWidth="2" />
-          <circle cx="100" cy="52" r="4.5" fill="#fff1c9" />
-          <circle cx="100" cy="52" r="10" fill="#ffe7a8" opacity=".35" />
+          {/* Bombillo apagado (queda a la vista cuando la luz se va) */}
+          <circle cx="100" cy="52" r="4.5" fill="#8d8270" />
+          <g className="animate-lamp-off motion-reduce:animate-none" style={{ animationDelay: "var(--night-delay, 0s)" }}>
+          <circle
+            cx="100"
+            cy="52"
+            r="10"
+            fill="#ffe7a8"
+            opacity=".35"
+            className="animate-lamp-glow [transform-box:fill-box] [transform-origin:center] motion-reduce:animate-none"
+            style={{ animationDelay: "var(--lamp-delay, 0s)" }}
+          />
+          <circle
+            cx="100"
+            cy="52"
+            r="4.5"
+            fill="#fff1c9"
+            className="animate-lamp-flicker motion-reduce:animate-none"
+            style={{ animationDelay: "var(--lamp-delay, 0s)" }}
+          />
+          </g>
+          {/* Zzz de sueñito: con la cabaña a oscuras salen tres zetas del mismo punto junto al caballete, una tras otra y
+              bien separadas, subiendo en zigzag. Van atadas al mismo ciclo («--night-delay») más un retraso propio. */}
+          <g
+            className="motion-reduce:hidden"
+            fill="#fff8e6"
+            fontFamily="ui-rounded, system-ui, sans-serif"
+            fontWeight="800"
+          >
+            {ZZZ.map(([x, y, size, extra]) => (
+              <text
+                key={extra}
+                x={x}
+                y={y}
+                fontSize={size}
+                opacity="0"
+                className="animate-zzz [transform-box:fill-box] [transform-origin:center]"
+                style={{ animationDelay: `calc(var(--night-delay, 0s) + ${extra}s)` }}
+              >
+                z
+              </text>
+            ))}
+          </g>
           {/* Balcón: pasamanos claro, barrotes y piso de madera */}
           <rect x="20" y="168" width="160" height="7" rx="3.5" fill="#f1e6cf" />
           {[28, 46, 64, 82, 118, 136, 154, 172].map((x) => (
@@ -241,12 +329,27 @@ export function FooterCabins({ className = "" }: { className?: string }) {
       {PINES.map((p) => (
         <use key={p.x} href="#ft-pino" x={p.x - p.h * 0.3} y={268 - p.h} width={p.h * 0.6} height={p.h} />
       ))}
-      {CABINS.map((x) => (
-        <use key={x} href="#ft-cabana" x={x} y={CABIN_Y} width={CABIN_W} height={CABIN_H} />
+      {CABINS.map((x, i) => (
+        <use
+          key={x}
+          href="#ft-cabana"
+          x={x}
+          y={CABIN_Y}
+          width={CABIN_W}
+          height={CABIN_H}
+          style={{ ["--lamp-delay" as string]: `${(-1.3 * i - 0.4).toFixed(1)}s`, ["--night-delay" as string]: NIGHT[i] }}
+        />
       ))}
 
       {/* Premium: la misma cabaña y, a su derecha, el jacuzzi de madera sobre su propio deck con base negra */}
-      <use href="#ft-cabana" x={PREMIUM} y={CABIN_Y} width={CABIN_W} height={CABIN_H} />
+      <use
+        href="#ft-cabana"
+        x={PREMIUM}
+        y={CABIN_Y}
+        width={CABIN_W}
+        height={CABIN_H}
+        style={{ ["--lamp-delay" as string]: "-2.1s", ["--night-delay" as string]: "-7.2s" }}
+      />
       <g transform={`translate(${PREMIUM + CABIN_W - 14} 0)`}>
         <ellipse cx="44" cy="262" rx="58" ry="12" fill="url(#ft-halo)" />
         <rect x="2" y="226" width="84" height="7" rx="3.5" fill="#7a5233" />
@@ -262,7 +365,18 @@ export function FooterCabins({ className = "" }: { className?: string }) {
         <ellipse cx="44" cy="196" rx="36" ry="8" fill="#7a4b26" />
         <ellipse cx="44" cy="196" rx="31" ry="5.5" fill="url(#ft-agua)" />
         <path d="M30 195q6-2 12 0t12 0" stroke="#e6fbfb" strokeWidth="1.5" fill="none" opacity=".8" />
-        {/* Vapor */}
+        {/* Vapor animado: volutas que salen del agua una tras otra en tres columnas */}
+        <g className="motion-reduce:hidden" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" fill="none">
+          {STEAM.map(([x, delay, drift], i) => (
+            <path
+              key={i}
+              d={`M${x} 190q-5-6 0-12t0-12`}
+              className="animate-steam [transform-box:fill-box] [transform-origin:50%_100%]"
+              style={{ animationDelay: `${delay}s`, opacity: 0, ["--steam-x" as string]: `${drift}px` }}
+            />
+          ))}
+        </g>
+        {/* Vapor quieto (reducir movimiento) */}
         <path
           d="M30 186q-6-8 0-16t0-16M46 184q-6-9 0-18t0-18M60 186q-6-8 0-16t0-14"
           stroke="#fff"
@@ -270,6 +384,7 @@ export function FooterCabins({ className = "" }: { className?: string }) {
           strokeLinecap="round"
           fill="none"
           opacity=".55"
+          className="hidden motion-reduce:inline"
         />
       </g>
     </svg>

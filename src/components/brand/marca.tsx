@@ -9,6 +9,7 @@ export const MARCA = {
   logo: { src: "/marca/logo.png", ratio: 627 / 900 }, // completo, apilado
   simbolo: { src: "/marca/simbolo.png", ratio: 338 / 800 }, // cóndor, nevado y fumarola
   nombre: { src: "/marca/nombre.png", ratio: 233 / 900 }, // las dos líneas con «Cabañas / EL CÓNDOR DEL RUIZ»
+  condor: { src: "/marca/condor.png", ratio: 288 / 900 }, // el cóndor solo, en vuelo (logo del panel)
 } as const;
 
 export type MarcaParte = keyof typeof MARCA;

@@ -277,17 +277,21 @@ export function ContentLayout({ children }: { children: ReactNode }) {
       </header>
       {/* En pantallas angostas, las secciones en una fila que se desplaza; en el computador, el índice a la izquierda. */}
       <div className="lg:hidden">
-        <GroupedNavTabs label="Secciones del sitio" current={section ?? ""} groups={CONTENT_GROUPS.map((g) => ({
-          label: g,
-          tabs: CONTENT_SECTIONS.filter((x) => x.group === g).map((x) => ({
-            id: x.id,
-            href: paths.contenido(x.id),
-            label: x.label,
-            icon: ICONS[x.id],
-            count: counts[x.id],
-            changed: changed.includes(x.id),
-          })),
-        }))} />
+        <GroupedNavTabs
+          label="Secciones del sitio"
+          current={section ?? ""}
+          groups={CONTENT_GROUPS.map((g) => ({
+            label: g,
+            tabs: CONTENT_SECTIONS.filter((x) => x.group === g).map((x) => ({
+              id: x.id,
+              href: paths.contenido(x.id),
+              label: x.label,
+              icon: ICONS[x.id],
+              count: counts[x.id],
+              changed: changed.includes(x.id),
+            })),
+          }))}
+        />
       </div>
       <div
         className={`grid grid-cols-1 items-start gap-5 ${withPreview ? "lg:grid-cols-[208px_minmax(0,1fr)] 2xl:grid-cols-[208px_minmax(400px,1fr)_minmax(0,1.15fr)]" : "lg:grid-cols-[208px_minmax(0,1fr)]"}`}

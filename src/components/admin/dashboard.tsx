@@ -163,8 +163,18 @@ function Pulse({ arr, dep }: { arr: Reservation[]; dep: Reservation[] }) {
   const toCollect = data.reservations.reduce((s, r) => s + pendingOf(r).total, 0);
   const [fill] = useTweened([tonight.pc], { delay: DELAY, duration: 900 });
   const cells: { label: string; value: ReactNode; hint: string; icon: ReactNode }[] = [
-    { label: "Llegan hoy", value: <Count value={arr.length} delay={DELAY} />, hint: arr.length ? "por recibir" : "sin llegadas", icon: <LoginIcon size={16} /> },
-    { label: "Salen hoy", value: <Count value={dep.length} delay={DELAY} />, hint: dep.length ? "por entregar" : "sin salidas", icon: <LogoutIcon size={16} /> },
+    {
+      label: "Llegan hoy",
+      value: <Count value={arr.length} delay={DELAY} />,
+      hint: arr.length ? "por recibir" : "sin llegadas",
+      icon: <LoginIcon size={16} />,
+    },
+    {
+      label: "Salen hoy",
+      value: <Count value={dep.length} delay={DELAY} />,
+      hint: dep.length ? "por entregar" : "sin salidas",
+      icon: <LogoutIcon size={16} />,
+    },
     { label: "En estadía", value: <Count value={inHouse.length} delay={DELAY} />, hint: plural(guests, "huésped", "huéspedes"), icon: <HomeIcon size={16} /> },
     { label: "Por cobrar", value: <Count value={toCollect} format={money} delay={DELAY} />, hint: "abonos y saldos", icon: <WalletIcon size={16} /> },
   ];
@@ -266,7 +276,10 @@ function Revenue() {
             {m.change !== null && <span className="text-[12px] text-paper/60">vs. el mismo tramo del mes anterior</span>}
           </div>
         </div>
-        <Link href={paths.finanzas()} className="inline-flex items-center gap-1 rounded-full bg-paper/10 px-3 py-1.5 text-[12.5px] font-medium text-paper transition-colors hover:bg-paper/20">
+        <Link
+          href={paths.finanzas()}
+          className="inline-flex items-center gap-1 rounded-full bg-paper/10 px-3 py-1.5 text-[12.5px] font-medium text-paper transition-colors hover:bg-paper/20"
+        >
           Finanzas
           <ArrowRightIcon size={13} />
         </Link>
@@ -399,9 +412,7 @@ function ToCollect() {
                 <Link href={paths.reserva(r.code)} className="flex items-center gap-3 rounded-[12px] px-2 py-2 transition-colors hover:bg-panel">
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-medium text-ink">{r.guest.fullName}</span>
-                    <span className="block truncate text-[11.5px] text-ink-muted">
-                      {bd ? `Saldo · en estadía` : `Abono · llega ${fmtDate(r.checkIn)}`}
-                    </span>
+                    <span className="block truncate text-[11.5px] text-ink-muted">{bd ? `Saldo · en estadía` : `Abono · llega ${fmtDate(r.checkIn)}`}</span>
                   </span>
                   <span className="flex flex-none flex-col items-end gap-0.5">
                     <span className="text-[13px] font-semibold text-ink tabular-nums">{money(bd ? bd.amount : r.quote.deposit)}</span>
@@ -473,7 +484,8 @@ function Occupancy() {
                 {...tip(
                   () => (
                     <span>
-                      <strong>{i === 0 ? "Hoy" : fmtDate(d.day)}</strong> · {d.pc} % · {d.busy} de {d.total} cabañas · {plural(d.arrivals, "llegada", "llegadas")}
+                      <strong>{i === 0 ? "Hoy" : fmtDate(d.day)}</strong> · {d.pc} % · {d.busy} de {d.total} cabañas ·{" "}
+                      {plural(d.arrivals, "llegada", "llegadas")}
                     </span>
                   ),
                   { anchor: (el) => el.firstElementChild as HTMLElement | null },
@@ -500,7 +512,9 @@ function Occupancy() {
                 <span className={`text-[11px] tabular-nums ${i === 0 ? "font-semibold text-ink" : "text-ink-muted"}`}>
                   {i === 0 ? "Hoy" : date.getUTCDate()}
                 </span>
-                <span className={`grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-semibold tabular-nums ${d.arrivals ? "bg-ink text-paper" : "text-transparent"}`}>
+                <span
+                  className={`grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-semibold tabular-nums ${d.arrivals ? "bg-ink text-paper" : "text-transparent"}`}
+                >
                   {d.arrivals || 0}
                 </span>
               </span>

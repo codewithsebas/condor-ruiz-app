@@ -66,7 +66,12 @@ export function BookingView() {
             },
             { icon: <CloseIcon size={15} />, label: "Canceladas en Booking", value: String(cancelled.length), hint: "en los últimos 30 días" },
           ].map((t, i) => (
-            <section key={t.label} {...enter(1.5 + i * 0.4)} aria-label={t.label} className="flex min-w-0 flex-col gap-3 rounded-[22px] bg-paper p-5 ring-1 ring-line ring-inset">
+            <section
+              key={t.label}
+              {...enter(1.5 + i * 0.4)}
+              aria-label={t.label}
+              className="flex min-w-0 flex-col gap-3 rounded-[22px] bg-paper p-5 ring-1 ring-line ring-inset"
+            >
               <span className="flex items-center gap-2 text-[12.5px] font-medium text-ink-muted">
                 <span aria-hidden="true" className="grid size-7 flex-none place-items-center rounded-full bg-panel text-ink ring-1 ring-line">
                   {t.icon}

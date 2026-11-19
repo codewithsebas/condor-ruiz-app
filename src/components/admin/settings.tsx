@@ -46,8 +46,18 @@ export function SettingsView() {
     });
 
   const status: { id: string; label: string; value: ReactNode; hint: string }[] = [
-    { id: "sec-theme", label: "Apariencia", value: THEME_OPTIONS.find((o) => o.value === theme)?.label ?? "Claro", hint: THEME_OPTIONS.find((o) => o.value === theme)?.hint ?? "" },
-    { id: "sec-sound", label: "Sonido", value: sound ? "Activado" : "Silenciado", hint: sound ? `${ringing} de ${SOUND_GROUPS.length} avisos suenan` : "ningún aviso suena" },
+    {
+      id: "sec-theme",
+      label: "Apariencia",
+      value: THEME_OPTIONS.find((o) => o.value === theme)?.label ?? "Claro",
+      hint: THEME_OPTIONS.find((o) => o.value === theme)?.hint ?? "",
+    },
+    {
+      id: "sec-sound",
+      label: "Sonido",
+      value: sound ? "Activado" : "Silenciado",
+      hint: sound ? `${ringing} de ${SOUND_GROUPS.length} avisos suenan` : "ningún aviso suena",
+    },
     {
       id: "sec-live",
       label: "Tiempo real",
@@ -75,9 +85,17 @@ export function SettingsView() {
       </header>
 
       {/* Estado actual: cada cifra lleva a su sección. */}
-      <section {...enter(1)} aria-label="Estado de este navegador" className="grid grid-cols-2 gap-px overflow-hidden rounded-[22px] bg-[color-mix(in_srgb,var(--color-ink)_82%,var(--color-paper))] lg:grid-cols-4">
+      <section
+        {...enter(1)}
+        aria-label="Estado de este navegador"
+        className="grid grid-cols-2 gap-px overflow-hidden rounded-[22px] bg-[color-mix(in_srgb,var(--color-ink)_82%,var(--color-paper))] lg:grid-cols-4"
+      >
         {status.map((x) => (
-          <a key={x.id} href={`#${x.id}`} className="flex min-w-0 flex-col gap-1.5 bg-ink p-5 text-paper transition-colors hover:bg-[color-mix(in_srgb,var(--color-ink)_88%,var(--color-paper))]">
+          <a
+            key={x.id}
+            href={`#${x.id}`}
+            className="flex min-w-0 flex-col gap-1.5 bg-ink p-5 text-paper transition-colors hover:bg-[color-mix(in_srgb,var(--color-ink)_88%,var(--color-paper))]"
+          >
             <span className="text-[12px] text-paper/60">{x.label}</span>
             <span className="truncate text-[20px] leading-tight font-semibold tracking-[-0.02em]">{x.value}</span>
             <span className="truncate text-[12px] text-paper/50">{x.hint}</span>
@@ -91,7 +109,10 @@ export function SettingsView() {
           <ul className="sticky top-28 flex flex-col gap-1 rounded-[22px] bg-paper p-2 ring-1 ring-line ring-inset">
             {SECTIONS.map((s) => (
               <li key={s.id}>
-                <a href={`#${s.id}`} className="flex items-center gap-2.5 rounded-full px-3 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-panel">
+                <a
+                  href={`#${s.id}`}
+                  className="flex items-center gap-2.5 rounded-full px-3 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-panel"
+                >
                   <span aria-hidden="true" className="text-ink-muted">
                     {s.icon}
                   </span>
@@ -104,7 +125,11 @@ export function SettingsView() {
 
         <div className="flex min-w-0 flex-col gap-4 [&>*]:scroll-mt-28">
           <div {...enter(2)} id="sec-theme">
-            <Panel id="st-theme-t" title="Apariencia" subtitle="Claro, oscuro o el mismo modo del sistema de este dispositivo. También se cambia desde el encabezado.">
+            <Panel
+              id="st-theme-t"
+              title="Apariencia"
+              subtitle="Claro, oscuro o el mismo modo del sistema de este dispositivo. También se cambia desde el encabezado."
+            >
               <div className="max-w-[420px]">
                 <ThemeSwitch />
               </div>
@@ -123,11 +148,19 @@ export function SettingsView() {
               }
             >
               <div className="flex items-center gap-3 rounded-[16px] bg-panel p-4 ring-1 ring-line ring-inset">
-                <span aria-hidden="true" className={`grid size-10 flex-none place-items-center rounded-full ${sound ? "bg-ink text-paper" : "bg-paper text-ink-muted ring-1 ring-line"}`}>
+                <span
+                  aria-hidden="true"
+                  className={`grid size-10 flex-none place-items-center rounded-full ${sound ? "bg-ink text-paper" : "bg-paper text-ink-muted ring-1 ring-line"}`}
+                >
                   {sound ? <VolumeIcon size={17} /> : <VolumeOffIcon size={17} />}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <Switch checked={sound} onChange={setSound} label="Reproducir sonido" description="Puedes silenciarlo también desde la campana de notificaciones." />
+                  <Switch
+                    checked={sound}
+                    onChange={setSound}
+                    label="Reproducir sonido"
+                    description="Puedes silenciarlo también desde la campana de notificaciones."
+                  />
                 </div>
               </div>
               {/* Cada tipo de aviso en su propia tarjeta, con su interruptor. */}
@@ -136,7 +169,13 @@ export function SettingsView() {
                 <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
                   {SOUND_GROUPS.map((g) => (
                     <div key={g.id} className="rounded-[16px] p-4 ring-1 ring-line ring-inset">
-                      <Switch checked={sound && !muted.includes(g.id)} disabled={!sound} onChange={(v) => toggleGroup(g.id, v)} label={g.label} description={g.description} />
+                      <Switch
+                        checked={sound && !muted.includes(g.id)}
+                        disabled={!sound}
+                        onChange={(v) => toggleGroup(g.id, v)}
+                        label={g.label}
+                        description={g.description}
+                      />
                     </div>
                   ))}
                 </div>
@@ -160,7 +199,9 @@ export function SettingsView() {
                   {LIVE_LABEL[live]}
                 </p>
                 {live === "offline" && (
-                  <Callout tone="warning">Se perdió la conexión en vivo. Recarga la página para reconectar; mientras tanto, los datos se actualizan al hacer cambios.</Callout>
+                  <Callout tone="warning">
+                    Se perdió la conexión en vivo. Recarga la página para reconectar; mientras tanto, los datos se actualizan al hacer cambios.
+                  </Callout>
                 )}
               </Panel>
             </div>

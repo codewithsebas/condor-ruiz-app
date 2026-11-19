@@ -382,9 +382,7 @@ function cellOf(c: CabinType, d: Draft, p: Prices, n: number): { price: number |
 
 function DayTag({ weekend, children }: { weekend: boolean; children: ReactNode }) {
   return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-[12px] font-semibold ${weekend ? "bg-ink text-paper" : "bg-ink/7 text-ink"}`}>
-      {children}
-    </span>
+    <span className={`inline-flex rounded-full px-2 py-0.5 text-[12px] font-semibold ${weekend ? "bg-ink text-paper" : "bg-ink/7 text-ink"}`}>{children}</span>
   );
 }
 

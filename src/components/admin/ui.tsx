@@ -265,7 +265,7 @@ export function FieldError({ id, children }: { id?: string; children: ReactNode 
 // Tarjeta del panel: gris casi blanco sobre el área de trabajo blanca, con un borde muy fino y sin sombra.
 export function Card({ className = "", children, ...rest }: HTMLAttributes<HTMLElement>) {
   return (
-    <section className={`rounded-[20px] bg-panel ring-1 ring-line ring-inset [--surface:var(--color-panel)] ${className}`} {...rest}>
+    <section className={`rounded-[20px] bg-panel ring-1 ring-line [--surface:var(--color-panel)] ring-inset ${className}`} {...rest}>
       {children}
     </section>
   );
@@ -418,17 +418,7 @@ export function CountBadge({ n, tone = "muted", label }: { n: number; tone?: "mu
 // Va pegada al borde inferior de la ventana y ocupa todo el ancho del área de contenido (de la barra lateral al borde
 // derecho), aunque el formulario sea corto. Publica su alto en --savebar-h: el panel deja ese espacio libre al final
 // de la página (shell.tsx) y los avisos flotantes aparecen por encima de ella.
-export function SaveBar({
-  dirty,
-  onDiscard,
-  onSave,
-  saveLabel,
-}: {
-  dirty: boolean;
-  onDiscard: () => void;
-  onSave: () => void;
-  saveLabel: string;
-}) {
+export function SaveBar({ dirty, onDiscard, onSave, saveLabel }: { dirty: boolean; onDiscard: () => void; onSave: () => void; saveLabel: string }) {
   const bar = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = bar.current;
@@ -757,7 +747,9 @@ export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs:
           >
             {t.icon}
             {t.label}
-            {t.count !== undefined && t.count > 0 && <span className={`rounded-full px-1.5 text-[11px] tabular-nums ${on ? "bg-paper text-ink" : "bg-ink text-paper"}`}>{t.count}</span>}
+            {t.count !== undefined && t.count > 0 && (
+              <span className={`rounded-full px-1.5 text-[11px] tabular-nums ${on ? "bg-paper text-ink" : "bg-ink text-paper"}`}>{t.count}</span>
+            )}
           </button>
         );
       })}
@@ -1103,11 +1095,7 @@ export function RangeSlider({
       {ticks && (
         <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-[calc(50%+12px)] h-4 text-[11px] font-medium text-ink-muted tabular-nums">
           {ticks.map((t) => (
-            <span
-              key={t}
-              className={`absolute -translate-x-1/2 transition-colors ${t === value ? "font-semibold text-ink" : ""}`}
-              style={{ left: at(t) }}
-            >
+            <span key={t} className={`absolute -translate-x-1/2 transition-colors ${t === value ? "font-semibold text-ink" : ""}`} style={{ left: at(t) }}>
               {tickLabel(t)}
             </span>
           ))}

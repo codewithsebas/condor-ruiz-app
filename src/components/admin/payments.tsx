@@ -65,7 +65,10 @@ export function PaymentsView() {
             ]}
           />
           {money && (
-            <Link href={paths.finanzas()} className="inline-flex items-center gap-1 px-2 text-[12.5px] font-medium text-ink-muted transition-colors hover:text-ink">
+            <Link
+              href={paths.finanzas()}
+              className="inline-flex items-center gap-1 px-2 text-[12.5px] font-medium text-ink-muted transition-colors hover:text-ink"
+            >
               Análisis en Finanzas
               <ArrowRightIcon size={13} />
             </Link>
@@ -74,7 +77,11 @@ export function PaymentsView() {
       </header>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <section {...enter(1)} aria-label={money ? "Recibido este mes" : "Por cobrar"} className="flex flex-col gap-4 rounded-[22px] bg-ink p-6 text-paper xl:col-span-5">
+        <section
+          {...enter(1)}
+          aria-label={money ? "Recibido este mes" : "Por cobrar"}
+          className="flex flex-col gap-4 rounded-[22px] bg-ink p-6 text-paper xl:col-span-5"
+        >
           <div className="flex items-start justify-between gap-3">
             <h2 className="text-[13px] font-medium text-paper/70">{money ? "Recibido este mes" : "Por cobrar hoy"}</h2>
             <span aria-hidden="true" className="grid size-9 place-items-center rounded-full bg-paper/10">
@@ -106,8 +113,20 @@ export function PaymentsView() {
             hint={pendingProofs.length ? "transferencias por confirmar" : "ninguno ahora"}
             tone={pendingProofs.length ? "bg-info-soft" : ""}
           />
-          <Tile order={2} icon={<ClockIcon size={15} />} label="Abonos pendientes" value={short(depTotal)} hint={plural(deposits.length, "retención sin abono", "retenciones sin abono")} />
-          <Tile order={2.5} icon={<WalletIcon size={15} />} label="Saldos por cobrar" value={short(balTotal)} hint={plural(balances.length, "estadía", "estadías")} />
+          <Tile
+            order={2}
+            icon={<ClockIcon size={15} />}
+            label="Abonos pendientes"
+            value={short(depTotal)}
+            hint={plural(deposits.length, "retención sin abono", "retenciones sin abono")}
+          />
+          <Tile
+            order={2.5}
+            icon={<WalletIcon size={15} />}
+            label="Saldos por cobrar"
+            value={short(balTotal)}
+            hint={plural(balances.length, "estadía", "estadías")}
+          />
         </div>
       </div>
 
@@ -161,7 +180,11 @@ function Split({ parts, extra }: { parts: { label: string; value: number; color:
 
 function Tile({ order, icon, label, value, hint, tone = "" }: { order: number; icon: ReactNode; label: string; value: string; hint: string; tone?: string }) {
   return (
-    <section {...enter(order)} aria-label={label} className={`flex min-w-0 flex-col gap-3 rounded-[22px] p-5 ring-1 ring-line ring-inset ${tone || "bg-paper"}`}>
+    <section
+      {...enter(order)}
+      aria-label={label}
+      className={`flex min-w-0 flex-col gap-3 rounded-[22px] p-5 ring-1 ring-line ring-inset ${tone || "bg-paper"}`}
+    >
       <span className="flex items-center gap-2 text-[12.5px] font-medium text-ink-muted">
         <span aria-hidden="true" className="grid size-7 flex-none place-items-center rounded-full bg-panel text-ink ring-1 ring-line">
           {icon}
@@ -174,7 +197,10 @@ function Tile({ order, icon, label, value, hint, tone = "" }: { order: number; i
   );
 }
 
-const cabinOptions = (cabins: { id: string; nombre: string }[]) => [{ value: "", label: "Todas las cabañas" }, ...cabins.map((c) => ({ value: c.id, label: c.nombre }))];
+const cabinOptions = (cabins: { id: string; nombre: string }[]) => [
+  { value: "", label: "Todas las cabañas" },
+  ...cabins.map((c) => ({ value: c.id, label: c.nombre })),
+];
 
 /* ───────────── Comprobantes ───────────── */
 
@@ -248,7 +274,14 @@ function ReceivedTab() {
       `pagos-${period.range.from}-a-${period.range.to}.csv`,
       csv([
         ["Fecha", "Reserva", "Huésped", "Cabaña", "Concepto", "Valor"],
-        ...rows.map((p) => [p.date, p.r.code, p.r.guest.fullName, cabin(p.r.cabinTypeId)?.nombre ?? p.r.cabinTypeId, p.kind === "deposit" ? "Abono" : "Saldo", p.amount]),
+        ...rows.map((p) => [
+          p.date,
+          p.r.code,
+          p.r.guest.fullName,
+          cabin(p.r.cabinTypeId)?.nombre ?? p.r.cabinTypeId,
+          p.kind === "deposit" ? "Abono" : "Saldo",
+          p.amount,
+        ]),
       ]),
       "text/csv;charset=utf-8",
     );
@@ -256,7 +289,14 @@ function ReceivedTab() {
   return (
     <>
       <div role="search" aria-label="Filtrar pagos" className="flex flex-wrap items-center gap-2">
-        <ListSearch id="pg-q" label="Buscar pagos" value={q} onChange={setQ} placeholder="Nombre, código, celular o documento" className="w-full sm:w-[300px]" />
+        <ListSearch
+          id="pg-q"
+          label="Buscar pagos"
+          value={q}
+          onChange={setQ}
+          placeholder="Nombre, código, celular o documento"
+          className="w-full sm:w-[300px]"
+        />
         <PeriodFilter period={period} />
         <div className="w-full sm:w-[210px]">
           <Combobox value={cabinId} onChange={setCabinId} options={cabinOptions(data.cabinTypes)} icon={<HomeIcon size={14} className="text-ink-muted" />} />
@@ -358,7 +398,11 @@ function DueTab({ rows }: { rows: Reservation[] }) {
   const total = list.reduce((s, r) => s + amount(r), 0);
   const paged = usePaged(list, "por-cobrar", [kind, nq, cabinId].join("|"));
   const detail = (r: Reservation) =>
-    r.status === "pending_deposit" ? "Sin confirmar, no aparta las fechas" : balanceDue(r) ? "En estadía, saldo por cobrar" : "Saldo antes de llegar o en recepción";
+    r.status === "pending_deposit"
+      ? "Sin confirmar, no aparta las fechas"
+      : balanceDue(r)
+        ? "En estadía, saldo por cobrar"
+        : "Saldo antes de llegar o en recepción";
   // Cuándo llega: hoy, mañana, en N días, o «en estadía».
   const when = (r: Reservation) => {
     if (r.checkIn <= today) return { label: r.status === "checked_in" ? "En estadía" : "Llega hoy", urgent: true };
@@ -369,7 +413,14 @@ function DueTab({ rows }: { rows: Reservation[] }) {
   return (
     <>
       <div role="search" aria-label="Filtrar por cobrar" className="flex flex-wrap items-center gap-2">
-        <ListSearch id="pg-due-q" label="Buscar por cobrar" value={q} onChange={setQ} placeholder="Nombre, código, celular o documento" className="w-full sm:w-[300px]" />
+        <ListSearch
+          id="pg-due-q"
+          label="Buscar por cobrar"
+          value={q}
+          onChange={setQ}
+          placeholder="Nombre, código, celular o documento"
+          className="w-full sm:w-[300px]"
+        />
         <div className="w-full sm:w-[210px]">
           <Combobox value={cabinId} onChange={setCabinId} options={cabinOptions(data.cabinTypes)} icon={<HomeIcon size={14} className="text-ink-muted" />} />
         </div>
@@ -414,7 +465,9 @@ function DueTab({ rows }: { rows: Reservation[] }) {
                           {both ? "Abono y saldo" : isDeposit ? "Abono" : "Saldo"}
                         </span>
                         <span className="mt-0.5 block text-[26px] leading-none font-semibold tracking-[-0.03em] text-ink">{cop(amount(r))}</span>
-                        {both && <span className="mt-1 block text-[11.5px] text-ink-muted">{`abono ${short(pend.deposit)} · saldo ${short(pend.balance)}`}</span>}
+                        {both && (
+                          <span className="mt-1 block text-[11.5px] text-ink-muted">{`abono ${short(pend.deposit)} · saldo ${short(pend.balance)}`}</span>
+                        )}
                       </span>
                       <Badge tone={w.urgent ? "warning" : "neutral"} icon={<ClockIcon size={11} />}>
                         {w.label}

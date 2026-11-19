@@ -9,7 +9,8 @@ import type { SiteConfig } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: { absolute: `${config.name} · Chalets frente al Nevado del Ruiz en Murillo, Tolima` },
-  description: "Cabañas tipo chalet con vista al Nevado del Ruiz y a una cascada en Murillo, Tolima. Desayuno incluido, jacuzzi, fogata, sendero ecológico y pet friendly. Reserva en línea.",
+  description:
+    "Cabañas tipo chalet con vista al Nevado del Ruiz y a una cascada en Murillo, Tolima. Desayuno incluido, jacuzzi, fogata, sendero ecológico y pet friendly. Reserva en línea.",
   openGraph: {
     title: `${config.name} · Murillo, Tolima`,
     description: "Despierta frente al Nevado del Ruiz. Cabañas tipo chalet con desayuno incluido.",
@@ -32,7 +33,13 @@ function jsonLd(cabins: Cabin[], site: SiteConfig) {
     name: config.name,
     description: config.tagline,
     telephone: "+57 " + site.phones[0],
-    address: { "@type": "PostalAddress", streetAddress: config.street, addressLocality: config.city, addressRegion: config.region, addressCountry: config.country },
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: config.street,
+      addressLocality: config.city,
+      addressRegion: config.region,
+      addressCountry: config.country,
+    },
     geo: { "@type": "GeoCoordinates", latitude: config.lat, longitude: config.lng },
     priceRange: `${cop(Math.min(...prices))} - ${cop(Math.max(...prices))} COP por noche`,
     checkinTime: site.checkInStart,

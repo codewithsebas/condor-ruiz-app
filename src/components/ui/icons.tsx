@@ -1,6 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
 
-
 type IconProps = { size?: number; stroke?: number; className?: string; style?: CSSProperties };
 
 function Stroke({ size = 18, stroke = 2.2, className, style, children }: IconProps & { children: ReactNode }) {
@@ -287,7 +286,6 @@ export const NoteIcon = (p: IconProps) => (
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   </Stroke>
 );
-
 
 // Una huella (mascotas).
 export const PawIcon = ({ size = 18, className }: IconProps) => (

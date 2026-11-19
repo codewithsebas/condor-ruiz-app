@@ -2,7 +2,20 @@
 
 import { useSearchParams } from "next/navigation";
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { CalendarIcon, CheckIcon, CloseIcon, HomeIcon, MoonIcon, PauseIcon, PencilIcon, PlayIcon, PlusIcon, TagIcon, TrashIcon, WalletIcon } from "@/components/ui/icons";
+import {
+  CalendarIcon,
+  CheckIcon,
+  CloseIcon,
+  HomeIcon,
+  MoonIcon,
+  PauseIcon,
+  PencilIcon,
+  PlayIcon,
+  PlusIcon,
+  TagIcon,
+  TrashIcon,
+  WalletIcon,
+} from "@/components/ui/icons";
 import {
   MAX_DAY_RATES,
   cleanPersonRates,
@@ -268,7 +281,21 @@ function Tonight() {
   );
 }
 
-function Tile({ order, icon, label, value, hint, small = false }: { order: number; icon: ReactNode; label: string; value: ReactNode; hint: string; small?: boolean }) {
+function Tile({
+  order,
+  icon,
+  label,
+  value,
+  hint,
+  small = false,
+}: {
+  order: number;
+  icon: ReactNode;
+  label: string;
+  value: ReactNode;
+  hint: string;
+  small?: boolean;
+}) {
   return (
     <section {...enter(order)} aria-label={label} className="flex min-w-0 flex-col gap-3 rounded-[22px] bg-paper p-5 ring-1 ring-line ring-inset">
       <span className="flex items-center gap-2 text-[12.5px] font-medium text-ink-muted">
@@ -335,7 +362,11 @@ function NextTwoWeeks() {
                         </span>
                       ))}
                       className="h-11 rounded-[10px] font-semibold text-ink tabular-nums ring-1 ring-line ring-inset"
-                      style={{ background: strength ? `color-mix(in srgb, var(--color-chart-a) ${Math.round(strength * 100)}%, var(--color-paper))` : "var(--color-panel)" }}
+                      style={{
+                        background: strength
+                          ? `color-mix(in srgb, var(--color-chart-a) ${Math.round(strength * 100)}%, var(--color-paper))`
+                          : "var(--color-panel)",
+                      }}
                     >
                       {short(n.couple)}
                     </td>

@@ -8,7 +8,7 @@ import { WhatsAppIcon } from "@/components/brand/icons";
 export async function SiteHeader() {
   const { c } = await getSite();
   return (
-    <header className="gutter-1360 flex flex-wrap items-center gap-4 py-3.5 text-on-dark">
+    <header className="flex flex-wrap items-center gap-4 gutter-1360 py-3.5 text-on-dark">
       <Link href="/" aria-label={`${config.name}, inicio`} className="flex min-h-11 items-center gap-3 no-underline">
         <Brand />
       </Link>

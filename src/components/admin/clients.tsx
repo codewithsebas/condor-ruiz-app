@@ -156,7 +156,9 @@ export function ClientList() {
     <>
       <header {...enter(0)} className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div className="min-w-0">
-          <p className="text-[13px] font-medium text-ink-muted">Cada cliente se identifica por su documento; su historial y la valoración del equipo están en su ficha</p>
+          <p className="text-[13px] font-medium text-ink-muted">
+            Cada cliente se identifica por su documento; su historial y la valoración del equipo están en su ficha
+          </p>
           <h1 className="mt-1 text-[clamp(1.5rem,2.4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-ink">{MODULES.clientes.label}</h1>
         </div>
         {active && (
@@ -178,7 +180,9 @@ export function ClientList() {
           {total > 0 && (
             <div className="flex flex-col gap-2">
               <div role="img" aria-label={`Recurrentes: ${recurring}; una sola vez: ${total - recurring}`} className="flex h-2.5 gap-[2px]">
-                {recurring > 0 && <span className="h-full rounded-full" style={{ width: `${(recurring / total) * 100}%`, background: "var(--color-chart-a)" }} />}
+                {recurring > 0 && (
+                  <span className="h-full rounded-full" style={{ width: `${(recurring / total) * 100}%`, background: "var(--color-chart-a)" }} />
+                )}
                 {total - recurring > 0 && <span className="h-full flex-1 rounded-full" style={{ background: "var(--color-chart-b)" }} />}
               </div>
               <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-paper/70">
@@ -208,7 +212,11 @@ export function ClientList() {
         </section>
 
         <div {...enter(1.6)} className="min-w-0 xl:col-span-4">
-          <Panel id="cl-top" title={money ? "Los que más han generado" : "Los que más se han hospedado"} subtitle={money ? `Entre todos: ${cop(value)}` : undefined}>
+          <Panel
+            id="cl-top"
+            title={money ? "Los que más han generado" : "Los que más se han hospedado"}
+            subtitle={money ? `Entre todos: ${cop(value)}` : undefined}
+          >
             {top.length ? (
               <ol className="-mx-2 flex flex-col">
                 {top.map((c, i) => (

@@ -25,7 +25,12 @@ const TONE: Record<SectionTone, string> = {
 // sube en lomas (abajo). Tenue y bajo, para marcar el cambio sin ser un adorno.
 function Ridge({ at }: { at: "top" | "bottom" }) {
   return (
-    <svg aria-hidden="true" viewBox="0 0 1440 60" preserveAspectRatio="none" className={`pointer-events-none absolute inset-x-0 block h-[clamp(22px,3.4vw,48px)] w-full fill-bg ${at === "top" ? "-top-px" : "-bottom-px rotate-180"}`}>
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 1440 60"
+      preserveAspectRatio="none"
+      className={`pointer-events-none absolute inset-x-0 block h-[clamp(22px,3.4vw,48px)] w-full fill-bg ${at === "top" ? "-top-px" : "-bottom-px rotate-180"}`}
+    >
       <path d="M0 0h1440v18l-90 22-110-30-120 34-100-20-130 28-110-26-120 30-110-22-120 26-110-30-120 28-100-18L0 34z" />
     </svg>
   );
@@ -42,14 +47,19 @@ type SectionProps = {
 
 export function Section({ id, tone = "base", labelledBy, className = "", fit = false, children, "data-zone": zone }: SectionProps & { "data-zone"?: string }) {
   return (
-    <section id={id} data-zone={zone} aria-labelledby={labelledBy} className={`relative scroll-mt-4 ${fit ? FIT_SPACE : SPACE} ${TONE[tone]} ${tone === "light" ? "my-[clamp(16px,3vw,40px)]" : ""}`}>
+    <section
+      id={id}
+      data-zone={zone}
+      aria-labelledby={labelledBy}
+      className={`relative scroll-mt-4 ${fit ? FIT_SPACE : SPACE} ${TONE[tone]} ${tone === "light" ? "my-[clamp(16px,3vw,40px)]" : ""}`}
+    >
       {tone === "light" && (
         <>
           <Ridge at="top" />
           <Ridge at="bottom" />
         </>
       )}
-      <div className={`gutter-1360 relative ${fit ? "w-full" : ""} ${className}`}>{children}</div>
+      <div className={`relative gutter-1360 ${fit ? "w-full" : ""} ${className}`}>{children}</div>
     </section>
   );
 }
@@ -69,7 +79,18 @@ type HeaderProps = {
 };
 
 // Encabezado común: frase manuscrita, título grande con su parte en verde y un subtítulo que da contexto.
-export function SectionHeader({ id, kicker, title, accent, subtitle, layout = "split", tone = "base", breakTitle = false, fit = false, children }: HeaderProps) {
+export function SectionHeader({
+  id,
+  kicker,
+  title,
+  accent,
+  subtitle,
+  layout = "split",
+  tone = "base",
+  breakTitle = false,
+  fit = false,
+  children,
+}: HeaderProps) {
   const light = tone === "light";
   return (
     // Aparece en dos tiempos al llegar con el scroll: la frase y el título, y después el subtítulo (que queda más abajo:
@@ -87,7 +108,11 @@ export function SectionHeader({ id, kicker, title, accent, subtitle, layout = "s
           {accent && (
             <>
               {breakTitle ? null : " "}
-              <span className={`${breakTitle ? "block" : ""} ${light ? "text-[color-mix(in_srgb,var(--color-accent)_70%,var(--color-on-light))]" : "text-accent"}`}>{accent}</span>
+              <span
+                className={`${breakTitle ? "block" : ""} ${light ? "text-[color-mix(in_srgb,var(--color-accent)_70%,var(--color-on-light))]" : "text-accent"}`}
+              >
+                {accent}
+              </span>
             </>
           )}
         </h2>

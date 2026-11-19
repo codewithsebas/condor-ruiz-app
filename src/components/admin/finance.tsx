@@ -202,10 +202,7 @@ function Hero({ now, before, against }: { now: Fin; before: Fin; against: string
           </div>
         )}
         <dl className="grid grid-cols-3 gap-3">
-          {[
-            ...parts.map((p) => ({ k: p.label, v: money(p.value), dot: p.color })),
-            { k: "Pagos", v: String(now.payments.length), dot: "" },
-          ].map((x) => (
+          {[...parts.map((p) => ({ k: p.label, v: money(p.value), dot: p.color })), { k: "Pagos", v: String(now.payments.length), dot: "" }].map((x) => (
             <div key={x.k} className="min-w-0 border-l border-paper/15 pl-3">
               <dt className="flex items-center gap-1.5 text-[12px] text-paper/60">
                 {x.dot && <span aria-hidden="true" className="size-2 rounded-full" style={{ background: x.dot }} />}
@@ -256,7 +253,11 @@ function Kpi({
         {change !== null && <Delta value={change} unit={unit} against={against} />}
       </div>
       {meter !== undefined && (
-        <span aria-hidden="true" className="block h-1.5 overflow-hidden rounded-full" style={{ background: "color-mix(in srgb, var(--color-chart-a) 18%, transparent)" }}>
+        <span
+          aria-hidden="true"
+          className="block h-1.5 overflow-hidden rounded-full"
+          style={{ background: "color-mix(in srgb, var(--color-chart-a) 18%, transparent)" }}
+        >
           <span className="block h-full rounded-full" style={{ width: `${fill}%`, background: "var(--color-chart-a)" }} />
         </span>
       )}
@@ -281,7 +282,11 @@ function RevenueChart({ buckets, deposits, balances }: { buckets: Fin["buckets"]
     { delay: DELAY + 150, duration: 900, stagger: Math.max(8, 300 / buckets.length) },
   );
   const by =
-    buckets[0]?.from === buckets[0]?.to ? "Dinero recibido cada día" : buckets[0]?.label.startsWith("Sem.") ? "Dinero recibido cada semana" : "Dinero recibido cada mes";
+    buckets[0]?.from === buckets[0]?.to
+      ? "Dinero recibido cada día"
+      : buckets[0]?.label.startsWith("Sem.")
+        ? "Dinero recibido cada semana"
+        : "Dinero recibido cada mes";
 
   return (
     <Panel
@@ -304,14 +309,26 @@ function RevenueChart({ buckets, deposits, balances }: { buckets: Fin["buckets"]
       }
     >
       {empty ? (
-        <EmptyState compact icon={<TrendIcon size={18} />} title="Sin ingresos en este periodo" text="Cuando se registren abonos o saldos, verás aquí su evolución." />
+        <EmptyState
+          compact
+          icon={<TrendIcon size={18} />}
+          title="Sin ingresos en este periodo"
+          text="Cuando se registren abonos o saldos, verás aquí su evolución."
+        />
       ) : (
         <div className="flex flex-1 flex-col pl-12">
           <div className="relative min-h-[260px] flex-1">
             {/* Líneas guía finas y sólidas, con su valor a la izquierda. */}
             {[1, 0.5, 0].map((f) => (
-              <div key={f} aria-hidden="true" className={`absolute inset-x-0 border-t ${f === 0 ? "border-line-strong" : "border-line"}`} style={{ top: `${(1 - f) * 100}%` }}>
-                <span className="absolute top-0 right-full -translate-y-1/2 pr-2 text-[11px] whitespace-nowrap text-ink-subtle tabular-nums">{money(max * f)}</span>
+              <div
+                key={f}
+                aria-hidden="true"
+                className={`absolute inset-x-0 border-t ${f === 0 ? "border-line-strong" : "border-line"}`}
+                style={{ top: `${(1 - f) * 100}%` }}
+              >
+                <span className="absolute top-0 right-full -translate-y-1/2 pr-2 text-[11px] whitespace-nowrap text-ink-subtle tabular-nums">
+                  {money(max * f)}
+                </span>
               </div>
             ))}
             <ol className="relative flex h-full items-end gap-[2px]">
@@ -349,7 +366,9 @@ function RevenueChart({ buckets, deposits, balances }: { buckets: Fin["buckets"]
                       {b.deposit > 0 && <span className="w-full" style={{ flex: b.deposit, background: SERIES[0].color }} />}
                       {b.balance > 0 && <span className="w-full" style={{ flex: b.balance, background: SERIES[1].color }} />}
                     </span>
-                    {i === top && total > 0 && <span className="absolute -top-5 text-[11.5px] font-semibold whitespace-nowrap text-ink tabular-nums">{money(total)}</span>}
+                    {i === top && total > 0 && (
+                      <span className="absolute -top-5 text-[11.5px] font-semibold whitespace-nowrap text-ink tabular-nums">{money(total)}</span>
+                    )}
                   </li>
                 );
               })}
@@ -360,7 +379,9 @@ function RevenueChart({ buckets, deposits, balances }: { buckets: Fin["buckets"]
             {buckets.map((b, i) => (
               <li key={b.key} className="relative min-w-0 flex-1">
                 {i % every === 0 && (
-                  <span className={`absolute left-1/2 -translate-x-1/2 whitespace-nowrap ${i % (every * 2) ? "max-sm:hidden" : ""}`}>{b.label.replace(/^Sem\. /, "")}</span>
+                  <span className={`absolute left-1/2 -translate-x-1/2 whitespace-nowrap ${i % (every * 2) ? "max-sm:hidden" : ""}`}>
+                    {b.label.replace(/^Sem\. /, "")}
+                  </span>
                 )}
               </li>
             ))}
@@ -382,11 +403,30 @@ function Receivables({ cabinId }: { cabinId: string }) {
   const dep = awaiting.reduce((s, r) => s + pendingOf(r).deposit, 0);
   const bal = balances.reduce((s, r) => s + pendingOf(r).balance, 0);
   const rows = [
-    { tipo: "abonos" as const, icon: <ClockIcon size={15} />, label: "Abonos por recibir", hint: plural(awaiting.length, "reserva sin abono", "reservas sin abono"), amount: dep, color: SERIES[0].color },
-    { tipo: "saldos" as const, icon: <WalletIcon size={15} />, label: "Saldos por cobrar", hint: plural(balances.length, "reserva confirmada", "reservas confirmadas"), amount: bal, color: SERIES[1].color },
+    {
+      tipo: "abonos" as const,
+      icon: <ClockIcon size={15} />,
+      label: "Abonos por recibir",
+      hint: plural(awaiting.length, "reserva sin abono", "reservas sin abono"),
+      amount: dep,
+      color: SERIES[0].color,
+    },
+    {
+      tipo: "saldos" as const,
+      icon: <WalletIcon size={15} />,
+      label: "Saldos por cobrar",
+      hint: plural(balances.length, "reserva confirmada", "reservas confirmadas"),
+      amount: bal,
+      color: SERIES[1].color,
+    },
   ];
   return (
-    <Panel id="fi-due" title="Por cobrar hoy" subtitle="De todas las reservas activas; no cambia con el periodo" action={<MoreLink href={paths.pagos({ vista: "por-cobrar", cabana: cabinId || null })}>Pagos</MoreLink>}>
+    <Panel
+      id="fi-due"
+      title="Por cobrar hoy"
+      subtitle="De todas las reservas activas; no cambia con el periodo"
+      action={<MoreLink href={paths.pagos({ vista: "por-cobrar", cabana: cabinId || null })}>Pagos</MoreLink>}
+    >
       <p className="text-[30px] leading-none font-semibold tracking-[-0.03em] text-ink">
         <Count value={dep + bal} format={cop} delay={DELAY} />
       </p>
@@ -479,7 +519,19 @@ function StaysMeter({ stays }: { stays: Fin["stays"] }) {
 
 /* ───────────── Listas con barra (ranking) ───────────── */
 
-function Ranking({ id, title, subtitle, rows, total }: { id: string; title: string; subtitle: string; rows: { id: string; label: string; value: number }[]; total: number }) {
+function Ranking({
+  id,
+  title,
+  subtitle,
+  rows,
+  total,
+}: {
+  id: string;
+  title: string;
+  subtitle: string;
+  rows: { id: string; label: string; value: number }[];
+  total: number;
+}) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   // Lo que no generó dinero no ocupa una fila: se resume al final.
   const earning = rows.filter((r) => r.value > 0);

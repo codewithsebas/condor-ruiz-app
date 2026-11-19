@@ -188,7 +188,13 @@ export function CabinList() {
             order={1.5}
             icon={<TagIcon size={15} />}
             label="Precio base por noche"
-            value={prices.length ? (Math.min(...prices) === Math.max(...prices) ? cop(prices[0]) : `${money(Math.min(...prices))} a ${money(Math.max(...prices))}`) : "—"}
+            value={
+              prices.length
+                ? Math.min(...prices) === Math.max(...prices)
+                  ? cop(prices[0])
+                  : `${money(Math.min(...prices))} a ${money(Math.max(...prices))}`
+                : "—"
+            }
             hint="de la más económica a la más cara"
           />
           <Tile
@@ -196,7 +202,11 @@ export function CabinList() {
             icon={<UsersIcon size={15} />}
             label="Reservas en todas las cabañas"
             value={String(data.reservations.length)}
-            hint={plural(data.reservations.filter((r) => r.checkIn >= today && ACTIVE_STATUSES.includes(r.status)).length, "llegada próxima", "llegadas próximas")}
+            hint={plural(
+              data.reservations.filter((r) => r.checkIn >= today && ACTIVE_STATUSES.includes(r.status)).length,
+              "llegada próxima",
+              "llegadas próximas",
+            )}
           />
         </div>
       </div>
@@ -226,7 +236,10 @@ export function CabinList() {
                     </div>
                   )}
                   <span className="absolute top-3 left-3 flex flex-wrap gap-1.5">
-                    <span className="grid size-7 place-items-center rounded-full bg-ink text-[12px] font-semibold text-paper shadow-panel" title="Orden en el sitio">
+                    <span
+                      className="grid size-7 place-items-center rounded-full bg-ink text-[12px] font-semibold text-paper shadow-panel"
+                      title="Orden en el sitio"
+                    >
                       {i + 1}
                     </span>
                     <Badge tone={c.activa ? "success" : "neutral"} className="shadow-panel">
@@ -298,7 +311,11 @@ export function CabinList() {
                   <div className="min-w-0">
                     <dt className="text-[12px] text-ink-muted">Ocupación 30 días</dt>
                     <dd className="mt-1 text-[20px] leading-none font-semibold tracking-[-0.02em] text-ink">{`${st.occ} %`}</dd>
-                    <dd aria-hidden="true" className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: "color-mix(in srgb, var(--color-chart-a) 18%, transparent)" }}>
+                    <dd
+                      aria-hidden="true"
+                      className="mt-2 h-1.5 overflow-hidden rounded-full"
+                      style={{ background: "color-mix(in srgb, var(--color-chart-a) 18%, transparent)" }}
+                    >
                       <span className="block h-full rounded-full" style={{ width: `${st.occ}%`, background: "var(--color-chart-a)" }} />
                     </dd>
                   </div>

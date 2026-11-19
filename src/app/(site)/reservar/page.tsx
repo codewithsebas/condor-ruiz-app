@@ -5,7 +5,8 @@ import { config } from "@/lib/config";
 
 export const metadata: Metadata = {
   title: { absolute: `Reservar | ${config.name} · Murillo, Tolima` },
-  description: "Reserva tu cabaña en El Cóndor del Ruiz, frente al Nevado del Ruiz en Murillo, Tolima. Elige fechas y cabaña, aparta tus fechas y confirma con tu abono.",
+  description:
+    "Reserva tu cabaña en El Cóndor del Ruiz, frente al Nevado del Ruiz en Murillo, Tolima. Elige fechas y cabaña, aparta tus fechas y confirma con tu abono.",
   openGraph: { title: `Reservar | ${config.name}`, description: "Elige fechas y cabaña, y reserva en Murillo, Tolima." },
   robots: { index: false },
 };

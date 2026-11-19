@@ -373,7 +373,9 @@ export function balancePaidEmail(c: Cfg, d: BalancePaidEmailData): RenderedEmail
   const body =
     pill("&#10003;&nbsp; Pago total recibido", "green") +
     h1(`¡Todo listo, ${esc(first)}!`) +
-    p("Recibimos el pago de tu saldo: <strong>ya hiciste tu pago total</strong>. No tienes nada pendiente, solo queda disfrutar tu estadía en El Cóndor del Ruiz.") +
+    p(
+      "Recibimos el pago de tu saldo: <strong>ya hiciste tu pago total</strong>. No tienes nada pendiente, solo queda disfrutar tu estadía en El Cóndor del Ruiz.",
+    ) +
     codeBox(esc(d.codigo), "Pago total", "green") +
     h2("Tu estadía") +
     kv([

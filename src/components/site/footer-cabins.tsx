@@ -191,32 +191,27 @@ export function FooterCabins({ className = "" }: { className?: string }) {
           {/* Bombillo apagado (queda a la vista cuando la luz se va) */}
           <circle cx="100" cy="52" r="4.5" fill="#8d8270" />
           <g className="animate-lamp-off motion-reduce:animate-none" style={{ animationDelay: "var(--night-delay, 0s)" }}>
-          <circle
-            cx="100"
-            cy="52"
-            r="10"
-            fill="#ffe7a8"
-            opacity=".35"
-            className="animate-lamp-glow [transform-box:fill-box] [transform-origin:center] motion-reduce:animate-none"
-            style={{ animationDelay: "var(--lamp-delay, 0s)" }}
-          />
-          <circle
-            cx="100"
-            cy="52"
-            r="4.5"
-            fill="#fff1c9"
-            className="animate-lamp-flicker motion-reduce:animate-none"
-            style={{ animationDelay: "var(--lamp-delay, 0s)" }}
-          />
+            <circle
+              cx="100"
+              cy="52"
+              r="10"
+              fill="#ffe7a8"
+              opacity=".35"
+              className="[transform-origin:center] animate-lamp-glow [transform-box:fill-box] motion-reduce:animate-none"
+              style={{ animationDelay: "var(--lamp-delay, 0s)" }}
+            />
+            <circle
+              cx="100"
+              cy="52"
+              r="4.5"
+              fill="#fff1c9"
+              className="animate-lamp-flicker motion-reduce:animate-none"
+              style={{ animationDelay: "var(--lamp-delay, 0s)" }}
+            />
           </g>
           {/* Zzz de sueñito: con la cabaña a oscuras salen tres zetas del mismo punto junto al caballete, una tras otra y
               bien separadas, subiendo en zigzag. Van atadas al mismo ciclo («--night-delay») más un retraso propio. */}
-          <g
-            className="motion-reduce:hidden"
-            fill="#fff8e6"
-            fontFamily="ui-rounded, system-ui, sans-serif"
-            fontWeight="800"
-          >
+          <g className="motion-reduce:hidden" fill="#fff8e6" fontFamily="ui-rounded, system-ui, sans-serif" fontWeight="800">
             {ZZZ.map(([x, y, size, extra]) => (
               <text
                 key={extra}
@@ -224,7 +219,7 @@ export function FooterCabins({ className = "" }: { className?: string }) {
                 y={y}
                 fontSize={size}
                 opacity="0"
-                className="animate-zzz [transform-box:fill-box] [transform-origin:center]"
+                className="[transform-origin:center] animate-zzz [transform-box:fill-box]"
                 style={{ animationDelay: `calc(var(--night-delay, 0s) + ${extra}s)` }}
               >
                 z
@@ -371,7 +366,7 @@ export function FooterCabins({ className = "" }: { className?: string }) {
             <path
               key={i}
               d={`M${x} 190q-5-6 0-12t0-12`}
-              className="animate-steam [transform-box:fill-box] [transform-origin:50%_100%]"
+              className="[transform-origin:50%_100%] animate-steam [transform-box:fill-box]"
               style={{ animationDelay: `${delay}s`, opacity: 0, ["--steam-x" as string]: `${drift}px` }}
             />
           ))}

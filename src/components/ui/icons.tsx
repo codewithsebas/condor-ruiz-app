@@ -164,6 +164,12 @@ export const InfoIcon = (p: IconProps) => (
     <path d="M12 16v-4M12 8h.01" />
   </Stroke>
 );
+export const CompassIcon = (p: IconProps) => (
+  <Stroke stroke={2} {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="m15.5 8.5-2 5-5 2 2-5z" />
+  </Stroke>
+);
 export const AlertIcon = (p: IconProps) => (
   <Stroke stroke={2} {...p}>
     <circle cx="12" cy="12" r="9" />
@@ -214,7 +220,11 @@ export const ImageIcon = (p: IconProps) => (
 );
 export const FileTextIcon = (p: IconProps) => (
   <Stroke stroke={2} {...p}>
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8" />
+    {/* La hoja y sus renglones por aparte: en el menú los renglones se escriben uno tras otro (globals.css). */}
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6" />
+    <path d="M10 9H8" />
+    <path d="M16 13H8" />
+    <path d="M16 17H8" />
   </Stroke>
 );
 export const ExternalLinkIcon = (p: IconProps) => (

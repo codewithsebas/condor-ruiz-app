@@ -349,13 +349,13 @@ export function NotificationCenter() {
         aria-label={unread.length ? `Notificaciones, ${unread.length} sin leer` : "Notificaciones"}
         data-gesture="bell"
         onClick={() => setOpen(!open)}
-        className="relative grid size-10 flex-none place-items-center rounded-full bg-ink text-paper transition-[background-color,transform] duration-150 hover:bg-ink/85 motion-safe:active:scale-[.97] pointer-coarse:size-11"
+        className="relative grid size-10 flex-none place-items-center rounded-full bg-paper text-ink ring-1 ring-line-strong ring-inset transition-[background-color,transform] duration-150 hover:bg-panel motion-safe:active:scale-[.97] pointer-coarse:size-11"
       >
         <BellIcon size={19} />
         {unread.length > 0 && (
           <span
             aria-hidden="true"
-            className="absolute -top-0.5 -right-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-pink px-1 text-[10px] leading-none font-bold text-ink tabular-nums ring-2 ring-canvas motion-safe:animate-pop-in"
+            className="absolute -top-0.5 -right-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-ink px-1 text-[10px] leading-none font-bold text-paper tabular-nums ring-2 ring-paper motion-safe:animate-pop-in"
           >
             {unread.length > 9 ? "9+" : unread.length}
           </span>

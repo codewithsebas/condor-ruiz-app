@@ -2,7 +2,7 @@
 // sitio sin conexión y las notificaciones push del equipo. Nunca guarda respuestas de /api: los datos del panel viven en
 // IndexedDB (lib/offline), por usuario, y la disponibilidad y los pagos los sigue decidiendo el servidor.
 // Al cambiar offline.html, sube la versión para que los celulares descarguen la nueva.
-const CACHE = "condor-offline-v6";
+const CACHE = "condor-offline-v7";
 const OFFLINE_URL = "/offline.html";
 // Páginas del panel (sin datos privados: esos los pone el navegador) y archivos de la aplicación, con hash e inmutables.
 const SHELL = "condor-panel-shell-v1";

@@ -4,8 +4,19 @@ import { config } from "@/lib/config";
 // Dos apps instalables: el sitio de reservas (huéspedes) y el panel (equipo), cada una con su manifiesto e ícono.
 // Van como Route Handlers enlazados desde `metadata.manifest`: un app/manifest.ts tendría prioridad sobre el del panel.
 
-const BG = "#163A2A";
+const BG = "#dcc39c";
 const png = (src: string, size: number, purpose: "any" | "maskable" = "any") => ({ src, sizes: `${size}x${size}`, type: "image/png", purpose });
+// El panel: fondo gris claro (el del panel) y el cóndor del logo en sus íconos.
+const PANEL_BG = "#eef0f2";
+
+// Favicon e ícono de inicio del panel (metadata de app/admin/layout.tsx y app/login/layout.tsx): el cóndor del logo.
+export const PANEL_ICONS = {
+  icon: [
+    { url: "/icons/panel-32.png", sizes: "32x32", type: "image/png" },
+    { url: "/icons/panel-192.png", sizes: "192x192", type: "image/png" },
+  ],
+  apple: [{ url: "/icons/panel-apple-180.png", sizes: "180x180", type: "image/png" }],
+};
 
 export const siteManifest: MetadataRoute.Manifest = {
   id: "/",
@@ -39,8 +50,8 @@ export const panelManifest: MetadataRoute.Manifest = {
   start_url: "/admin",
   scope: "/admin",
   display: "standalone",
-  background_color: BG,
-  theme_color: BG,
+  background_color: PANEL_BG,
+  theme_color: PANEL_BG,
   categories: ["business", "productivity"],
   icons: [png("/icons/panel-192.png", 192), png("/icons/panel-512.png", 512), png("/icons/panel-maskable-512.png", 512, "maskable")],
   shortcuts: [

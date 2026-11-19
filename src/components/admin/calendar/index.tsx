@@ -23,7 +23,8 @@ import { NewReservationDialog, type NewReservationDraft } from "@/components/adm
 import { ReservationModal } from "@/components/admin/reservation-detail";
 import { PREF, usePref } from "@/components/admin/prefs";
 import { paths } from "@/components/admin/routes";
-import { Button, EmptyState, IconButton, ModalPresence, Skeleton, buttonClass } from "@/components/admin/ui";
+import { Button, EmptyState, IconButton, ModalPresence, Segmented, buttonClass, enter } from "@/components/admin/ui";
+import { CalendarGridSkeleton } from "@/components/admin/skeletons";
 import {
   CALENDAR_VIEWS,
   type CalView,
@@ -137,71 +138,71 @@ export function CalendarView() {
 
   const showsToday = today >= from && today <= to;
 
+  // Anterior, «Hoy» y siguiente en una sola pieza del color de «Nueva reserva». Va en la fila del resumen, junto a la
+  // quincena, en columna con «Nueva reserva» (mismo ancho) y con el filtro de cabañas (del ancho de la quincena). En el
+  // encabezado solo si no hay cabañas, porque entonces no hay resumen.
+  const todayNav = (
+    <div className="flex h-9 flex-none items-center justify-between gap-0.5 rounded-full bg-ink p-0.5 text-paper">
+      <IconButton label={prevLabel} size="sm" variant="primary" onClick={() => step(-1)}>
+        <ChevronLeftIcon size={15} />
+      </IconButton>
+      <Button size="sm" variant="primary" onClick={() => setAnchor(today)} aria-current={showsToday ? "date" : undefined} className="h-8! px-3!">
+        Hoy
+      </Button>
+      <IconButton label={nextLabel} size="sm" variant="primary" onClick={() => step(1)}>
+        <ChevronRightIcon size={15} />
+      </IconButton>
+    </div>
+  );
+
   return (
     <div ref={wrap} className="flex flex-col gap-3">
-      {/* Una línea en pantallas anchas: el periodo a la izquierda y, a la derecha, las flechas con «Hoy», el mes, la
-          vista, las cabañas y «Nueva reserva». En el celular, los controles en una cuadrícula de dos columnas. */}
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <h1 id="ad-title" tabIndex={-1} className="sr-only">
-            Calendario
+      {/* Encabezado como en el resto del panel: qué es la página arriba y el periodo como título; «Nueva reserva» a la derecha. */}
+      <header {...enter(0)} className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0">
+          <h1 id="ad-title" tabIndex={-1} className="text-[13px] font-medium text-ink-muted focus:outline-none">
+            Calendario · ocupación y reservas por cabaña
           </h1>
-          <p aria-live="polite" className="truncate text-[25px] leading-tight font-bold tracking-[-0.03em] text-ink first-letter:uppercase">
+          <p aria-live="polite" className="mt-1 truncate text-[clamp(1.5rem,2.4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-ink first-letter:uppercase">
             {title}
           </p>
         </div>
-        <div className="grid w-full grid-cols-2 items-center gap-2 sm:ml-auto sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
-          {/* Anterior, «Hoy» y siguiente en una sola pieza del color de «Nueva reserva», pegada al mes. */}
-          <div className="flex h-9 flex-none items-center justify-between gap-0.5 rounded-full bg-ink p-0.5 text-paper">
-            <IconButton label={prevLabel} size="sm" variant="primary" onClick={() => step(-1)}>
-              <ChevronLeftIcon size={15} />
-            </IconButton>
-            <Button size="sm" variant="primary" onClick={() => setAnchor(today)} aria-current={showsToday ? "date" : undefined} className="h-8! px-3!">
-              Hoy
-            </Button>
-            <IconButton label={nextLabel} size="sm" variant="primary" onClick={() => step(1)}>
-              <ChevronRightIcon size={15} />
-            </IconButton>
-          </div>
-          <div className="min-w-0 sm:w-[184px]">
-            <label htmlFor="cal-mes" className="sr-only">
-              Mes del calendario
-            </label>
-            {/* Lleva al mes elegido sin cambiar la vista; el mes actual vuelve a hoy. */}
-            <Combobox
-              id="cal-mes"
-              value={monthStart(anchor)}
-              onChange={(m) => setAnchor(m === monthStart(today) ? today : m)}
-              options={months}
-              searchable={false}
-              selectedFirst
-              icon={<CalendarIcon size={14} className="text-ink-muted" />}
-            />
-          </div>
-          <div className="min-w-0 sm:w-[146px]">
-            <label htmlFor="cal-vista" className="sr-only">
-              Vista del calendario
-            </label>
-            <Combobox
-              id="cal-vista"
-              value={view}
-              onChange={(v) => setViewParam(v as CalView)}
-              options={view === "dia" ? [{ value: "dia", label: "Día" }, ...CALENDAR_VIEWS] : CALENDAR_VIEWS}
-              searchable={false}
-              icon={<CalendarIcon size={14} className="text-ink-muted" />}
-            />
-          </div>
-          <div className="min-w-0 sm:w-[188px]">
-            <Combobox value={filter} onChange={setFilter} options={cabinOptions} icon={<HomeIcon size={14} className="text-ink-muted" />} />
-          </div>
-          <Button variant="primary" icon={<PlusIcon size={15} />} onClick={() => setDraft({ cabinTypeId: filter || undefined })}>
-            Nueva reserva
-          </Button>
-        </div>
+        <Button variant="primary" icon={<PlusIcon size={15} />} onClick={() => setDraft({ cabinTypeId: filter || undefined })}>
+          Nueva reserva
+        </Button>
       </header>
 
+      {/* Barra de controles en una sola píldora: anterior/Hoy/siguiente, el mes, la vista y las cabañas. */}
+      <div {...enter(0.6)} data-tour="calendar-bar" className="flex flex-wrap items-center gap-2 rounded-[28px] bg-paper p-1.5 ring-1 ring-line ring-inset sm:rounded-full">
+        {todayNav}
+        <div className="min-w-0 flex-1 sm:w-[184px] sm:flex-none">
+          <label htmlFor="cal-mes" className="sr-only">
+            Mes del calendario
+          </label>
+          {/* Lleva al mes elegido sin cambiar la vista; el mes actual vuelve a hoy. */}
+          <Combobox
+            id="cal-mes"
+            value={monthStart(anchor)}
+            onChange={(m) => setAnchor(m === monthStart(today) ? today : m)}
+            options={months}
+            searchable={false}
+            selectedFirst
+            icon={<CalendarIcon size={14} className="text-ink-muted" />}
+          />
+        </div>
+        <Segmented
+          label="Vista del calendario"
+          value={view}
+          onChange={(v) => setViewParam(v)}
+          options={(view === "dia" ? [{ value: "dia" as CalView, label: "Día" }, ...CALENDAR_VIEWS] : CALENDAR_VIEWS).map((v) => ({ value: v.value, label: v.label }))}
+        />
+        <div className="min-w-0 flex-1 sm:ml-auto sm:w-[200px] sm:flex-none">
+          <Combobox value={filter} onChange={setFilter} options={cabinOptions} icon={<HomeIcon size={14} className="text-ink-muted" />} />
+        </div>
+      </div>
+
       {!rows.length ? (
-        <div className="rounded-[22px] bg-panel p-4">
+        <div className="rounded-[22px] bg-paper p-4 ring-1 ring-line ring-inset">
           <EmptyState
             icon={<HomeIcon size={18} />}
             title="No hay cabañas para mostrar"
@@ -215,23 +216,29 @@ export function CalendarView() {
         </div>
       ) : (
         <>
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-6">
+          {/* Resumen del periodo visible en una franja con divisores; la quincena, al final, en el mes partido. */}
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch">
             <ul
+              {...enter(1)}
               aria-label="Resumen del periodo"
-              className="-mx-4 no-scrollbar flex gap-2 overflow-x-auto px-4 text-[12.5px] whitespace-nowrap sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+              className="grid min-w-0 flex-1 grid-cols-2 overflow-hidden rounded-[22px] bg-panel ring-1 ring-line ring-inset sm:grid-cols-3 xl:grid-cols-6"
             >
-              <Chip label="Ocupación" value={`${occupancy} %`} meter={occupancy} />
-              <Chip label={view === "dia" ? "Llegan" : "Llegadas"} value={arrivals} icon={<LoginIcon size={13} />} />
-              <Chip label={view === "dia" ? "Salen" : "Salidas"} value={departures} icon={<LogoutIcon size={13} />} />
-              <Chip label="Por cobrar" value={unpaid} icon={<WalletIcon size={13} />} tone={unpaid ? "warning" : undefined} />
-              <Chip label="Noches libres" value={Math.max(0, capacity - busyNights)} icon={<MoonIcon size={13} />} />
-              {blockedNights > 0 && <Chip label="Bloqueadas" value={blockedNights} icon={<BanIcon size={13} />} />}
+              <Stat label="Ocupación" value={`${occupancy} %`} meter={occupancy} />
+              <Stat label={view === "dia" ? "Llegan" : "Llegadas"} value={arrivals} icon={<LoginIcon size={14} />} />
+              <Stat label={view === "dia" ? "Salen" : "Salidas"} value={departures} icon={<LogoutIcon size={14} />} />
+              <Stat label="Sin abono" value={unpaid} icon={<WalletIcon size={14} />} tone={unpaid ? "warning" : undefined} />
+              <Stat label="Noches libres" value={Math.max(0, capacity - busyNights)} icon={<MoonIcon size={14} />} />
+              <Stat label="Bloqueadas" value={blockedNights} icon={<BanIcon size={14} />} />
             </ul>
-            {splitMonth && <HalfSwitch days={days} active={half} onChange={setHalf} />}
+            {splitMonth && (
+              <div className="flex flex-none items-center justify-end">
+                <HalfSwitch days={days} active={half} onChange={setHalf} />
+              </div>
+            )}
           </div>
           <div key={`${view}-${from}-${filter}-${monthGrid}`} className="motion-safe:animate-fade-in">
             {!width ? (
-              <Skeleton className="min-h-[360px]" />
+              <CalendarGridSkeleton />
             ) : view === "dia" ? (
               <DayAgenda day={anchor} rows={rows} onNew={setDraft} onStay={setStayId} onOpen={setOpenCode} />
             ) : monthGrid ? (
@@ -270,19 +277,20 @@ export function CalendarView() {
   );
 }
 
-function Chip({ label, value, icon, meter, tone }: { label: string; value: ReactNode; icon?: ReactNode; meter?: number; tone?: "warning" }) {
+// Una cifra de la franja de resumen: rótulo con icono, valor y, en la ocupación, su barra.
+function Stat({ label, value, icon, meter, tone }: { label: string; value: ReactNode; icon?: ReactNode; meter?: number; tone?: "warning" }) {
   return (
-    <li
-      className={`inline-flex flex-none items-center gap-1.5 rounded-full border px-2.5 py-1 ${tone === "warning" ? "border-warning/30 bg-warning-soft text-warning" : "border-transparent bg-panel text-ink-muted"}`}
-    >
-      {icon && <span aria-hidden="true">{icon}</span>}
-      {label}
+    <li className={`flex min-w-0 flex-col justify-center gap-1.5 border-line px-4 py-3 not-last:border-r ${tone === "warning" ? "bg-warning-soft" : ""}`}>
+      <span className={`flex items-center gap-1.5 text-[12px] font-medium ${tone === "warning" ? "text-warning" : "text-ink-muted"}`}>
+        {icon && <span aria-hidden="true">{icon}</span>}
+        {label}
+      </span>
+      <strong className={`text-[20px] leading-none font-semibold tracking-[-0.02em] ${tone === "warning" ? "text-warning" : "text-ink"}`}>{value}</strong>
       {meter !== undefined && (
-        <span aria-hidden="true" className="h-1.5 w-10 overflow-hidden rounded-full bg-ink/8">
-          <span className="block h-full rounded-full bg-ink" style={{ width: `${Math.min(100, meter)}%` }} />
+        <span aria-hidden="true" className="h-1.5 overflow-hidden rounded-full" style={{ background: "color-mix(in srgb, var(--color-chart-a) 18%, transparent)" }}>
+          <span className="block h-full rounded-full" style={{ width: `${Math.min(100, meter)}%`, background: "var(--color-chart-a)" }} />
         </span>
       )}
-      <strong className={`font-bold tabular-nums ${tone === "warning" ? "" : "text-ink"}`}>{value}</strong>
     </li>
   );
 }
@@ -405,11 +413,16 @@ function MonthHalves({
   );
 }
 
-// Control de quincena en la fila de resumen, fuera de la tabla: ‹ 1 – 15 nov ›.
+// Control de quincena en la fila de resumen, fuera de la tabla: ‹ 1 – 15 nov ›. Mide 36 px como los botones y los
+// desplegables del encabezado: con el borde de 1 px, las flechas (32 px) caben sin relleno vertical.
 function HalfSwitch({ days, active, onChange }: { days: string[]; active: number; onChange: (k: number) => void }) {
   const parts = halvesOf(days);
   return (
-    <div role="group" aria-label="Quincena" className="flex flex-none items-center gap-0.5 rounded-full border border-line-strong p-0.5">
+    <div
+      role="group"
+      aria-label="Quincena"
+      className="box-border flex h-9 flex-none items-center justify-between gap-0.5 rounded-full border border-line-strong bg-paper px-0.5 sm:w-[188px]"
+    >
       <IconButton label={`Primera quincena · ${halfLabel(parts[0])}`} size="sm" disabled={active === 0} onClick={() => onChange(0)}>
         <ChevronLeftIcon size={16} />
       </IconButton>

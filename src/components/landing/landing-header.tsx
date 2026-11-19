@@ -86,26 +86,42 @@ export function LandingHeader() {
   return (
     <>
       {/* Alto fijo (--header-h, definido en la portada): la portada ocupa exactamente el resto de la pantalla. */}
-      <header className="gutter-1360 flex h-(--header-h,82px) items-center gap-4">
+      <header className="flex h-(--header-h,82px) items-center gap-4 gutter-1360">
         <a href="#top" aria-label={`${c.name}, inicio`} className="flex min-h-11 min-w-0 items-center gap-3 text-on-dark no-underline">
           <Brand circle={50} mark={38} snow wordSize="1.5rem" eyebrowSize=".66rem" />
         </a>
         <nav aria-label="Principal" className="ml-4 hidden gap-0.5 min-[1100px]:flex">
           {SECTIONS.map(([id, label]) => (
-            <a key={id} href={`#${id}`} className="inline-flex min-h-11 items-center rounded-full px-3.5 text-[.93rem] font-semibold no-underline hover:bg-surface">
+            <a
+              key={id}
+              href={`#${id}`}
+              className="inline-flex min-h-11 items-center rounded-full px-3.5 text-[.93rem] font-semibold no-underline hover:bg-surface"
+            >
               {label}
             </a>
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2">
-          <a href={dirHref()} target="_blank" rel="noopener" className="btn btn-card hidden min-h-11 flex-none gap-2 whitespace-nowrap pr-5 pl-3.5 text-[.9rem] font-bold min-[860px]:inline-flex">
+          <a
+            href={dirHref()}
+            target="_blank"
+            rel="noopener"
+            className="btn btn-cta hidden min-h-11 flex-none gap-2 pr-5 pl-3.5 text-[.9rem] font-bold whitespace-nowrap min-[860px]:inline-flex"
+          >
             <PinIcon />
             Cómo llegar
           </a>
-          <a href={tel(phone1)} aria-label={`Llamar al ${phone1}`} className="btn-icon size-12 bg-surface text-on-dark min-[860px]:hidden">
+          <a href={tel(phone1)} aria-label={`Llamar al ${phone1}`} className="btn-icon btn-cta size-12 min-[860px]:hidden">
             <PhoneIcon />
           </a>
-          <button ref={opener} type="button" aria-label="Abrir menú" aria-expanded={menu === "open"} onClick={open} className="btn-icon btn-card size-12 border-0">
+          <button
+            ref={opener}
+            type="button"
+            aria-label="Abrir menú"
+            aria-expanded={menu === "open"}
+            onClick={open}
+            className="btn-icon btn-cta size-12 border-0"
+          >
             <MenuIcon />
           </button>
         </div>
@@ -123,9 +139,15 @@ export function LandingHeader() {
           <div className="flex items-center justify-between gap-3">
             <span className="flex items-center gap-2.5 motion-safe:animate-menu-item" style={item(0)}>
               <LogoMark size={64} />
-              <span className="display whitespace-nowrap text-[1.5rem] tracking-[.03em]">El Cóndor del Ruiz</span>
+              <span className="display text-[1.5rem] tracking-[.03em] whitespace-nowrap">El Cóndor del Ruiz</span>
             </span>
-            <button type="button" aria-label="Cerrar menú" onClick={close} autoFocus className="btn-icon btn-card size-12 border-0 transition-transform duration-300 motion-safe:hover:rotate-90">
+            <button
+              type="button"
+              aria-label="Cerrar menú"
+              onClick={close}
+              autoFocus
+              className="btn-icon btn-card size-12 border-0 transition-transform duration-300 motion-safe:hover:rotate-90"
+            >
               <CloseIcon />
             </button>
           </div>

@@ -193,13 +193,13 @@ export function GlobalSearch({ autoFocus = false, onDone, className = "" }: { au
       ref={form}
       role="search"
       onSubmit={submit}
-      className={`flex h-12 min-w-0 items-center gap-2 rounded-full border border-line-strong bg-paper/70 py-1 pr-4 pl-1 transition-[border-color,background-color,box-shadow] duration-150 focus-within:border-ink focus-within:bg-paper focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-ink)_10%,transparent)] ${className}`}
+      className={`flex h-10 min-w-0 items-center gap-1.5 rounded-full border border-transparent bg-panel py-1 pr-4 pl-1 transition-[border-color,background-color,box-shadow] duration-150 focus-within:border-ink focus-within:bg-paper focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-ink)_10%,transparent)] ${className}`}
     >
       <button
         type="submit"
         aria-label="Buscar"
         data-gesture="search"
-        className="grid size-10 flex-none place-items-center rounded-full bg-ink text-paper transition-colors hover:bg-ink/85"
+        className="grid size-8 flex-none place-items-center rounded-full text-ink-muted transition-colors hover:text-ink"
       >
         <SearchIcon size={18} />
       </button>

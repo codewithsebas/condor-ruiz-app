@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { CalendarIcon, CheckIcon, CloseIcon, HomeIcon, PauseIcon, PencilIcon, PlayIcon, PlusIcon, TagIcon, TrashIcon, WalletIcon } from "@/components/ui/icons";
+import { CalendarIcon, CheckIcon, CloseIcon, HomeIcon, MoonIcon, PauseIcon, PencilIcon, PlayIcon, PlusIcon, TagIcon, TrashIcon, WalletIcon } from "@/components/ui/icons";
 import {
   MAX_DAY_RATES,
   cleanPersonRates,
@@ -16,7 +16,7 @@ import {
   tierPrice,
 } from "@/lib/booking";
 import { api } from "@/lib/client/api";
-import { WD_FULL, WD_MIN, addDays, cop, fmtDate, nightsBetween, plural } from "@/lib/format";
+import { WD_FULL, WD_MIN, addDays, cop, fmtDate, nightsBetween, parseISO, plural } from "@/lib/format";
 import type { PersonRates, RateSeason, SeasonDayRate, SeasonInput } from "@/lib/types";
 import { Combobox } from "@/components/ui/combobox";
 import { useAdmin, useParam, useSetParams } from "@/components/admin/context";
@@ -25,7 +25,8 @@ import { RatesTable } from "@/components/admin/rates-table";
 import { Paginator, usePaged } from "@/components/admin/paginator";
 import { DatePicker, DateRangePicker } from "@/components/admin/date-picker";
 import { adminInput } from "@/components/admin/shared";
-import { LIST_CARD, LIST_MOBILE_ROW, LIST_ROW, LIST_ROW_HOVER, LIST_ROW_LATEST, ListTableHead } from "@/components/admin/list-table";
+import { Panel } from "@/components/admin/board";
+import { useTip } from "@/components/ui/floating";
 import {
   Badge,
   Button,
@@ -38,8 +39,9 @@ import {
   Modal,
   ModalPresence,
   MoneyInput,
-  PageHeader,
+  Segmented,
   Stepper,
+  enter,
   Switch,
   type Tone,
 } from "@/components/admin/ui";
@@ -101,79 +103,77 @@ export function RatesView() {
   const edit = (id: string) => setParams({ temporada: id });
   const paged = usePaged(shown, "temporadas", `${filter}|${cabinId}`);
 
-  // Barra de secciones compacta; en el teléfono ocupa todo el ancho, en partes iguales. En Tarifas va junto a los días de fin de semana.
-  const tabs = (
-    <div role="tablist" aria-label="Secciones de tarifas" className="grid w-full grid-cols-3 gap-1 rounded-full bg-panel p-1 sm:w-fit">
-      {RATES_TABS.map((t) => {
-        const on = t.value === tab;
-        const count = t.value === "temporadas" ? data.seasons.filter((s) => s.activa && s.to >= today).length : 0;
-        return (
-          <button
-            key={t.value}
-            type="button"
-            role="tab"
-            aria-selected={on}
-            onClick={() => setTab(t.value)}
-            className={`inline-flex h-8 min-w-0 items-center justify-center gap-1.5 rounded-full px-2 text-[13px] font-semibold whitespace-nowrap transition-colors duration-150 sm:px-4 ${on ? "bg-ink text-paper" : "text-ink-muted hover:text-ink"}`}
-          >
-            {t.icon}
-            {t.label}
-            {count > 0 && <span className="rounded-full bg-yellow px-1.5 text-[11px] font-bold text-ink tabular-nums">{count}</span>}
-          </button>
-        );
-      })}
-    </div>
-  );
+  const live = data.seasons.filter((s) => s.activa && s.from <= today && s.to >= today);
+  const next = data.seasons.filter((s) => s.activa && s.from > today).sort((a, b) => (a.from < b.from ? -1 : 1))[0];
+  const counts = {
+    vigentes: data.seasons.filter((s) => s.to >= today).length,
+    finalizadas: data.seasons.filter((s) => s.to < today).length,
+    todas: data.seasons.length,
+  };
 
   return (
     <>
-      <PageHeader
-        title={MODULES.tarifas.label}
-        description="El precio de cada noche. Las temporadas lo reemplazan en sus fechas."
-        actions={
-          tab === "temporadas" ? (
+      <header {...enter(0)} className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium text-ink-muted">El precio de cada noche; las temporadas lo reemplazan en sus fechas</p>
+          <h1 className="mt-1 text-[clamp(1.5rem,2.4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-ink">{MODULES.tarifas.label}</h1>
+        </div>
+        <div data-tour="rates-tabs" className="flex flex-wrap items-center gap-2 rounded-full">
+          <Segmented
+            label="Secciones de tarifas"
+            value={tab}
+            onChange={setTab}
+            options={RATES_TABS.map((t) => ({ ...t, count: t.value === "temporadas" ? counts.vigentes : undefined }))}
+          />
+          {tab === "temporadas" && (
             <Button variant="primary" icon={<PlusIcon size={14} />} onClick={() => edit("nueva")}>
               Nueva temporada
             </Button>
-          ) : undefined
-        }
-      />
+          )}
+        </div>
+      </header>
 
-      {tab !== "tarifas" && tabs}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div {...enter(1)} className="min-w-0 xl:col-span-5">
+          <Tonight />
+        </div>
+        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:col-span-7">
+          <Tile
+            order={1.5}
+            icon={<CalendarIcon size={15} />}
+            label="Temporadas vigentes"
+            value={live.length}
+            hint={live.length ? live.map((s) => s.nombre).join(", ") : "hoy rige la tarifa base"}
+          />
+          <Tile
+            order={2}
+            icon={<TagIcon size={15} />}
+            label="Próxima temporada"
+            value={next ? next.nombre : "—"}
+            hint={next ? `empieza el ${fmtDate(next.from)}` : "no hay temporadas programadas"}
+            small
+          />
+        </div>
+      </div>
+
+      {tab === "tarifas" && (
+        <div {...enter(2.5)}>
+          <NextTwoWeeks />
+        </div>
+      )}
 
       {/* Oculta, no desmontada: cambiar de pestaña no borra los cambios sin guardar. */}
       <div className={tab === "tarifas" ? "" : "hidden"}>
-        <RatesTable toolbar={tabs} />
+        <RatesTable />
       </div>
 
       {tab === "simulador" && <Simulator />}
 
       {tab === "temporadas" && (
         <section aria-label="Temporadas" className="flex flex-col gap-3">
-          <p className="text-[13.5px] text-ink-muted">Dos temporadas activas de la misma cabaña no pueden cruzarse.</p>
           {data.seasons.length > 0 && (
-            <div role="search" aria-label="Filtrar temporadas" className="grid grid-cols-1 items-center gap-2 sm:grid-cols-2 xl:w-[560px]">
-              <div className="min-w-0">
-                <label htmlFor="rt-mostrar" className="sr-only">
-                  Mostrar
-                </label>
-                <Combobox
-                  id="rt-mostrar"
-                  value={filter}
-                  onChange={(v) => setFilter(v as typeof filter)}
-                  searchable={false}
-                  options={[
-                    {
-                      value: "vigentes",
-                      label: "Vigentes y próximas",
-                      description: plural(data.seasons.filter((s) => s.to >= today).length, "temporada", "temporadas"),
-                    },
-                    { value: "finalizadas", label: "Finalizadas" },
-                    { value: "todas", label: "Todas" },
-                  ]}
-                />
-              </div>
-              <div className="min-w-0">
+            <div role="search" aria-label="Filtrar temporadas" className="flex flex-wrap items-center gap-2">
+              <div className="w-full sm:w-[220px]">
                 <Combobox
                   value={cabinId}
                   onChange={setCabinId}
@@ -181,30 +181,30 @@ export function RatesView() {
                   icon={<HomeIcon size={14} className="text-ink-muted" />}
                 />
               </div>
+              <Segmented
+                label="Mostrar"
+                value={filter}
+                onChange={setFilter}
+                options={[
+                  { value: "vigentes", label: "Vigentes", count: counts.vigentes },
+                  { value: "finalizadas", label: "Finalizadas", count: counts.finalizadas },
+                  { value: "todas", label: "Todas", count: counts.todas },
+                ]}
+              />
+              <p className="text-[12.5px] text-ink-muted sm:ml-auto">Dos temporadas activas de la misma cabaña no pueden cruzarse.</p>
             </div>
           )}
           {shown.length ? (
             <>
-              <Card className={LIST_CARD}>
-                <table className="w-full text-[14px]">
-                  <ListTableHead columns={["Temporada", "Cabaña", "Fechas", "Precio", "Estado", "Acciones"]} right={["Precio", "Acciones"]} />
-                  <tbody className="divide-y divide-line">
-                    {paged.rows.map((s) => (
-                      <SeasonTableRow key={s.id} s={s} onEdit={() => edit(s.id)} />
-                    ))}
-                  </tbody>
-                </table>
-                <Paginator p={paged} noun="temporadas" className="border-t border-line px-4 py-3" />
-              </Card>
-              <ul className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:hidden">
+              <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
                 {paged.rows.map((s) => (
                   <SeasonCard key={s.id} s={s} onEdit={() => edit(s.id)} />
                 ))}
               </ul>
-              <Paginator p={paged} noun="temporadas" className="rounded-[20px] bg-paper px-4 py-3 ring-1 ring-line xl:hidden" />
+              <Paginator p={paged} noun="temporadas" className="rounded-[18px] bg-paper px-4 py-3 ring-1 ring-line" />
             </>
           ) : (
-            <Card className="p-4">
+            <Panel id="rt-empty" title="Temporadas">
               <EmptyState
                 compact
                 icon={<CalendarIcon size={18} />}
@@ -215,7 +215,7 @@ export function RatesView() {
                     : "Crea una temporada para cobrar distinto en fechas de alta demanda. Se aplica automáticamente al cotizar en el sitio."
                 }
               />
-            </Card>
+            </Panel>
           )}
         </section>
       )}
@@ -224,6 +224,134 @@ export function RatesView() {
     </>
   );
 }
+
+/* ───────────── Resumen ───────────── */
+
+// Tarjeta oscura: lo que cuesta esta noche cada cabaña (con temporada o precio por día, si aplica) frente a su base.
+function Tonight() {
+  const { data, today } = useAdmin();
+  const cabins = data.cabinTypes.filter((c) => c.activa).sort((a, b) => a.sort - b.sort);
+  return (
+    <section aria-labelledby="rt-tonight" className="flex h-full flex-col gap-4 rounded-[22px] bg-ink p-6 text-paper">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 id="rt-tonight" className="text-[13px] font-medium text-paper/70">
+            Precio de esta noche
+          </h2>
+          <p className="mt-0.5 text-[12px] text-paper/50">{fmtDate(today, true)}</p>
+        </div>
+        <span aria-hidden="true" className="grid size-9 place-items-center rounded-full bg-paper/10">
+          <MoonIcon size={16} />
+        </span>
+      </div>
+      <ul className="flex flex-col gap-3">
+        {cabins.map((c) => {
+          const n = nightlyRate(c, data.seasons, today);
+          const base = rateFrom(c).price;
+          return (
+            <li key={c.id} className="flex items-end justify-between gap-3 border-t border-paper/15 pt-3 first:border-t-0 first:pt-0">
+              <span className="min-w-0">
+                <span className="block truncate text-[13px] text-paper/80">{c.nombre}</span>
+                <span className="block truncate text-[11.5px] text-paper/50">
+                  {n.season ? `Temporada: ${n.season.nombre}` : n.dayRate ? "Precio del día" : "Tarifa base"} · {`para ${n.fromGuests}`}
+                </span>
+              </span>
+              <span className="flex flex-none flex-col items-end">
+                <span className="text-[26px] leading-none font-semibold tracking-[-0.03em]">{cop(n.couple)}</span>
+                {n.couple !== base && <span className="mt-1 text-[11.5px] text-paper/60">{diff(n.couple, base)}</span>}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function Tile({ order, icon, label, value, hint, small = false }: { order: number; icon: ReactNode; label: string; value: ReactNode; hint: string; small?: boolean }) {
+  return (
+    <section {...enter(order)} aria-label={label} className="flex min-w-0 flex-col gap-3 rounded-[22px] bg-paper p-5 ring-1 ring-line ring-inset">
+      <span className="flex items-center gap-2 text-[12.5px] font-medium text-ink-muted">
+        <span aria-hidden="true" className="grid size-7 flex-none place-items-center rounded-full bg-panel text-ink ring-1 ring-line">
+          {icon}
+        </span>
+        {label}
+      </span>
+      <p className={`truncate leading-tight font-semibold tracking-[-0.03em] text-ink ${small ? "text-[20px]" : "text-[28px]"}`}>{value}</p>
+      <p className="mt-auto line-clamp-2 text-[12px] text-ink-subtle">{hint}</p>
+    </section>
+  );
+}
+
+// Precio de cada noche en las próximas dos semanas, por cabaña. El tono marca cuánto sube sobre la base (más fuerte,
+// más caro); el valor va escrito en cada celda.
+function NextTwoWeeks() {
+  const { data, today } = useAdmin();
+  const tip = useTip();
+  const cabins = data.cabinTypes.filter((c) => c.activa).sort((a, b) => a.sort - b.sort);
+  const days = Array.from({ length: 14 }, (_, i) => addDays(today, i));
+  const rows = cabins.map((c) => {
+    const base = rateFrom(c).price;
+    return { c, base, nights: days.map((d) => ({ d, ...nightlyRate(c, data.seasons, d) })) };
+  });
+  const maxUp = Math.max(1, ...rows.flatMap((r) => r.nights.map((n) => n.couple / r.base - 1)));
+  return (
+    <Panel id="rt-14" title="Las próximas dos semanas" subtitle="Precio por noche en pareja; más intenso, más alto que la tarifa base">
+      <div className="-mx-5 overflow-x-auto px-5">
+        <table className="w-full min-w-[820px] border-separate border-spacing-[3px] text-center text-[11.5px]">
+          <thead>
+            <tr>
+              <th scope="col" className="w-[150px] text-left font-medium text-ink-muted">
+                <span className="sr-only">Cabaña</span>
+              </th>
+              {days.map((d, i) => {
+                const date = parseISO(d);
+                return (
+                  <th key={d} scope="col" className={`pb-1 font-medium ${i === 0 ? "text-ink" : "text-ink-muted"}`}>
+                    <span className="block text-[10.5px]">{i === 0 ? "Hoy" : WD_MIN[date.getUTCDay()]}</span>
+                    <span className="block tabular-nums">{date.getUTCDate()}</span>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.c.id}>
+                <th scope="row" className="pr-2 text-left text-[12.5px] font-medium text-ink">
+                  <span className="block truncate">{r.c.nombre}</span>
+                  <span className="block text-[11px] font-normal text-ink-muted">{`base ${short(r.base)}`}</span>
+                </th>
+                {r.nights.map((n) => {
+                  const up = Math.max(0, n.couple / r.base - 1);
+                  const strength = up > 0 ? 0.18 + (up / maxUp) * 0.6 : 0;
+                  return (
+                    <td
+                      key={n.d}
+                      {...tip(() => (
+                        <span>
+                          <strong>{fmtDate(n.d)}</strong> · {cop(n.couple)}
+                          {n.season ? ` · ${n.season.nombre}` : n.dayRate ? " · precio del día" : ""}
+                        </span>
+                      ))}
+                      className="h-11 rounded-[10px] font-semibold text-ink tabular-nums ring-1 ring-line ring-inset"
+                      style={{ background: strength ? `color-mix(in srgb, var(--color-chart-a) ${Math.round(strength * 100)}%, var(--color-paper))` : "var(--color-panel)" }}
+                    >
+                      {short(n.couple)}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+}
+
+// $390 mil · $1,2 M
+const short = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(1).replace(".", ",")} M` : `$${Math.round(n / 1e3)}k`);
 
 /* ───────────── Precio por cantidad de personas ───────────── */
 
@@ -333,7 +461,7 @@ function SeasonActions({ s, onEdit }: { s: RateSeason; onEdit: () => void }) {
   );
 }
 
-// Lo que comparten la fila de la tabla y la tarjeta del teléfono.
+// Datos de una temporada para su tarjeta.
 function useSeasonView(s: RateSeason) {
   const { today, cabin } = useAdmin();
   const c = cabin(s.cabinTypeId);
@@ -353,53 +481,36 @@ function useSeasonView(s: RateSeason) {
   };
 }
 
-function SeasonTableRow({ s, onEdit }: { s: RateSeason; onEdit: () => void }) {
-  const v = useSeasonView(s);
-  return (
-    <tr
-      onClick={onEdit}
-      className={`${LIST_ROW} ${v.st.order === 0 ? LIST_ROW_LATEST : LIST_ROW_HOVER} ${v.st.order >= 2 ? "[&>td:not(:last-child)]:opacity-60" : ""}`}
-    >
-      <td className="px-4 py-3">
-        <span className="block font-bold text-ink">{s.nombre}</span>
-        {v.days.length > 0 && <span className="mt-1 flex flex-wrap gap-1.5">{v.days}</span>}
-      </td>
-      <td className="px-4 py-3 text-ink">{v.cabinName}</td>
-      <td className="px-4 py-3">
-        <span className="block whitespace-nowrap text-ink">{v.dates}</span>
-        <span className="block text-[12.5px] text-ink-muted">{v.nights}</span>
-      </td>
-      <td className="px-4 py-3 text-right">
-        <span className="block font-semibold text-ink tabular-nums">{v.price}</span>
-        <span className="block text-[12px] whitespace-nowrap text-ink-muted">{v.priceHint}</span>
-      </td>
-      <td className="px-4 py-3">
-        <Badge tone={v.st.tone}>{v.st.label}</Badge>
-      </td>
-      <td className="px-4 py-3">
-        <SeasonActions s={s} onEdit={onEdit} />
-      </td>
-    </tr>
-  );
-}
-
 function SeasonCard({ s, onEdit }: { s: RateSeason; onEdit: () => void }) {
   const v = useSeasonView(s);
   return (
-    <li className={`${LIST_MOBILE_ROW} ${v.st.order === 0 ? "bg-yellow-soft/70" : "bg-paper"} ${v.st.order >= 2 ? "opacity-75" : ""}`}>
-      <span className="flex w-full flex-wrap items-center justify-between gap-2">
-        <strong className="font-bold text-ink">{s.nombre}</strong>
-        <Badge tone={v.st.tone}>{v.st.label}</Badge>
-      </span>
-      <span className="text-[13px] text-ink-muted">{`${v.cabinName} · ${v.dates} · ${v.nights}`}</span>
-      {v.days.length > 0 && <span className="flex flex-wrap gap-1.5">{v.days}</span>}
-      <span className="flex w-full flex-wrap items-center justify-between gap-2">
-        <span>
-          <strong className="block font-semibold text-ink tabular-nums">{v.price}</strong>
-          <span className="block text-[12px] text-ink-muted">{v.priceHint}</span>
+    <li
+      className={`flex min-w-0 flex-col rounded-[22px] bg-paper ring-1 ring-inset ${v.st.order === 0 ? "ring-success/40" : "ring-line"} ${v.st.order >= 2 ? "opacity-70" : ""}`}
+    >
+      <button type="button" onClick={onEdit} className="flex min-w-0 flex-col gap-3 rounded-t-[22px] p-5 text-left transition-colors hover:bg-panel/60">
+        <span className="flex items-start justify-between gap-2">
+          <span className="min-w-0">
+            <span className="block truncate text-[15px] font-semibold text-ink">{s.nombre}</span>
+            <span className="block truncate text-[12px] text-ink-muted">{v.cabinName}</span>
+          </span>
+          <Badge tone={v.st.tone}>{v.st.label}</Badge>
         </span>
+        <span className="flex items-end justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-[26px] leading-none font-semibold tracking-[-0.03em] text-ink">{v.price}</span>
+            <span className="mt-1 block truncate text-[12px] text-ink-muted">{v.priceHint}</span>
+          </span>
+        </span>
+        <span className="flex items-center gap-2 rounded-[14px] bg-panel px-3.5 py-2.5 text-[12.5px] text-ink ring-1 ring-line ring-inset">
+          <CalendarIcon size={14} className="flex-none text-ink-muted" />
+          <span className="min-w-0 flex-1 truncate">{v.dates}</span>
+          <span className="flex-none text-ink-muted">{v.nights}</span>
+        </span>
+        {v.days.length > 0 && <span className="flex flex-wrap gap-1.5">{v.days}</span>}
+      </button>
+      <div className="mt-auto border-t border-line px-3 py-2">
         <SeasonActions s={s} onEdit={onEdit} />
-      </span>
+      </div>
     </li>
   );
 }

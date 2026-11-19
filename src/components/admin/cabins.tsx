@@ -1,9 +1,10 @@
 "use client";
 
-import { cleanUnitLabels, invalidUnitLabels, personRatesText, personSteps, rateFrom, unitLabel } from "@/lib/booking";
+import { ACTIVE_STATUSES, BLOCKING_STATUSES, cleanUnitLabels, invalidUnitLabels, personRatesText, personSteps, rateFrom, unitLabel } from "@/lib/booking";
+import { paymentsOf, recordsByCode } from "@/lib/admin-metrics";
 import Image from "next/image";
 import Link from "next/link";
-import { useRef, useState, type DragEvent } from "react";
+import { useRef, useState, type DragEvent, type ReactNode } from "react";
 import {
   BathIcon,
   ArrowDownIcon,
@@ -24,7 +25,7 @@ import {
 } from "@/components/ui/icons";
 import { api } from "@/lib/client/api";
 import { isMockApi } from "@/lib/config";
-import { cop, plural } from "@/lib/format";
+import { addDays, cop, nightsBetween, plural } from "@/lib/format";
 import { imageSize, resizeImage } from "@/lib/client/image-resize";
 import { CABIN_PHOTO } from "@/lib/site";
 import type { CabinInput, PersonRates, CabinType } from "@/lib/types";
@@ -34,6 +35,7 @@ import { MODULES, paths } from "@/components/admin/routes";
 import { useRouteParam } from "@/components/admin/route-param";
 import { adminInput } from "@/components/admin/shared";
 import { themeStyle } from "@/components/admin/theme";
+import { Panel, money } from "@/components/admin/board";
 import {
   Badge,
   Button,
@@ -51,6 +53,7 @@ import {
   Stepper,
   Switch,
   buttonClass,
+  enter,
 } from "@/components/admin/ui";
 
 const SUGGESTED = [
@@ -119,114 +122,202 @@ export function CabinList() {
       run: () => api.admin.deleteCabin(c.id),
     });
 
+  // Cifras de cada cabaña: ocupación de los próximos 30 días, lo cobrado este mes y las próximas llegadas.
+  const end = addDays(today, 30);
+  const monthStart = today.slice(0, 8) + "01";
+  const records = recordsByCode(data.payments);
+  const statsOf = (c: CabinType) => {
+    const own = data.reservations.filter((r) => r.cabinTypeId === c.id);
+    let busy = 0;
+    for (const r of own) {
+      if (!BLOCKING_STATUSES.includes(r.status)) continue;
+      const a = r.checkIn > today ? r.checkIn : today;
+      const z = r.checkOut < end ? r.checkOut : end;
+      if (z > a) busy += nightsBetween(a, z);
+    }
+    const occ = c.units ? Math.min(100, Math.round((busy / (c.units * 30)) * 100)) : 0;
+    const month = own.flatMap((r) => paymentsOf(r, records.get(r.code))).reduce((s, p) => (p.date >= monthStart && p.date <= today ? s + p.amount : s), 0);
+    const upcoming = own.filter((r) => r.checkIn >= today && ACTIVE_STATUSES.includes(r.status)).length;
+    return { occ, month, upcoming };
+  };
+  const active = cabins.filter((c) => c.activa);
+  const units = active.reduce((n, c) => n + c.units, 0);
+  const beds = active.reduce((n, c) => n + c.units * c.maxPersonas, 0);
+  const prices = active.map((c) => rateFrom(c).price);
+
   return (
     <>
-      <PageHeader
-        title={MODULES.cabanas.label}
-        description="Lo que ves aquí es lo que se ofrece en el sitio. El orden también es el del sitio."
-        actions={
-          <Link href={paths.nuevaCabana} className={buttonClass("primary")}>
-            <PlusIcon size={14} />
-            Nueva cabaña
-          </Link>
-        }
-      />
+      <header {...enter(0)} className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium text-ink-muted">Lo que ves aquí es lo que se ofrece en el sitio, en el mismo orden</p>
+          <h1 className="mt-1 text-[clamp(1.5rem,2.4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-ink">{MODULES.cabanas.label}</h1>
+        </div>
+        <Link href={paths.nuevaCabana} data-tour="new-cabin" className={buttonClass("primary")}>
+          <PlusIcon size={14} />
+          Nueva cabaña
+        </Link>
+      </header>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <section {...enter(1)} aria-label="Inventario" className="flex flex-col gap-4 rounded-[22px] bg-ink p-6 text-paper xl:col-span-5">
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-[13px] font-medium text-paper/70">Cabañas para reservar</h2>
+            <span aria-hidden="true" className="grid size-9 place-items-center rounded-full bg-paper/10">
+              <HomeIcon size={16} />
+            </span>
+          </div>
+          <p className="flex items-baseline gap-2">
+            <span className="text-[56px] leading-none font-semibold tracking-[-0.04em]">{units}</span>
+            <span className="text-[15px] text-paper/60">{`en ${plural(active.length, "tipo", "tipos")}`}</span>
+          </p>
+          <dl className="mt-auto grid grid-cols-3 gap-3">
+            {[
+              { k: "Personas a la vez", v: String(beds) },
+              { k: "Tipos inactivos", v: String(cabins.length - active.length) },
+              { k: "Fotos", v: String(cabins.reduce((n, c) => n + c.fotos.length, 0)) },
+            ].map((x) => (
+              <div key={x.k} className="min-w-0 border-l border-paper/15 pl-3">
+                <dt className="text-[12px] leading-tight text-paper/60">{x.k}</dt>
+                <dd className="mt-1 text-[18px] font-semibold">{x.v}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:col-span-7">
+          <Tile
+            order={1.5}
+            icon={<TagIcon size={15} />}
+            label="Precio base por noche"
+            value={prices.length ? (Math.min(...prices) === Math.max(...prices) ? cop(prices[0]) : `${money(Math.min(...prices))} a ${money(Math.max(...prices))}`) : "—"}
+            hint="de la más económica a la más cara"
+          />
+          <Tile
+            order={2}
+            icon={<UsersIcon size={15} />}
+            label="Reservas en todas las cabañas"
+            value={String(data.reservations.length)}
+            hint={plural(data.reservations.filter((r) => r.checkIn >= today && ACTIVE_STATUSES.includes(r.status)).length, "llegada próxima", "llegadas próximas")}
+          />
+        </div>
+      </div>
+
       {cabins.length ? (
-        <div className="@container">
-          {/* Columnas según el espacio de las tarjetas (no el de la ventana): 4 desde ~1000 px de contenido. */}
-          <ul className="grid grid-cols-1 gap-3 @xl:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4">
-            {cabins.map((c, i) => {
-              const n = count(c.id);
-              const bathAlerts = cabinBathroomAlerts(data, c.id, today);
-              return (
-                <li key={c.id} className={`flex flex-col overflow-hidden rounded-[20px] bg-panel transition-opacity ${c.activa ? "" : "opacity-80"}`}>
-                  <div className="relative aspect-[16/9] bg-canvas">
-                    {c.fotos[0] ? (
-                      <Image src={c.fotos[0]} alt={c.nombre} fill sizes="(min-width: 1024px) 360px, (min-width: 640px) 50vw, 100vw" className="object-cover" />
-                    ) : (
-                      <div className="absolute inset-0 grid place-items-center text-ink-muted">
-                        <span className="flex flex-col items-center gap-1 text-[13px]">
-                          <ImageIcon size={20} className="opacity-60" />
-                          Sin fotos
-                        </span>
-                      </div>
+        <ol className="flex flex-col gap-3">
+          {cabins.map((c, i) => {
+            const n = count(c.id);
+            const st = statsOf(c);
+            const bathAlerts = cabinBathroomAlerts(data, c.id, today);
+            return (
+              <li
+                key={c.id}
+                {...enter(3 + i * 0.5)}
+                className={`grid min-w-0 grid-cols-1 overflow-hidden rounded-[22px] bg-paper ring-1 ring-line ring-inset md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_260px] ${c.activa ? "" : "opacity-75"}`}
+              >
+                {/* Foto con el orden en el sitio y el estado. */}
+                <div className="relative aspect-[16/10] bg-panel md:aspect-auto md:min-h-[220px]">
+                  {c.fotos[0] ? (
+                    <Image src={c.fotos[0]} alt={c.nombre} fill sizes="(min-width: 768px) 320px, 100vw" className="object-cover" />
+                  ) : (
+                    <div className="absolute inset-0 grid place-items-center text-ink-muted">
+                      <span className="flex flex-col items-center gap-1 text-[13px]">
+                        <ImageIcon size={20} className="opacity-60" />
+                        Sin fotos
+                      </span>
+                    </div>
+                  )}
+                  <span className="absolute top-3 left-3 flex flex-wrap gap-1.5">
+                    <span className="grid size-7 place-items-center rounded-full bg-ink text-[12px] font-semibold text-paper shadow-panel" title="Orden en el sitio">
+                      {i + 1}
+                    </span>
+                    <Badge tone={c.activa ? "success" : "neutral"} className="shadow-panel">
+                      {c.activa ? "Activa" : "Inactiva"}
+                    </Badge>
+                    {/* La etiqueta de la cabaña, como en el sitio. */}
+                    {c.badge && (
+                      <span className="inline-flex items-center rounded-full bg-paper px-2.5 py-0.5 text-[12px] leading-[1.5] font-semibold whitespace-nowrap text-ink shadow-panel">
+                        {c.badge}
+                      </span>
                     )}
-                    <span className="absolute top-2.5 left-2.5 flex gap-1.5">
-                      <Badge tone={c.activa ? "success" : "neutral"} className="shadow-panel">
-                        {c.activa ? "Activa" : "Inactiva"}
-                      </Badge>
-                      {/* La etiqueta de la cabaña, como en el sitio. No usa Badge: su fondo neutro le gana al resaltado y no se lee sobre la foto. */}
-                      {c.badge && (
-                        <span className="inline-flex items-center rounded-full bg-yellow px-2.5 py-0.5 text-[12px] leading-[1.5] font-bold whitespace-nowrap text-ink shadow-panel">
-                          {c.badge}
-                        </span>
+                  </span>
+                </div>
+
+                <div className="flex min-w-0 flex-col gap-3 p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-[17px] leading-tight font-semibold tracking-[-0.01em] text-ink">{c.nombre}</h2>
+                      {c.descripcion && <p className="mt-1 line-clamp-2 text-[12.5px] text-ink-muted">{c.descripcion}</p>}
+                    </div>
+                    <span className="flex flex-none flex-col items-end">
+                      <span className="text-[20px] leading-none font-semibold tracking-[-0.02em] text-ink">{cop(rateFrom(c).price)}</span>
+                      <span className="mt-1 text-[11.5px] text-ink-muted">{`noche para ${rateFrom(c).guests}`}</span>
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 text-[12px]">
+                    <span className="rounded-full bg-panel px-2.5 py-1 text-ink ring-1 ring-line ring-inset">{`Hasta ${plural(c.maxPersonas, "persona", "personas")}`}</span>
+                    <span className="rounded-full bg-panel px-2.5 py-1 text-ink ring-1 ring-line ring-inset">
+                      {`${plural(c.units, "unidad", "unidades")}: ${Array.from({ length: c.units }, (_, k) => unitLabel(c, k + 1)).join(", ") || "ninguna"}`}
+                    </span>
+                    <span className="rounded-full bg-panel px-2.5 py-1 text-ink-muted ring-1 ring-line ring-inset">
+                      {`${plural(c.fotos.length, "foto", "fotos")} · ${plural(c.caracteristicas.length, "característica", "características")}`}
+                    </span>
+                  </div>
+                  {c.caracteristicas.length > 0 && <p className="line-clamp-1 text-[12px] text-ink-subtle">{c.caracteristicas.join(" · ")}</p>}
+                  {bathAlerts.length > 0 && (
+                    <p className="flex items-center gap-2 rounded-[14px] bg-warning-soft px-3 py-2 text-[12.5px] font-medium text-warning">
+                      <BathIcon size={14} />
+                      {bathAlerts.length === 1 ? `${bathAlerts[0].name}: fuera de servicio hoy` : `${bathAlerts.length} baños fuera de servicio hoy`}
+                    </p>
+                  )}
+                  <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-line pt-3">
+                    <Link href={paths.cabana(c.id)} className={buttonClass("primary", "sm")}>
+                      <PencilIcon size={13} />
+                      Editar
+                    </Link>
+                    <Button size="sm" onClick={() => toggle(c)}>
+                      {c.activa ? "Desactivar" : "Activar"}
+                    </Button>
+                    <span className="ml-auto flex gap-0.5">
+                      <IconButton label="Subir en el orden" size="sm" disabled={i === 0} onClick={() => move(i, -1)}>
+                        <ArrowUpIcon size={15} />
+                      </IconButton>
+                      <IconButton label="Bajar en el orden" size="sm" disabled={i === cabins.length - 1} onClick={() => move(i, 1)}>
+                        <ArrowDownIcon size={15} />
+                      </IconButton>
+                      {/* Eliminar solo si se puede (sin reservas). */}
+                      {!n && (
+                        <IconButton label={`Eliminar ${c.nombre}`} size="sm" variant="danger-ghost" onClick={() => remove(c)}>
+                          <TrashIcon size={15} />
+                        </IconButton>
                       )}
                     </span>
                   </div>
-                  <div className="flex flex-1 flex-col gap-2.5 p-3.5">
-                    <div>
-                      <h2 className="text-[15px] leading-tight font-bold text-ink">{c.nombre}</h2>
-                      {c.descripcion && <p className="mt-1 line-clamp-2 text-[12.5px] text-ink-muted">{c.descripcion}</p>}
-                    </div>
-                    <dl className="grid grid-cols-3 gap-1.5 text-[12px]">
-                      <div className="min-w-0 rounded-[12px] bg-canvas/70 px-2.5 py-1.5">
-                        <dt className="text-ink-muted">Capacidad</dt>
-                        <dd className="font-semibold text-ink">{plural(c.maxPersonas, "persona", "personas")}</dd>
-                      </div>
-                      <div className="min-w-0 rounded-[12px] bg-canvas/70 px-2.5 py-1.5">
-                        <dt className="text-ink-muted">Cabañas</dt>
-                        <dd className="font-semibold text-ink">{Array.from({ length: c.units }, (_, i) => unitLabel(c, i + 1)).join(", ") || "Ninguna"}</dd>
-                      </div>
-                      <div className="min-w-0 rounded-[12px] bg-canvas/70 px-2.5 py-1.5">
-                        <dt className="text-ink-muted">{`Noche para ${rateFrom(c).guests}`}</dt>
-                        <dd className="font-semibold text-ink tabular-nums">{cop(rateFrom(c).price)}</dd>
-                      </div>
-                    </dl>
-                    <p className="text-[12px] text-ink-muted">
-                      {plural(c.fotos.length, "foto", "fotos")} · {plural(c.caracteristicas.length, "característica", "características")} ·{" "}
-                      {plural(n, "reserva", "reservas")}
-                    </p>
-                    {bathAlerts.length > 0 && (
-                      <p className="flex items-center gap-2 rounded-[14px] bg-yellow-soft px-3 py-2 text-[12.5px] font-semibold text-warning">
-                        <BathIcon size={14} />
-                        {bathAlerts.length === 1 ? `${bathAlerts[0].name}: fuera de servicio hoy` : `${bathAlerts.length} baños fuera de servicio hoy`}
-                      </p>
-                    )}
-                    <div className="mt-auto flex flex-col gap-2 border-t border-line pt-2.5">
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <Link href={paths.cabana(c.id)} className={buttonClass("primary", "sm", "w-full")}>
-                          <PencilIcon size={13} />
-                          Editar
-                        </Link>
-                        <Button size="sm" className="w-full" onClick={() => toggle(c)}>
-                          {c.activa ? "Desactivar" : "Activar"}
-                        </Button>
-                      </div>
-                      {/* Orden al centro; eliminar a la derecha, solo si se puede (sin reservas). */}
-                      <div className="grid grid-cols-[1fr_auto_1fr] items-center">
-                        <span className="col-start-2 flex gap-0.5">
-                          <IconButton label="Subir en el orden" size="sm" disabled={i === 0} onClick={() => move(i, -1)}>
-                            <ArrowUpIcon size={15} />
-                          </IconButton>
-                          <IconButton label="Bajar en el orden" size="sm" disabled={i === cabins.length - 1} onClick={() => move(i, 1)}>
-                            <ArrowDownIcon size={15} />
-                          </IconButton>
-                        </span>
-                        {!n && (
-                          <IconButton label={`Eliminar ${c.nombre}`} size="sm" variant="danger-ghost" className="justify-self-end" onClick={() => remove(c)}>
-                            <TrashIcon size={15} />
-                          </IconButton>
-                        )}
-                      </div>
-                    </div>
+                </div>
+
+                {/* Cifras de la cabaña (nuevo): ocupación, lo cobrado este mes y las reservas. */}
+                <dl className="grid grid-cols-3 gap-3 border-t border-line bg-panel/60 p-5 md:col-span-2 xl:col-span-1 xl:grid-cols-1 xl:border-t-0 xl:border-l">
+                  <div className="min-w-0">
+                    <dt className="text-[12px] text-ink-muted">Ocupación 30 días</dt>
+                    <dd className="mt-1 text-[20px] leading-none font-semibold tracking-[-0.02em] text-ink">{`${st.occ} %`}</dd>
+                    <dd aria-hidden="true" className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: "color-mix(in srgb, var(--color-chart-a) 18%, transparent)" }}>
+                      <span className="block h-full rounded-full" style={{ width: `${st.occ}%`, background: "var(--color-chart-a)" }} />
+                    </dd>
                   </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+                  <div className="min-w-0">
+                    <dt className="text-[12px] text-ink-muted">Cobrado este mes</dt>
+                    <dd className="mt-1 text-[20px] leading-none font-semibold tracking-[-0.02em] text-ink">{money(st.month)}</dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[12px] text-ink-muted">Reservas</dt>
+                    <dd className="mt-1 text-[20px] leading-none font-semibold tracking-[-0.02em] text-ink">{n}</dd>
+                    <dd className="mt-0.5 text-[11.5px] text-ink-subtle">{plural(st.upcoming, "próxima", "próximas")}</dd>
+                  </div>
+                </dl>
+              </li>
+            );
+          })}
+        </ol>
       ) : (
-        <Card className="p-4">
+        <Panel id="cb-empty" title="Cabañas">
           <EmptyState
             icon={<HomeIcon size={18} />}
             title="Aún no hay cabañas"
@@ -237,9 +328,24 @@ export function CabinList() {
               </Link>
             }
           />
-        </Card>
+        </Panel>
       )}
     </>
+  );
+}
+
+function Tile({ order, icon, label, value, hint }: { order: number; icon: ReactNode; label: string; value: ReactNode; hint: string }) {
+  return (
+    <section {...enter(order)} aria-label={label} className="flex min-w-0 flex-col gap-3 rounded-[22px] bg-paper p-5 ring-1 ring-line ring-inset">
+      <span className="flex items-center gap-2 text-[12.5px] font-medium text-ink-muted">
+        <span aria-hidden="true" className="grid size-7 flex-none place-items-center rounded-full bg-panel text-ink ring-1 ring-line">
+          {icon}
+        </span>
+        {label}
+      </span>
+      <p className="text-[24px] leading-tight font-semibold tracking-[-0.03em] text-ink">{value}</p>
+      <p className="mt-auto text-[12px] text-ink-subtle">{hint}</p>
+    </section>
   );
 }
 
@@ -416,7 +522,7 @@ export function CabinEditor({ id }: { id?: string }) {
             </Field>
           </Card>
 
-          <Card aria-labelledby="cb-cap" className="flex flex-col gap-4 p-4 sm:p-5">
+          <Card aria-labelledby="cb-cap" data-tour="cabin-capacity" className="flex flex-col gap-4 p-4 sm:p-5">
             <CardHeader
               id="cb-cap"
               icon={<UsersIcon size={18} />}

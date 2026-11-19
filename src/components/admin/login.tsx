@@ -7,19 +7,22 @@ import { BrandName, Logo } from "@/components/brand/logo";
 import { EyeIcon, EyeOffIcon } from "@/components/ui/icons";
 import { api } from "@/lib/client/api";
 import { isMockApi } from "@/lib/config";
+import { panelNext } from "@/lib/panel-next";
 import { PanelFooter } from "@/components/admin/footer";
-import { SoaringCondor } from "@/components/landing/soaring-condor";
 import { adminInput } from "@/components/admin/shared";
 import { Button, Callout, Field } from "@/components/admin/ui";
 
 // Cuadrícula del fondo del ingreso y de la pantalla de carga, en el color de las líneas del panel; se desvanece hacia
 // los bordes.
 const GRID: CSSProperties = {
+  // Cuadrícula de líneas finas y cuadros amplios, del color del texto muy suave: nítida en el centro de la pantalla y
+  // desvaneciéndose hacia los lados (como el fondo del ingreso del sitio).
   backgroundImage:
-    "linear-gradient(to right, color-mix(in srgb, var(--color-line) 70%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--color-line) 70%, transparent) 1px, transparent 1px)",
+    "linear-gradient(to right, color-mix(in srgb, var(--color-ink) 8%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--color-ink) 8%, transparent) 1px, transparent 1px)",
   backgroundSize: "48px 48px",
-  backgroundPosition: "center",
-  maskImage: "radial-gradient(ellipse 70% 60% at 50% 45%, black 30%, transparent 75%)",
+  backgroundPosition: "center top",
+  maskImage: "linear-gradient(to right, transparent, black 22%, black 78%, transparent), linear-gradient(to bottom, transparent, black 12%, black 82%, transparent)",
+  maskComposite: "intersect",
 };
 
 /* ───────────── Pantalla de carga ───────────── */
@@ -75,11 +78,6 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
   return (
     <main className="admin-surface relative grid min-h-dvh grid-rows-[1fr_auto] place-items-center gap-4 overflow-hidden bg-canvas px-4 py-4 text-ink">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={GRID} />
-      {/* Cóndores de la portada, en el verde del panel y muy suaves: uno grande que llega planeando por la izquierda y otro
-          lejano arriba a la derecha. Con movimiento reducido quedan quietos. */}
-      <SoaringCondor id="condor-ingreso" arrive fill="fill-ink" opacity={0.1} className="absolute bottom-[18%] left-[2%] w-[clamp(200px,26vw,480px)]" />
-      <SoaringCondor id="condor-ingreso-lejano" fill="fill-ink" opacity={0.14} offset={0.45} slow={1.6} className="absolute top-[14%] right-[9%] w-[clamp(70px,9vw,130px)]" />
-
       <form
         noValidate
         onSubmit={onSubmit}
@@ -88,13 +86,13 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
       >
         {/* Logo y nombre centrados, sobre el saludo. En pantallas bajas todo se compacta para que quepa sin scroll. */}
         <div className="flex flex-col items-center gap-3 text-center">
-          <Logo size={72} eager className="[@media(max-height:860px)]:size-14" />
+          <Logo size={96} eager flap className="[@media(max-height:860px)]:size-18" />
           <BrandName wordSize="1.15rem" eyebrowSize=".62rem" className="items-center text-ink" />
           <h1 id="lg-title" className="mt-3 text-[26px] leading-tight font-bold tracking-[-0.03em] [@media(max-height:860px)]:mt-1">
             Bienvenido al panel
           </h1>
-          <p className="max-w-[30ch] text-[14.5px] text-balance text-ink-muted [@media(max-height:640px)]:hidden">
-            {isMockApi ? "Modo simulado: entra con cualquier correo y contraseña." : "Accede con tu cuenta para gestionar reservas."}
+          <p className="text-[14.5px] text-balance text-ink-muted [@media(max-height:640px)]:hidden">
+            Accede con tu cuenta para gestionar reservas.
           </p>
         </div>
 
@@ -179,11 +177,9 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-// Página /login: al entrar vuelve a la ruta del panel de la que venía (?next=), o al inicio del panel. Solo se aceptan
-// rutas del propio panel, para que el enlace no pueda llevar a otro sitio.
+// Página /login: al entrar vuelve a la ruta del panel de la que venía (?next=), o al inicio del panel (lib/panel-next.ts).
 export function LoginPage() {
   const router = useRouter();
-  const next = useSearchParams().get("next") ?? "";
-  const target = /^\/admin(\/|$|\?)/.test(next) && !next.startsWith("//") ? next : "/admin";
+  const target = panelNext(useSearchParams().get("next"));
   return <Login onSuccess={() => router.replace(target)} />;
 }

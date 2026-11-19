@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { BanIcon, BathIcon, BookingIcon, ChevronDownIcon, PlusIcon } from "@/components/ui/icons";
-import { CHANNEL_NAME, channelStayIdOf, computeQuote, isChannelBlock, isFromBooking, nightlyRate, unitLabel } from "@/lib/booking";
+import { BanIcon, BathIcon, BookingIcon, PlusIcon } from "@/components/ui/icons";
+import { CHANNEL_NAME, channelStayIdOf, computeQuote, isChannelBlock, isFromBooking, nightlyRate } from "@/lib/booking";
 import { addDays, cop, fmtDate, fmtFullDate, nightsBetween, parseISO, plural, statusOf } from "@/lib/format";
 import type { CabinType } from "@/lib/types";
-import { useAdmin, useParam } from "@/components/admin/context";
+import { useAdmin } from "@/components/admin/context";
 import { Popover, useTip } from "@/components/ui/floating";
 import { type NewReservationDraft } from "@/components/admin/new-reservation";
 import { bathroomIssues } from "@/components/admin/bathrooms";
@@ -42,14 +42,11 @@ type TimelineProps = {
   footer?: boolean; // leyenda y ayuda al pie (la primera quincena del mes no la lleva)
   className?: string;
 };
-// "idle": las unidades de un tipo sin reservas ni bloqueos en el periodo. Cerradas, quedan en esa sola línea; abiertas,
-// se muestran todas y la línea queda al final del tipo para volver a cerrarlas.
-type Line = { kind: "group"; cabin: CabinType; units: Unit[] } | { kind: "unit"; u: Unit } | { kind: "idle"; cabin: CabinType; units: Unit[]; open: boolean };
+type Line = { kind: "group"; cabin: CabinType; units: Unit[] } | { kind: "unit"; u: Unit };
 
 // Agrupada por tipo de cabaña: cada tipo muestra por día cuántas unidades quedan libres y su tarifa (lo que se necesita
-// para vender por WhatsApp); debajo, una fila por unidad con sus reservas, bloqueos y noches de Booking. Por defecto solo
-// las unidades con algo en el periodo; las demás quedan en una línea que las despliega, tipo por tipo, como un acordeón
-// (?unidades=doble,familiar: los tipos abiertos).
+// para vender por WhatsApp); debajo, una fila por unidad con sus reservas, bloqueos y noches de Booking. Se ven siempre
+// todas las unidades, también las que no tienen nada en el periodo.
 // Arrastrar sobre noches libres de una unidad (con el mouse) abre «Nueva reserva» con esa cabaña y esas fechas.
 export function Timeline({ days, rows, today, width, onDay, onNew, onStay, onOpen, footer = true, className = "" }: TimelineProps) {
   const { data, cabinLabel } = useAdmin();
@@ -76,27 +73,15 @@ export function Timeline({ days, rows, today, width, onDay, onNew, onStay, onOpe
   // al bajar: se desplaza con la página.
   const overflows = label + n * 2 * half > width;
 
-  const [openParam, setOpenParam] = useParam("unidades", "");
-  const opened = useMemo(() => new Set(openParam.split(",").filter(Boolean)), [openParam]);
-  const toggleGroup = (id: string) => {
-    const next = new Set(opened);
-    if (!next.delete(id)) next.add(id);
-    setOpenParam([...next].join(","));
-  };
   const visible = data.reservations.filter((r) => r.checkIn <= to && r.checkOut > from && rows.some((u) => occupies(r, u)));
   const lines = useMemo<Line[]>(() => {
-    const busy = (u: Unit) => visible.some((r) => occupies(r, u)) || calBlocks.some((b) => blocks(b, u) && b.from <= to && b.to >= from);
     const out: Line[] = [];
     for (const cabin of [...new Map(rows.map((u) => [u.cabin.id, u.cabin])).values()]) {
       const all = rows.filter((x) => x.cabin.id === cabin.id);
-      const idle = all.filter((u) => !busy(u));
-      const open = opened.has(cabin.id);
-      const shown = open ? all : all.filter(busy);
-      out.push({ kind: "group", cabin, units: all }, ...shown.map((u) => ({ kind: "unit" as const, u })));
-      if (idle.length) out.push({ kind: "idle", cabin, units: idle, open });
+      out.push({ kind: "group", cabin, units: all }, ...all.map((u) => ({ kind: "unit" as const, u })));
     }
     return out;
-  }, [rows, visible, calBlocks, opened, from, to]);
+  }, [rows]);
 
   // Abre desplazado hasta hoy si el periodo no cabe en pantalla.
   useEffect(() => {
@@ -164,7 +149,7 @@ export function Timeline({ days, rows, today, width, onDay, onNew, onStay, onOpe
   const rowHeight = compact ? 48 : 56;
   const gridStyle: CSSProperties = {
     gridTemplateColumns: `${label}px repeat(${n * 2}, minmax(${half}px, 1fr))`,
-    gridTemplateRows: `auto ${lines.map((l) => (l.kind === "group" ? "38px" : l.kind === "idle" ? "36px" : `${rowHeight}px`)).join(" ")}`,
+    gridTemplateRows: `auto ${lines.map((l) => (l.kind === "group" ? "38px" : `${rowHeight}px`)).join(" ")}`,
     minWidth: label + n * 2 * half,
   };
   const rate = cell ? nightlyRate(cell.u.cabin, data.seasons, cell.d) : null;
@@ -214,35 +199,6 @@ export function Timeline({ days, rows, today, width, onDay, onNew, onStay, onOpe
 
           {lines.map((line, li) => {
             const gridRow = 2 + li;
-            if (line.kind === "idle") {
-              const nums = line.units.map((u) => unitLabel(u.cabin, u.unit));
-              const seq = nums.map(Number);
-              const which =
-                nums.length === 1
-                  ? `Cabaña ${nums[0]}`
-                  : `Cabañas ${
-                      nums.length > 2 && seq.every((x, k) => Number.isInteger(x) && (!k || x === seq[k - 1] + 1))
-                        ? `${nums[0]} a ${nums[nums.length - 1]}`
-                        : nums.join(", ")
-                    }`;
-              return (
-                <div key={`idle-${line.cabin.id}`} role="row" className="contents">
-                  <button
-                    type="button"
-                    aria-expanded={line.open}
-                    onClick={() => toggleGroup(line.cabin.id)}
-                    className="sticky left-0 z-10 flex min-w-0 items-center gap-2 border-b border-line bg-panel py-1 pr-2 pl-5 text-left text-[12px] font-medium text-ink-muted transition-colors hover:text-ink sm:pl-6"
-                    style={{ gridRow, gridColumn: `1 / span ${1 + n * 2}`, width: "fit-content" }}
-                  >
-                    <ChevronDownIcon size={14} className={`flex-none transition-transform duration-200 ${line.open ? "rotate-180" : ""}`} />
-                    <span className="truncate">
-                      {line.open ? "Ocultar" : "Mostrar"} {plural(line.units.length, "cabaña", "cabañas")} sin reservas ({which})
-                    </span>
-                  </button>
-                  <div aria-hidden="true" className="border-b border-line" style={{ gridRow, gridColumn: `1 / span ${1 + n * 2}` }} />
-                </div>
-              );
-            }
             if (line.kind === "group") {
               const total = line.cabin.units;
               const all = units([line.cabin], "");

@@ -65,7 +65,15 @@ export const THEME_GROUPS: { label: string; fields: { key: ThemeKey; label: stri
 export const themeField = (k: ThemeKey) => THEME_GROUPS.flatMap((g) => g.fields).find((f) => f.key === k)!;
 
 // Paletas listas para usar (contraste de textos ≥ 4.5:1 y de acentos ≥ 3:1). La primera es la del diseño.
+// Madera clara es la única de fondo claro: el dorado no llega a 3:1 sobre el fondo (sí a 4.5:1 con el texto de sus
+// etiquetas), porque con fondo claro no se pueden cumplir las dos cosas a la vez.
 export const THEME_PRESETS: { id: string; label: string; description: string; theme: SiteTheme }[] = [
+  {
+    id: "madera",
+    label: "Madera clara",
+    description: "Roble claro, nogal y ámbar. La paleta del sitio.",
+    theme: { bg: "#dcc39c", surface: "#e7d3b2", deep: "#cfb187", night: "#c4a274", card: "#fbf6ec", cardMuted: "#efe2c9", onDark: "#3a2817", onLight: "#3a2817", accent: "#8a5a2b", highlight: "#d4913c", cta: "#5b3a21", ctaText: "#fbf6ec" },
+  },
   {
     id: "bosque",
     label: "Bosque",

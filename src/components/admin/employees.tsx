@@ -1,10 +1,13 @@
 "use client";
 
-// Empleados del panel (solo administradores): cuentas del equipo, su rol, su acceso y su contraseña inicial.
-import { useCallback, useEffect, useState } from "react";
+// Empleados del panel (solo administradores), como tablero: el equipo en cifras (activas por rol, quién entró esta
+// semana, quién nunca ha entrado), las cuentas en tarjetas con sus acciones, la actividad reciente y lo que incluye cada
+// rol. Cada cuenta se crea o edita en una ventana: su rol, su acceso y su contraseña inicial.
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   BanIcon,
   CheckIcon,
+  ClockIcon,
   EyeIcon,
   EyeOffIcon,
   IdCardIcon,
@@ -15,9 +18,8 @@ import {
   UserPlusIcon,
   UsersIcon,
 } from "@/components/ui/icons";
-import { Combobox } from "@/components/ui/combobox";
 import { api } from "@/lib/client/api";
-import { ROLE_HINT, ROLE_LABEL } from "@/lib/permissions";
+import { ROLE_HINT, ROLE_LABEL, canManageRole, isAdminRole } from "@/lib/permissions";
 import { fmtDate, dateOf, timeAgo } from "@/lib/format";
 import type { ApiResult, Employee, EmployeeInput, PanelRole } from "@/lib/types";
 import { useAdmin } from "@/components/admin/context";
@@ -26,12 +28,11 @@ import { MODULES } from "@/components/admin/routes";
 import { Avatar, RoleBadge, RoleCapabilities, displayName } from "@/components/admin/account";
 import { Paginator, usePaged } from "@/components/admin/paginator";
 import { adminInput, norm } from "@/components/admin/shared";
-import { LIST_CARD, LIST_ROW, LIST_ROW_HOVER, LIST_ROW_LATEST, ListSearch, ListTableHead } from "@/components/admin/list-table";
+import { ListSearch } from "@/components/admin/list-table";
+import { Panel } from "@/components/admin/board";
 import {
   Badge,
   Button,
-  Card,
-  CardHeader,
   EmptyState,
   ErrorState,
   Field,
@@ -40,20 +41,21 @@ import {
   Modal,
   ModalPresence,
   Callout,
-  PageHeader,
-  Skeleton,
-  StatCard,
+  Segmented,
   Switch,
+  enter,
 } from "@/components/admin/ui";
+import { PersonCardSkeleton, RecentSignInsSkeleton } from "@/components/admin/skeletons";
 
 type Filter = "todos" | PanelRole | "inactivos";
 type Draft = { id?: string; name: string; email: string; role: PanelRole; password: string; active: boolean };
 
-const ROLES: PanelRole[] = ["recepcion", "admin"];
+const ROLES: PanelRole[] = ["recepcion", "admin", "superadmin"];
 
 // Mensaje de los rechazos del servidor que no son de un campo.
 const REFUSAL: Record<string, string> = {
-  SELF_LOCKOUT: "No puedes quitarte tu propio acceso de administrador ni desactivar o borrar tu cuenta.",
+  SELF_LOCKOUT: "No puedes cambiar tu propio rol ni desactivar o borrar tu cuenta.",
+  SUPERADMIN_ONLY: "Solo un superadministrador puede crear o cambiar cuentas de superadministrador.",
   LAST_ADMIN: "Debe quedar al menos un administrador activo.",
 };
 
@@ -123,14 +125,6 @@ export function EmployeesView() {
         return (code && REFUSAL[code] ? { status: r.status, data: { fields: { cuenta: REFUSAL[code] } } } : r) as ApiResult<unknown>;
       },
     });
-  const toggleButton = (e: Employee) =>
-    e.id !== data.me.id && (
-      <Button size="sm" variant="ghost" icon={e.active ? <BanIcon size={14} /> : <CheckIcon size={14} />} onClick={() => toggle(e)}>
-        {e.active ? "Desactivar" : "Activar"}
-        <span className="sr-only">{` a ${displayName(e)}`}</span>
-      </Button>
-    );
-
   const remove = (e: Employee) =>
     ask({
       title: "Borrar la cuenta",
@@ -153,225 +147,370 @@ export function EmployeesView() {
       },
     });
 
+  const supers = active.filter((e) => e.role === "superadmin").length;
+  const admins = active.filter((e) => e.role === "admin").length;
+  const me = data.me.role;
+  // Roles que quien edita puede asignar: un administrador no ve la opción de superadministrador.
+  const roles = ROLES.filter((r) => canManageRole(me, r));
+  const reception = active.filter((e) => e.role === "recepcion").length;
+  const inactive = all.length - active.length;
+  const week = active.filter((e) => e.lastSignInAt && now - Date.parse(e.lastSignInAt) < 7 * 864e5).length;
+  const never = active.filter((e) => !e.lastSignInAt).length;
+  const recent = [...all].filter((e) => e.lastSignInAt).sort((a, b) => (a.lastSignInAt! < b.lastSignInAt! ? 1 : -1));
+
   return (
     <>
       {offline && (
         <Callout tone="warning">Sin conexión puedes consultar el equipo, pero crear o cambiar cuentas, roles y contraseñas requiere internet.</Callout>
       )}
-      <PageHeader
-        title={MODULES.empleados.label}
-        description="Cada persona del equipo entra con su propio correo y contraseña. El rol decide qué puede ver y hacer en el panel."
-        actions={
-          <Button
-            variant="primary"
-            icon={<UserPlusIcon size={15} />}
-            onClick={() => setEditing({ name: "", email: "", role: "recepcion", password: newPassword(), active: true })}
-          >
-            Nuevo empleado
-          </Button>
-        }
-      />
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard accent="pink" label="Cuentas activas" value={list ? active.length : "—"} hint="pueden entrar al panel" icon={<UsersIcon size={15} />} />
-        <StatCard
-          accent="yellow"
-          label="Administradores"
-          value={list ? active.filter((e) => e.role === "admin").length : "—"}
-          hint="todo el panel"
-          icon={<ShieldIcon size={15} />}
-        />
-        <StatCard
-          accent="blue"
-          label="Recepción"
-          value={list ? active.filter((e) => e.role === "recepcion").length : "—"}
-          hint="el día a día"
-          icon={<IdCardIcon size={15} />}
-        />
-      </div>
-
-      <div role="search" aria-label="Filtrar empleados" className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <ListSearch id="em-q" label="Buscar empleados" value={q} onChange={setQ} placeholder="Buscar por nombre o correo" />
+      <header {...enter(0)} className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div className="min-w-0">
-          <label htmlFor="em-filtro" className="sr-only">
-            Mostrar
-          </label>
-          <Combobox
-            id="em-filtro"
-            value={filter}
-            onChange={(v) => setFilter(v as Filter)}
-            searchable={false}
-            options={[
-              { value: "todos", label: "Todos los empleados", description: `${all.length} en total` },
-              { value: "admin", label: "Administradores" },
-              { value: "recepcion", label: "Recepción" },
-              { value: "inactivos", label: "Desactivados", description: all.length - active.length ? `${all.length - active.length} en total` : undefined },
-            ]}
+          <p className="text-[13px] font-medium text-ink-muted">Cada persona entra con su propio correo; el rol decide qué puede ver y hacer</p>
+          <h1 className="mt-1 text-[clamp(1.5rem,2.4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-ink">{MODULES.empleados.label}</h1>
+        </div>
+        <Button
+          variant="primary"
+          icon={<UserPlusIcon size={15} />}
+          onClick={() => setEditing({ name: "", email: "", role: "recepcion", password: newPassword(), active: true })}
+        >
+          Nuevo empleado
+        </Button>
+      </header>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div {...enter(1)} className="min-w-0 xl:col-span-5">
+          <TeamHero loading={!list} active={active.length} supers={supers} admins={admins} reception={reception} inactive={inactive} />
+        </div>
+        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3 xl:col-span-7">
+          <Tile
+            order={1.5}
+            icon={<CheckIcon size={15} />}
+            label="Entraron esta semana"
+            value={list ? week : "—"}
+            hint={`de ${active.length} cuentas activas`}
+          />
+          <Tile
+            order={2}
+            icon={<ClockIcon size={15} />}
+            label="Nunca han entrado"
+            value={list ? never : "—"}
+            hint={never ? "entrégales su contraseña" : "todos ya entraron"}
+          />
+          <Tile
+            order={2.5}
+            icon={<UsersIcon size={15} />}
+            label="Último ingreso"
+            value={recent[0] ? displayName(recent[0]) : "—"}
+            hint={recent[0] ? timeAgo(recent[0].lastSignInAt!, now) : "nadie ha entrado"}
+            small
           />
         </div>
       </div>
 
-      <div className="flex flex-col gap-3">
-        {failed ? (
-          <Card className="p-4">
-            <ErrorState
-              title="No pudimos cargar los empleados"
-              text="Revisa tu conexión e inténtalo de nuevo."
-              onRetry={() => {
-                setFailed(false);
-                load();
-              }}
-            />
-          </Card>
-        ) : !list ? (
-          <div className="flex flex-col gap-2">
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-16" />
-            ))}
-          </div>
-        ) : shown.length ? (
-          <>
-            <Card className={LIST_CARD}>
-              <table className="w-full text-[14px]">
-                <ListTableHead columns={["Empleado", "Rol", "Estado", "Último ingreso", "Creada", "Acciones"]} right={["Acciones"]} />
-                <tbody className="divide-y divide-line">
-                  {paged.rows.map((e) => (
-                    // Desactivada: los datos se atenúan, las acciones no (para que «Activar» se vea disponible).
-                    <tr
-                      key={e.id}
-                      onClick={() => editOf(e)}
-                      className={`${LIST_ROW} ${e.id === newest ? LIST_ROW_LATEST : LIST_ROW_HOVER} ${e.active ? "" : "[&>td:not(:last-child)]:opacity-60"}`}
-                    >
-                      <td className="px-4 py-3">
-                        <span className="flex items-center gap-3">
-                          <Avatar user={e} size={36} />
-                          <span className="min-w-0">
-                            <span className="flex items-center gap-2 font-semibold text-ink">
-                              <span className="truncate">{displayName(e)}</span>
-                              {e.id === data.me.id && <Badge>Tú</Badge>}
-                            </span>
-                            <span className="block truncate text-[12.5px] text-ink-muted">{e.email}</span>
-                          </span>
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <RoleBadge role={e.role} />
-                      </td>
-                      <td className="px-4 py-3">{e.active ? <Badge tone="success">Activa</Badge> : <Badge>Desactivada</Badge>}</td>
-                      <td className="px-4 py-3 text-ink-muted">{e.lastSignInAt ? timeAgo(e.lastSignInAt, now) : "Nunca"}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-ink-muted">{fmtDate(dateOf(e.createdAt), true)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1" onClick={(ev) => ev.stopPropagation()}>
-                          {e.id !== data.me.id && (
-                            <IconButton
-                              label={`${e.active ? "Desactivar" : "Activar"} a ${displayName(e)}`}
-                              size="sm"
-                              variant={e.active ? "secondary" : "primary"}
-                              data-gesture={e.active ? "cancel" : "checkin"}
-                              onClick={() => toggle(e)}
-                            >
-                              {e.active ? <BanIcon size={15} /> : <CheckIcon size={15} />}
-                            </IconButton>
-                          )}
-                          <IconButton label={`Editar a ${displayName(e)}`} size="sm" variant="secondary" data-gesture="cancel" onClick={() => editOf(e)}>
-                            <PencilIcon size={15} />
-                          </IconButton>
-                          {e.id !== data.me.id && (
-                            <IconButton
-                              label={`Borrar la cuenta de ${displayName(e)}`}
-                              size="sm"
-                              variant="danger-ghost"
-                              data-gesture="cancel"
-                              onClick={() => remove(e)}
-                            >
-                              <TrashIcon size={15} />
-                            </IconButton>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <Paginator p={paged} noun="cuentas" className="border-t border-line px-4 py-3" />
-            </Card>
-            <ul className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:hidden">
-              {paged.rows.map((e) => (
-                // En el celular, activar o desactivar va en su propia fila: así el nombre y el correo conservan su espacio.
-                <li key={e.id} className={`overflow-hidden rounded-[20px] ring-1 ring-line ${e.id === newest ? "bg-yellow-soft/70" : "bg-paper"}`}>
-                  <button
-                    type="button"
-                    onClick={() => editOf(e)}
-                    className={`flex w-full items-center gap-3 p-3.5 text-left transition-colors hover:bg-paper ${e.active ? "" : "opacity-60"}`}
-                  >
-                    <Avatar user={e} size={40} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[14.5px] font-semibold text-ink">{displayName(e)}</span>
-                      <span className="block truncate text-[12.5px] text-ink-muted">{e.email}</span>
-                      <span className="mt-1.5 flex flex-wrap gap-1.5">
-                        <RoleBadge role={e.role} />
-                        {!e.active && <Badge>Desactivada</Badge>}
-                        {e.id === data.me.id && <Badge>Tú</Badge>}
-                      </span>
-                    </span>
-                    <PencilIcon size={15} className="flex-none text-ink-subtle" />
-                  </button>
-                  {e.id !== data.me.id && <div className="flex justify-end border-t border-line px-2 py-1.5">{toggleButton(e)}</div>}
-                </li>
-              ))}
-            </ul>
-            <Paginator p={paged} noun="cuentas" className="rounded-[20px] bg-paper px-4 py-3 ring-1 ring-line xl:hidden" />
-          </>
-        ) : (
-          <Card className="p-4">
-            <EmptyState
-              icon={<UsersIcon size={18} />}
-              title={all.length ? "Nadie coincide con la búsqueda" : "Aún no hay empleados"}
-              text={all.length ? "Prueba con otro nombre o cambia el filtro." : "Crea una cuenta para cada persona del equipo."}
-            />
-          </Card>
-        )}
+      <div role="search" aria-label="Filtrar empleados" className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full sm:max-w-[360px] sm:flex-1">
+          <ListSearch id="em-q" label="Buscar empleados" value={q} onChange={setQ} placeholder="Buscar por nombre o correo" />
+        </div>
+        <Segmented
+          label="Mostrar"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: "todos", label: "Todos", count: all.length },
+            ...(supers || me === "superadmin" ? [{ value: "superadmin" as const, label: "Superadministradores", count: supers }] : []),
+            { value: "admin", label: "Administradores", count: admins },
+            { value: "recepcion", label: "Recepción", count: reception },
+            { value: "inactivos", label: "Desactivados", count: inactive },
+          ]}
+        />
       </div>
 
-      <section aria-labelledby="em-roles" className="flex flex-col gap-3">
-        <div>
-          <h2 id="em-roles" className="text-[17px] font-bold tracking-[-0.01em] text-ink">
-            Roles del panel
-          </h2>
-          <p className="text-[13.5px] text-ink-muted">Lo que incluye cada rol. La API y la base de datos aplican las mismas reglas.</p>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div {...enter(3)} className="flex min-w-0 flex-col gap-3 xl:col-span-8">
+          {failed ? (
+            <Panel id="em-err" title="Equipo">
+              <ErrorState
+                title="No pudimos cargar los empleados"
+                text="Revisa tu conexión e inténtalo de nuevo."
+                onRetry={() => {
+                  setFailed(false);
+                  load();
+                }}
+              />
+            </Panel>
+          ) : !list ? (
+            <ul aria-busy="true" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {[0, 1, 2, 3].map((i) => (
+                <PersonCardSkeleton key={i} />
+              ))}
+            </ul>
+          ) : shown.length ? (
+            <>
+              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {paged.rows.map((e) => (
+                  <PersonCard
+                    key={e.id}
+                    e={e}
+                    self={e.id === data.me.id}
+                    locked={!canManageRole(me, e.role)}
+                    latest={e.id === newest}
+                    now={now}
+                    onEdit={() => editOf(e)}
+                    onToggle={() => toggle(e)}
+                    onRemove={() => remove(e)}
+                  />
+                ))}
+              </ul>
+              <Paginator p={paged} noun="cuentas" className="rounded-[18px] bg-paper px-4 py-3 ring-1 ring-line" />
+            </>
+          ) : (
+            <Panel id="em-empty" title="Equipo">
+              <EmptyState
+                icon={<UsersIcon size={18} />}
+                title={all.length ? "Nadie coincide con la búsqueda" : "Aún no hay empleados"}
+                text={all.length ? "Prueba con otro nombre o cambia el filtro." : "Crea una cuenta para cada persona del equipo."}
+              />
+            </Panel>
+          )}
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {(["admin", "recepcion"] as PanelRole[]).map((role) => (
-            <Card key={role} aria-labelledby={`em-role-${role}`} className="flex flex-col gap-4 p-4 sm:p-5">
-              <CardHeader
+
+        <div {...enter(3.6)} className="flex min-w-0 flex-col gap-4 xl:col-span-4">
+          <Panel id="em-activity" title="Actividad reciente" subtitle="Último ingreso de cada cuenta">
+            {!list ? (
+              <RecentSignInsSkeleton />
+            ) : recent.length ? (
+              <ol className="relative flex flex-col gap-3 before:absolute before:top-2 before:bottom-2 before:left-[15px] before:w-px before:bg-line">
+                {recent.slice(0, 6).map((e) => (
+                  <li key={e.id} className="relative flex items-center gap-3">
+                    <span className="relative rounded-full ring-4 ring-paper">
+                      <Avatar user={e} size={30} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-medium text-ink">{displayName(e)}</span>
+                      <span className="block truncate text-[11.5px] text-ink-muted">{ROLE_LABEL[e.role]}</span>
+                    </span>
+                    <span className="flex-none text-[12px] text-ink-muted">{timeAgo(e.lastSignInAt!, now)}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="text-[13px] text-ink-muted">Nadie ha entrado al panel todavía.</p>
+            )}
+          </Panel>
+          {[...ROLES]
+            .reverse()
+            .filter((role) => role !== "superadmin" || me === "superadmin" || supers > 0)
+            .map((role) => (
+              <Panel
+                key={role}
                 id={`em-role-${role}`}
-                icon={role === "admin" ? <ShieldIcon size={18} /> : <IdCardIcon size={18} />}
-                accent={role === "admin" ? "pink" : "blue"}
                 title={ROLE_LABEL[role]}
                 subtitle={ROLE_HINT[role]}
-              />
-              <RoleCapabilities role={role} />
-            </Card>
-          ))}
+                action={
+                  <span aria-hidden="true" className="grid size-8 place-items-center rounded-full bg-panel text-ink ring-1 ring-line">
+                    {isAdminRole(role) ? <ShieldIcon size={15} /> : <IdCardIcon size={15} />}
+                  </span>
+                }
+              >
+                <RoleCapabilities role={role} />
+              </Panel>
+            ))}
         </div>
-      </section>
+      </div>
 
       <ModalPresence>
-        {editing && (
+        {editing && canManageRole(me, editing.role) && (
           <EmployeeEditor
             key={editing.id ?? "nuevo"}
             initial={editing}
             isSelf={editing.id === data.me.id}
+            roles={roles}
             onClose={() => setEditing(null)}
             onSaved={(l) => {
               setList(l);
               setEditing(null);
             }}
-            onDelete={editing.id && editing.id !== data.me.id ? () => remove(all.find((e) => e.id === editing.id)!) : undefined}
+            onDelete={
+              editing.id && editing.id !== data.me.id && canManageRole(me, editing.role) ? () => remove(all.find((e) => e.id === editing.id)!) : undefined
+            }
           />
         )}
       </ModalPresence>
     </>
+  );
+}
+
+/* ───────────── Resumen del equipo ───────────── */
+
+// Tarjeta oscura: cuentas activas en grande y cómo se reparten entre administradores y recepción.
+function TeamHero({
+  loading,
+  active,
+  supers,
+  admins,
+  reception,
+  inactive,
+}: {
+  loading: boolean;
+  active: number;
+  supers: number;
+  admins: number;
+  reception: number;
+  inactive: number;
+}) {
+  const parts = [
+    ...(supers ? [{ key: "superadmin", label: ROLE_LABEL.superadmin, value: supers, color: "var(--color-yellow-deep)" }] : []),
+    { key: "admin", label: ROLE_LABEL.admin, value: admins, color: "var(--color-chart-a)" },
+    { key: "recepcion", label: ROLE_LABEL.recepcion, value: reception, color: "var(--color-chart-b)" },
+  ];
+  return (
+    <section aria-labelledby="em-hero" className="flex h-full flex-col gap-5 rounded-[22px] bg-ink p-6 text-paper">
+      <div className="flex items-start justify-between gap-3">
+        <h2 id="em-hero" className="text-[13px] font-medium text-paper/70">
+          Cuentas activas
+        </h2>
+        <span aria-hidden="true" className="grid size-9 place-items-center rounded-full bg-paper/10">
+          <UsersIcon size={16} />
+        </span>
+      </div>
+      <p className="text-[56px] leading-none font-semibold tracking-[-0.04em]">{loading ? "—" : active}</p>
+      <div className="mt-auto flex flex-col gap-3">
+        {active > 0 && (
+          <div role="img" aria-label={parts.map((p) => `${p.label}: ${p.value}`).join(", ")} className="flex h-2.5 gap-[2px]">
+            {parts
+              .filter((p) => p.value > 0)
+              .map((p) => (
+                <span key={p.key} className="h-full rounded-full" style={{ width: `${(p.value / active) * 100}%`, background: p.color }} />
+              ))}
+          </div>
+        )}
+        <dl className={`grid gap-3 ${parts.length > 2 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
+          {[...parts.map((p) => ({ k: p.label, v: p.value, dot: p.color })), { k: "Desactivadas", v: inactive, dot: "" }].map((x) => (
+            <div key={x.k} className="min-w-0 border-l border-paper/15 pl-3">
+              <dt className="flex items-center gap-1.5 truncate text-[12px] text-paper/60">
+                {x.dot && <span aria-hidden="true" className="size-2 flex-none rounded-full" style={{ background: x.dot }} />}
+                {x.k}
+              </dt>
+              <dd className="mt-1 text-[18px] font-semibold">{loading ? "—" : x.v}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
+  );
+}
+
+function Tile({
+  order,
+  icon,
+  label,
+  value,
+  hint,
+  small = false,
+}: {
+  order: number;
+  icon: ReactNode;
+  label: string;
+  value: ReactNode;
+  hint: string;
+  small?: boolean;
+}) {
+  return (
+    <section {...enter(order)} aria-label={label} className="flex min-w-0 flex-col gap-3 rounded-[22px] bg-paper p-5 ring-1 ring-line ring-inset">
+      <span className="flex items-center gap-2 text-[12.5px] font-medium text-ink-muted">
+        <span aria-hidden="true" className="grid size-7 flex-none place-items-center rounded-full bg-panel text-ink ring-1 ring-line">
+          {icon}
+        </span>
+        {label}
+      </span>
+      <p className={`truncate leading-tight font-semibold tracking-[-0.03em] text-ink ${small ? "text-[18px]" : "text-[28px]"}`}>{value}</p>
+      <p className="mt-auto truncate text-[12px] text-ink-subtle">{hint}</p>
+    </section>
+  );
+}
+
+/* ───────────── Tarjeta de cada persona ───────────── */
+
+function PersonCard({
+  e,
+  self,
+  locked,
+  latest,
+  now,
+  onEdit,
+  onToggle,
+  onRemove,
+}: {
+  e: Employee;
+  self: boolean;
+  locked: boolean; // cuenta de superadministrador vista por un administrador: solo lectura
+  latest: boolean;
+  now: number;
+  onEdit: () => void;
+  onToggle: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <li className={`flex min-w-0 flex-col rounded-[22px] bg-paper ring-1 ring-inset ${latest ? "ring-ink/25" : "ring-line"}`}>
+      {/* Desactivada: los datos se atenúan, las acciones no (para que «Activar» se vea disponible). */}
+      <button
+        type="button"
+        onClick={onEdit}
+        disabled={locked}
+        className={`flex min-w-0 flex-col gap-4 rounded-t-[22px] p-5 text-left transition-colors hover:bg-panel/60 disabled:cursor-default disabled:hover:bg-transparent ${e.active ? "" : "opacity-60"}`}
+      >
+        <span className="flex items-start gap-3">
+          <span className="relative flex-none">
+            <Avatar user={e} size={48} />
+            <span
+              aria-hidden="true"
+              className={`absolute right-0 bottom-0 size-3 rounded-full ring-2 ring-paper ${e.active ? "bg-success" : "bg-ink-subtle"}`}
+            />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2">
+              <span className="truncate text-[15px] font-semibold text-ink">{displayName(e)}</span>
+              {self && <Badge>Tú</Badge>}
+              {latest && !self && <Badge tone="info">Nueva</Badge>}
+            </span>
+            <span className="block truncate text-[12.5px] text-ink-muted">{e.email}</span>
+            <span className="mt-2 flex flex-wrap gap-1.5">
+              <RoleBadge role={e.role} />
+              {e.active ? <Badge tone="success">Activa</Badge> : <Badge>Desactivada</Badge>}
+            </span>
+          </span>
+        </span>
+        <dl className="grid grid-cols-2 gap-3 border-t border-line pt-3 text-[12px]">
+          <div className="min-w-0">
+            <dt className="text-ink-muted">Último ingreso</dt>
+            <dd className="truncate font-medium text-ink">{e.lastSignInAt ? timeAgo(e.lastSignInAt, now) : "Nunca"}</dd>
+          </div>
+          <div className="min-w-0">
+            <dt className="text-ink-muted">Creada</dt>
+            <dd className="truncate font-medium text-ink">{fmtDate(dateOf(e.createdAt), true)}</dd>
+          </div>
+        </dl>
+      </button>
+      <div className="flex items-center justify-end gap-1 border-t border-line px-3 py-2">
+        {locked && <p className="mr-auto px-2 py-1.5 text-[12px] text-ink-muted">Solo un superadministrador puede cambiar esta cuenta.</p>}
+        {!self && !locked && (
+          <Button size="sm" variant="ghost" icon={e.active ? <BanIcon size={14} /> : <CheckIcon size={14} />} onClick={onToggle} className="mr-auto">
+            {e.active ? "Desactivar" : "Activar"}
+            <span className="sr-only">{` a ${displayName(e)}`}</span>
+          </Button>
+        )}
+        {!locked && (
+          <IconButton label={`Editar a ${displayName(e)}`} size="sm" variant="secondary" data-gesture="cancel" onClick={onEdit}>
+            <PencilIcon size={15} />
+          </IconButton>
+        )}
+        {!self && !locked && (
+          <IconButton label={`Borrar la cuenta de ${displayName(e)}`} size="sm" variant="danger-ghost" data-gesture="cancel" onClick={onRemove}>
+            <TrashIcon size={15} />
+          </IconButton>
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -380,12 +519,14 @@ export function EmployeesView() {
 function EmployeeEditor({
   initial,
   isSelf,
+  roles,
   onClose,
   onSaved,
   onDelete,
 }: {
   initial: Draft;
   isSelf: boolean;
+  roles: PanelRole[];
   onClose: () => void;
   onSaved: (list: Employee[]) => void;
   onDelete?: () => void;
@@ -488,8 +629,8 @@ function EmployeeEditor({
 
           <fieldset className="flex min-w-0 flex-col gap-2">
             <legend className="mb-1.5 text-[13px] font-semibold text-ink">Rol</legend>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {ROLES.map((role) => {
+            <div className={`grid grid-cols-1 gap-2 ${roles.length > 2 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+              {roles.map((role) => {
                 const on = d.role === role;
                 return (
                   <label

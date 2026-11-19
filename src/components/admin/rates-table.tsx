@@ -170,7 +170,7 @@ export function RatesTable({ toolbar }: { toolbar?: ReactNode }) {
                   title={WD_FULL[d]}
                   disabled={lock}
                   onClick={() => setWeekend(on ? weekend.filter((x) => x !== d) : WEEK.filter((x) => x === d || weekend.includes(x)))}
-                  className={`grid size-8 place-items-center rounded-full text-[12.5px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${on ? "bg-sidebar text-white" : "text-ink-muted hover:not-disabled:bg-paper hover:not-disabled:text-ink"}`}
+                  className={`grid size-8 place-items-center rounded-full text-[12.5px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${on ? "bg-ink text-paper" : "text-ink-muted hover:not-disabled:bg-paper hover:not-disabled:text-ink"}`}
                 >
                   {WD_MIN[d]}
                 </button>
@@ -382,7 +382,7 @@ function cellOf(c: CabinType, d: Draft, p: Prices, n: number): { price: number |
 
 function DayTag({ weekend, children }: { weekend: boolean; children: ReactNode }) {
   return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-[12px] font-semibold ${weekend ? "bg-sidebar text-white" : "bg-ink/7 text-ink"}`}>
+    <span className={`inline-flex rounded-full px-2 py-0.5 text-[12px] font-semibold ${weekend ? "bg-ink text-paper" : "bg-ink/7 text-ink"}`}>
       {children}
     </span>
   );

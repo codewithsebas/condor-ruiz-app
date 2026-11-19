@@ -247,7 +247,10 @@ export function DashboardSkeleton() {
             <div className="flex h-[132px] items-end gap-1.5 border-b border-paper/15">
               {MONTH_BARS.map((h, i) => (
                 <span key={i} className="flex h-full flex-1 items-end justify-center">
-                  <span className={`block w-full max-w-[24px] rounded-t-[4px] ${i === 11 ? "bg-paper/35" : "bg-paper/12"} ${PULSE}`} style={{ height: `${h}%` }} />
+                  <span
+                    className={`block w-full max-w-[24px] rounded-t-[4px] ${i === 11 ? "bg-paper/35" : "bg-paper/12"} ${PULSE}`}
+                    style={{ height: `${h}%` }}
+                  />
                 </span>
               ))}
             </div>
@@ -660,7 +663,10 @@ function ClientCardSk({ i }: { i: number }) {
 export function ClientsSkeleton() {
   return (
     <>
-      <ModHead eyebrow="Cada cliente se identifica por su documento; su historial y la valoración del equipo están en su ficha" title={MODULES.clientes.label} />
+      <ModHead
+        eyebrow="Cada cliente se identifica por su documento; su historial y la valoración del equipo están en su ficha"
+        title={MODULES.clientes.label}
+      />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         <Dark label="Clientes" icon={<UsersIcon size={16} />} className="xl:col-span-4">
           <DarkBig w="2.5ch" />
@@ -772,12 +778,12 @@ export function BookingSkeleton() {
       <CardSk title="Calendarios de Booking.com" subtitle={null} icon={<RefreshIcon size={16} />} accent="bg-blue">
         <ol className="ml-5 list-decimal text-[13px] leading-relaxed text-ink-muted">
           <li>
-            <strong className="text-ink">Booking → panel:</strong> en Booking, <em>Sincronizar calendarios → Exportar</em>, copia el enlace de cada cabaña y pégalo
-            aquí. Sus noches ocupan esa cabaña en el panel.
+            <strong className="text-ink">Booking → panel:</strong> en Booking, <em>Sincronizar calendarios → Exportar</em>, copia el enlace de cada cabaña y
+            pégalo aquí. Sus noches ocupan esa cabaña en el panel.
           </li>
           <li>
-            <strong className="text-ink">Panel → Booking:</strong> copia el enlace del panel de cada cabaña y pégalo en Booking, en <em>Importar calendario</em>.
-            Booking cierra las noches ocupadas aquí.
+            <strong className="text-ink">Panel → Booking:</strong> copia el enlace del panel de cada cabaña y pégalo en Booking, en <em>Importar calendario</em>
+            . Booking cierra las noches ocupadas aquí.
           </li>
         </ol>
         <ul className="divide-y divide-line">
@@ -913,7 +919,12 @@ export function NotificationsSkeleton() {
           </>
         }
       />
-      <CardSk title="Requiere atención" subtitle="Calculado con los datos actuales; desaparece cuando se resuelve." icon={<AlertIcon size={18} />} className="flex flex-col gap-2 p-4 sm:p-5">
+      <CardSk
+        title="Requiere atención"
+        subtitle="Calculado con los datos actuales; desaparece cuando se resuelve."
+        icon={<AlertIcon size={18} />}
+        className="flex flex-col gap-2 p-4 sm:p-5"
+      >
         <ul className="-mx-2 flex flex-col">
           {[0, 1].map((i) => (
             <ListRow key={i} lead={<Dot size="size-8" />} w={["40%", "52%"][i]} end={false} />
@@ -948,7 +959,12 @@ export function ImportSkeleton() {
             </Btn>
           </div>
         </section>
-        <CardSk title="Formato del archivo" subtitle="El reporte «Reservas» con estas columnas:" icon={<ListIcon size={18} />} className="flex flex-col gap-3 p-4 sm:p-5">
+        <CardSk
+          title="Formato del archivo"
+          subtitle="El reporte «Reservas» con estas columnas:"
+          icon={<ListIcon size={18} />}
+          className="flex flex-col gap-3 p-4 sm:p-5"
+        >
           <span className="flex flex-wrap gap-1.5">
             {[64, 80, 72, 96, 60, 88, 70, 76].map((w, i) => (
               <Pill key={i} w={`${w}px`} />

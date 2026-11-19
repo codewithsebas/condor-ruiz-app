@@ -33,20 +33,34 @@ export function Horizon() {
           </svg>
         </div>
 
-        <SoaringCondor id="condor-horizonte" className="absolute top-[12%] left-[44%] w-[clamp(38px,4vw,64px)]" opacity={0.3} depth={0} offset={0.6} slow={1.8} />
+        <SoaringCondor
+          id="condor-horizonte"
+          className="absolute top-[12%] left-[44%] w-[clamp(38px,4vw,64px)]"
+          opacity={0.3}
+          depth={0}
+          offset={0.6}
+          slow={1.8}
+        />
 
         <div className="parallax-on-scroll absolute inset-x-0 top-[30%] h-[50%] [--parallax:10px]">
           <div className="absolute -inset-x-[12%] inset-y-0 motion-safe:animate-fog-drift" style={fog(["38% 60% at 24% 55%", "30% 50% at 70% 45%"])} />
         </div>
 
-        <svg viewBox="0 0 1440 240" preserveAspectRatio="none" className="absolute inset-0 size-full fill-[color-mix(in_srgb,var(--color-bg)_55%,var(--color-deep))]">
+        <svg
+          viewBox="0 0 1440 240"
+          preserveAspectRatio="none"
+          className="absolute inset-0 size-full fill-[color-mix(in_srgb,var(--color-bg)_55%,var(--color-deep))]"
+        >
           <path d={NEAR} />
         </svg>
 
-        <div className="absolute -inset-x-[12%] bottom-[6%] h-[38%] motion-safe:animate-fog-drift-back" style={fog(["34% 70% at 40% 50%", "26% 60% at 86% 60%"])} />
+        <div
+          className="absolute -inset-x-[12%] bottom-[6%] h-[38%] motion-safe:animate-fog-drift-back"
+          style={fog(["34% 70% at 40% 50%", "26% 60% at 86% 60%"])}
+        />
       </div>
 
-      <div className="gutter-1360 relative">
+      <div className="relative gutter-1360">
         <PawTrail variant="b" />
       </div>
     </div>

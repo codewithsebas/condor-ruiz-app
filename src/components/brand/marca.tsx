@@ -30,7 +30,6 @@ export function Marca({
 }) {
   const { src, ratio } = MARCA[parte];
   const mask = `url(${src}) center / contain no-repeat`;
-  const size: CSSProperties =
-    width !== undefined ? { width, height: Math.round(width * ratio) } : { height, aspectRatio: `${1 / ratio}` };
+  const size: CSSProperties = width !== undefined ? { width, height: Math.round(width * ratio) } : { height, aspectRatio: `${1 / ratio}` };
   return <span aria-hidden="true" className={`block flex-none ${className}`} style={{ ...size, mask, WebkitMask: mask, ...style }} />;
 }

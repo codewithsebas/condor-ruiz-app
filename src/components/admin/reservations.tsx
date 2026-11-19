@@ -101,7 +101,11 @@ export function ReservationsView() {
       <header {...enter(0)} className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div className="min-w-0">
           <p className="text-[13px] font-medium text-ink-muted">{MODULES.reservas.description}</p>
-          <h1 id="ad-title" tabIndex={-1} className="mt-1 text-[clamp(1.5rem,2.4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-ink focus:outline-none">
+          <h1
+            id="ad-title"
+            tabIndex={-1}
+            className="mt-1 text-[clamp(1.5rem,2.4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-ink focus:outline-none"
+          >
             {MODULES.reservas.label}
           </h1>
         </div>
@@ -128,7 +132,11 @@ export function ReservationsView() {
           className="w-full"
           options={[
             { value: "" as View, label: "Todas", count: data.reservations.length },
-            { value: "proximas" as View, label: "Próximas llegadas", count: data.reservations.filter((r) => ["pending_deposit", "confirmed", "rescheduled"].includes(r.status) && r.checkIn >= today).length },
+            {
+              value: "proximas" as View,
+              label: "Próximas llegadas",
+              count: data.reservations.filter((r) => ["pending_deposit", "confirmed", "rescheduled"].includes(r.status) && r.checkIn >= today).length,
+            },
             { value: "comprobantes" as View, label: "Comprobantes", count: proofCodes.size },
             ...(missing ? [{ value: "booking-sin-datos" as View, label: "Booking sin datos", count: missing }] : []),
             ...(Object.entries(STATUS) as [ReservationStatus, (typeof STATUS)[ReservationStatus]][]).map(([v, s]) => ({
@@ -139,7 +147,12 @@ export function ReservationsView() {
             })),
           ]}
         />
-        <form role="search" aria-label="Filtrar reservas" onSubmit={(e) => e.preventDefault()} className="grid grid-cols-2 items-center gap-2 md:grid-cols-3 xl:grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,1fr))]">
+        <form
+          role="search"
+          aria-label="Filtrar reservas"
+          onSubmit={(e) => e.preventDefault()}
+          className="grid grid-cols-2 items-center gap-2 md:grid-cols-3 xl:grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,1fr))]"
+        >
           <div className="relative col-span-2 min-w-0 md:col-span-3 xl:col-span-1">
             <label htmlFor="res-q" className="sr-only">
               Buscar reservas
@@ -163,7 +176,10 @@ export function ReservationsView() {
               value={cabin}
               onChange={setCabin}
               icon={<HomeIcon size={14} className="text-ink-muted" />}
-              options={[{ value: "", label: "Todas las cabañas" }, ...data.cabinTypes.map((c) => ({ value: c.id, label: c.nombre, description: c.activa ? undefined : "Inactiva" }))]}
+              options={[
+                { value: "", label: "Todas las cabañas" },
+                ...data.cabinTypes.map((c) => ({ value: c.id, label: c.nombre, description: c.activa ? undefined : "Inactiva" })),
+              ]}
             />
           </div>
           <div className="min-w-0">
@@ -373,7 +389,11 @@ function ReservationStats({ onView }: { onView: (v: View) => void }) {
             <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
               {parts.map((p) => (
                 <li key={p.s}>
-                  <button type="button" onClick={() => onView(p.s)} className="flex items-center gap-1.5 text-[12px] text-paper/70 transition-colors hover:text-paper">
+                  <button
+                    type="button"
+                    onClick={() => onView(p.s)}
+                    className="flex items-center gap-1.5 text-[12px] text-paper/70 transition-colors hover:text-paper"
+                  >
                     <span aria-hidden="true" className="size-2 rounded-full" style={{ background: STATUS[p.s].bg }} />
                     {STATUS[p.s].label}
                     <span className="font-semibold text-paper">{p.n}</span>
@@ -387,7 +407,12 @@ function ReservationStats({ onView }: { onView: (v: View) => void }) {
       <div className="grid min-w-0 grid-cols-2 gap-4 xl:col-span-7">
         {[
           { icon: <LoginIcon size={15} />, label: "Llegadas hoy", value: arrivals, hint: arrivals ? "por recibir" : "ninguna hoy" },
-          { icon: <HomeIcon size={15} />, label: "En estadía", value: inHouse, hint: departures ? plural(departures, "salida hoy", "salidas hoy") : "sin salidas hoy" },
+          {
+            icon: <HomeIcon size={15} />,
+            label: "En estadía",
+            value: inHouse,
+            hint: departures ? plural(departures, "salida hoy", "salidas hoy") : "sin salidas hoy",
+          },
           { icon: <CalendarIcon size={15} />, label: "Por llegar", value: upcoming.length, hint: `${thisWeek} en los próximos 7 días` },
           {
             icon: <ClockIcon size={15} />,
@@ -396,7 +421,12 @@ function ReservationStats({ onView }: { onView: (v: View) => void }) {
             hint: unpaid.length ? `${cop(unpaid.reduce((s, r) => s + pendingOf(r).deposit, 0))} por recibir` : "ninguno ahora",
           },
         ].map((t, i) => (
-          <section key={t.label} {...enter(1.5 + i * 0.4)} aria-label={t.label} className="flex min-w-0 flex-col gap-2 rounded-[22px] bg-paper p-5 ring-1 ring-line ring-inset">
+          <section
+            key={t.label}
+            {...enter(1.5 + i * 0.4)}
+            aria-label={t.label}
+            className="flex min-w-0 flex-col gap-2 rounded-[22px] bg-paper p-5 ring-1 ring-line ring-inset"
+          >
             <span className="flex items-center gap-2 text-[12.5px] font-medium text-ink-muted">
               <span aria-hidden="true" className="grid size-7 flex-none place-items-center rounded-full bg-panel text-ink ring-1 ring-line">
                 {t.icon}

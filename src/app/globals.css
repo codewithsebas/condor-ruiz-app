@@ -1204,13 +1204,7 @@
 .nav-fade {
   --nav-fade-top: 0px;
   --nav-fade-bottom: 40px;
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    #000 var(--nav-fade-top),
-    #000 calc(100% - var(--nav-fade-bottom)),
-    transparent 100%
-  );
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--nav-fade-top), #000 calc(100% - var(--nav-fade-bottom)), transparent 100%);
 }
 @supports (animation-timeline: scroll()) {
   .nav-fade {
@@ -1945,7 +1939,9 @@
     background: var(--color-paper);
     border: 3px solid var(--range-color);
     box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
-    transition: transform 0.15s, box-shadow 0.15s;
+    transition:
+      transform 0.15s,
+      box-shadow 0.15s;
   }
   .panel-range::-moz-range-thumb {
     width: 16px;
@@ -1954,7 +1950,9 @@
     background: var(--color-paper);
     border: 3px solid var(--range-color);
     box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
-    transition: transform 0.15s, box-shadow 0.15s;
+    transition:
+      transform 0.15s,
+      box-shadow 0.15s;
   }
   .panel-range:not(:disabled):hover::-webkit-slider-thumb,
   .panel-range:not(:disabled):active::-webkit-slider-thumb {

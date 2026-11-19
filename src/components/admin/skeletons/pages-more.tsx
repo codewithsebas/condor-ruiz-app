@@ -247,7 +247,12 @@ export function RatesSkeleton() {
         }
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <Dark label="Precio de esta noche" icon={<MoonIcon size={16} />} sub={<Line w="18ch" tone="dark" className="mt-0.5 text-[12px]" />} className="xl:col-span-5">
+        <Dark
+          label="Precio de esta noche"
+          icon={<MoonIcon size={16} />}
+          sub={<Line w="18ch" tone="dark" className="mt-0.5 text-[12px]" />}
+          className="xl:col-span-5"
+        >
           <ul className="flex flex-col gap-3">
             {[0, 1, 2].map((i) => (
               <li key={i} className="flex items-end justify-between gap-3 border-t border-paper/15 pt-3 first:border-t-0 first:pt-0">
@@ -295,7 +300,10 @@ export function RatesSkeleton() {
             <p className="text-[13px] font-semibold text-ink">Fin de semana</p>
             <div className="flex flex-wrap gap-1">
               {["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"].map((d, i) => (
-                <span key={d} className={`grid size-8 place-items-center rounded-full text-[12.5px] font-semibold ${i === 4 || i === 5 ? "bg-ink text-paper" : "text-ink-muted"}`}>
+                <span
+                  key={d}
+                  className={`grid size-8 place-items-center rounded-full text-[12.5px] font-semibold ${i === 4 || i === 5 ? "bg-ink text-paper" : "text-ink-muted"}`}
+                >
                   {d}
                 </span>
               ))}
@@ -496,7 +504,13 @@ export function FinanceSkeleton() {
         }
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <Dark label="" icon={<WalletIcon size={16} />} gap="gap-5" className="xl:col-span-5" sub={<Line w="18ch" tone="dark" className="-mt-[19.5px] text-[13px]" />}>
+        <Dark
+          label=""
+          icon={<WalletIcon size={16} />}
+          gap="gap-5"
+          className="xl:col-span-5"
+          sub={<Line w="18ch" tone="dark" className="-mt-[19.5px] text-[13px]" />}
+        >
           <div>
             <DarkBig w="7ch" className="text-[clamp(2.3rem,4vw,3.2rem)] leading-none font-semibold" />
             <Line w="24ch" tone="dark" className="mt-3 text-[12px] leading-[22px]" />
@@ -517,7 +531,11 @@ export function FinanceSkeleton() {
           <div className="flex flex-1 flex-col pl-12">
             <div className="relative min-h-[260px] flex-1">
               {[0, 0.5, 1].map((f) => (
-                <span key={f} className={`absolute inset-x-0 border-t ${f === 0 ? "border-line-strong" : "border-line"}`} style={{ top: `${(1 - f) * 100}%` }} />
+                <span
+                  key={f}
+                  className={`absolute inset-x-0 border-t ${f === 0 ? "border-line-strong" : "border-line"}`}
+                  style={{ top: `${(1 - f) * 100}%` }}
+                />
               ))}
               <div className="relative flex h-full items-end gap-[2px]">
                 {[30, 44, 26, 58, 40, 72, 50, 34, 64, 46, 80, 38].map((h, i) => (
@@ -828,7 +846,13 @@ export function EmployeesSkeleton() {
             { title: "Recepción", icon: <IdCardIcon size={15} /> },
             { title: "Administrador", icon: <ShieldIcon size={15} /> },
           ].map((r) => (
-            <Box key={r.title} title={r.title} subtitle={null} className="h-auto!" action={<span className="grid size-8 place-items-center rounded-full bg-panel text-ink ring-1 ring-line">{r.icon}</span>}>
+            <Box
+              key={r.title}
+              title={r.title}
+              subtitle={null}
+              className="h-auto!"
+              action={<span className="grid size-8 place-items-center rounded-full bg-panel text-ink ring-1 ring-line">{r.icon}</span>}
+            >
               <Block className="h-[120px] rounded-[16px]" />
             </Box>
           ))}
@@ -873,7 +897,10 @@ export function ActivityDaysSkeleton() {
 export function ActivitySkeleton() {
   return (
     <>
-      <PageHead title={MODULES.actividad.label} description="Cada movimiento del equipo en el panel, con quién lo hizo, cuándo y qué cambió, y los inicios de sesión.">
+      <PageHead
+        title={MODULES.actividad.label}
+        description="Cada movimiento del equipo en el panel, con quién lo hizo, cuándo y qué cambió, y los inicios de sesión."
+      >
         <div className="mt-3">
           <Seg
             counts={false}
@@ -934,7 +961,11 @@ export function SettingsSkeleton() {
           </ul>
         </nav>
         <div className="flex min-w-0 flex-col gap-4">
-          <Box title="Apariencia" subtitle="Claro, oscuro o el mismo modo del sistema de este dispositivo. También se cambia desde el encabezado." className="h-auto!">
+          <Box
+            title="Apariencia"
+            subtitle="Claro, oscuro o el mismo modo del sistema de este dispositivo. También se cambia desde el encabezado."
+            className="h-auto!"
+          >
             <Block className="h-[88px] max-w-[420px] rounded-[16px]" />
           </Box>
           <Box title="Sonido de notificaciones" subtitle="Suena cuando llega un aviso nuevo con el panel abierto." className="h-auto!">
@@ -956,14 +987,16 @@ export function SettingsSkeleton() {
 export function SyncSkeleton() {
   return (
     <>
-      <PageHead
-        title="Sincronización"
-        actions={<Btn icon={<RefreshIcon size={14} />}>Revisar ahora</Btn>}
-      >
+      <PageHead title="Sincronización" actions={<Btn icon={<RefreshIcon size={14} />}>Revisar ahora</Btn>}>
         <Line w="44ch" className="mt-1.5 text-[14.5px] leading-relaxed" />
       </PageHead>
       <Block className="h-[64px] rounded-[16px]" />
-      <CardSk title="Pendientes" subtitle="Se envían solos, en este orden, cuando hay conexión. Puedes seguir trabajando." icon={<ClockIcon size={18} />} className="flex flex-col gap-3 p-4 sm:p-5">
+      <CardSk
+        title="Pendientes"
+        subtitle="Se envían solos, en este orden, cuando hay conexión. Puedes seguir trabajando."
+        icon={<ClockIcon size={18} />}
+        className="flex flex-col gap-3 p-4 sm:p-5"
+      >
         <ul className="flex flex-col divide-y divide-line">
           {[0, 1, 2].map((i) => (
             <li key={i} className="flex items-center justify-between gap-2 py-2.5">

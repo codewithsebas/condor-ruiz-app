@@ -21,7 +21,8 @@ const GRID: CSSProperties = {
     "linear-gradient(to right, color-mix(in srgb, var(--color-ink) 8%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--color-ink) 8%, transparent) 1px, transparent 1px)",
   backgroundSize: "48px 48px",
   backgroundPosition: "center top",
-  maskImage: "linear-gradient(to right, transparent, black 22%, black 78%, transparent), linear-gradient(to bottom, transparent, black 12%, black 82%, transparent)",
+  maskImage:
+    "linear-gradient(to right, transparent, black 22%, black 78%, transparent), linear-gradient(to bottom, transparent, black 12%, black 82%, transparent)",
   maskComposite: "intersect",
 };
 
@@ -91,9 +92,7 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
           <h1 id="lg-title" className="mt-3 text-[26px] leading-tight font-bold tracking-[-0.03em] [@media(max-height:860px)]:mt-1">
             Bienvenido al panel
           </h1>
-          <p className="text-[14.5px] text-balance text-ink-muted [@media(max-height:640px)]:hidden">
-            Accede con tu cuenta para gestionar reservas.
-          </p>
+          <p className="text-[14.5px] text-balance text-ink-muted [@media(max-height:640px)]:hidden">Accede con tu cuenta para gestionar reservas.</p>
         </div>
 
         <Field label="Correo">

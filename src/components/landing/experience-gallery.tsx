@@ -49,33 +49,49 @@ export function ExperienceGallery({ items }: { items: Item[] }) {
             }`}
           >
             {/* Foto: la activa a todo color y asentada; las plegadas, más oscuras y un poco ampliadas. */}
-            <div className={`absolute inset-0 transition-[transform,filter] duration-[1.4s] ease-out ${on ? "scale-100" : "min-[900px]:scale-110 min-[900px]:brightness-[.62] min-[900px]:saturate-[.7]"}`}>
+            <div
+              className={`absolute inset-0 transition-[transform,filter] duration-[1.4s] ease-out ${on ? "scale-100" : "min-[900px]:scale-110 min-[900px]:brightness-[.62] min-[900px]:saturate-[.7]"}`}
+            >
               <PhotoSlot id={`exp-${e.id}`} src={e.src} sizes="(min-width: 900px) 60vw, 240px" zoom />
             </div>
-            <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-3/5 bg-linear-to-t from-black/75 via-black/25 to-transparent" />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-3/5 bg-linear-to-t from-black/75 via-black/25 to-transparent"
+            />
 
             {/* Celular: título abajo, siempre visible. */}
             <h3 className="absolute inset-x-4 bottom-4 text-[1.05rem] leading-tight font-bold text-card min-[900px]:hidden">{e.label}</h3>
 
             {/* Pantalla ancha, plegada: número y título en vertical. */}
-            <div aria-hidden="true" className={`pointer-events-none absolute inset-x-0 bottom-5 hidden flex-col items-center gap-3 transition-opacity duration-500 min-[900px]:flex ${on ? "opacity-0" : "opacity-100 delay-300"}`}>
-              <span className="[writing-mode:vertical-rl] rotate-180 text-[.95rem] font-bold whitespace-nowrap text-card">{e.label}</span>
+            <div
+              aria-hidden="true"
+              className={`pointer-events-none absolute inset-x-0 bottom-5 hidden flex-col items-center gap-3 transition-opacity duration-500 min-[900px]:flex ${on ? "opacity-0" : "opacity-100 delay-300"}`}
+            >
+              <span className="rotate-180 text-[.95rem] font-bold whitespace-nowrap text-card [writing-mode:vertical-rl]">{e.label}</span>
               <span className="display text-[1.3rem] leading-none text-accent">{String(i + 1).padStart(2, "0")}</span>
             </div>
 
             {/* Pantalla ancha, abierta: número grande, título y barra de avance. */}
-            <div className={`pointer-events-none absolute inset-x-0 bottom-0 hidden flex-col gap-3 p-[clamp(20px,2.4vw,34px)] min-[900px]:flex ${on ? "" : "invisible"}`}>
-              <span className={`display text-[clamp(2.4rem,4vw,3.6rem)] leading-none text-accent transition-[opacity,transform] duration-700 ${on ? "translate-y-0 opacity-100 delay-200" : "translate-y-4 opacity-0"}`}>
+            <div
+              className={`pointer-events-none absolute inset-x-0 bottom-0 hidden flex-col gap-3 p-[clamp(20px,2.4vw,34px)] min-[900px]:flex ${on ? "" : "invisible"}`}
+            >
+              <span
+                className={`display text-[clamp(2.4rem,4vw,3.6rem)] leading-none text-accent transition-[opacity,transform] duration-700 ${on ? "translate-y-0 opacity-100 delay-200" : "translate-y-4 opacity-0"}`}
+              >
                 {String(i + 1).padStart(2, "0")}
               </span>
-              <h3 className={`display max-w-[18ch] text-[clamp(2rem,3.4vw,3.2rem)] leading-[.92] text-card transition-[opacity,transform] duration-700 ${on ? "translate-y-0 opacity-100 delay-300" : "translate-y-6 opacity-0"}`}>{e.label}</h3>
+              <h3
+                className={`display max-w-[18ch] text-[clamp(2rem,3.4vw,3.2rem)] leading-[.92] text-card transition-[opacity,transform] duration-700 ${on ? "translate-y-0 opacity-100 delay-300" : "translate-y-6 opacity-0"}`}
+              >
+                {e.label}
+              </h3>
               <span className="relative mt-1 h-[3px] w-full max-w-[260px] overflow-hidden rounded-full bg-card/25">
                 {on && (
                   <span
                     key={`p-${active}`}
                     onAnimationEnd={next}
                     style={{ animationDuration: `${STEP_MS}ms`, animationPlayState: inView ? undefined : "paused" }}
-                    className="absolute inset-0 origin-left rounded-full bg-highlight motion-safe:animate-progress group-hover/gal:[animation-play-state:paused]"
+                    className="absolute inset-0 origin-left rounded-full bg-highlight group-hover/gal:[animation-play-state:paused] motion-safe:animate-progress"
                   />
                 )}
               </span>

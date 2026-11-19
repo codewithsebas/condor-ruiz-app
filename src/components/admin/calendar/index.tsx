@@ -163,7 +163,10 @@ export function CalendarView() {
           <h1 id="ad-title" tabIndex={-1} className="text-[13px] font-medium text-ink-muted focus:outline-none">
             Calendario · ocupación y reservas por cabaña
           </h1>
-          <p aria-live="polite" className="mt-1 truncate text-[clamp(1.5rem,2.4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-ink first-letter:uppercase">
+          <p
+            aria-live="polite"
+            className="mt-1 truncate text-[clamp(1.5rem,2.4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-ink first-letter:uppercase"
+          >
             {title}
           </p>
         </div>
@@ -173,7 +176,11 @@ export function CalendarView() {
       </header>
 
       {/* Barra de controles en una sola píldora: anterior/Hoy/siguiente, el mes, la vista y las cabañas. */}
-      <div {...enter(0.6)} data-tour="calendar-bar" className="flex flex-wrap items-center gap-2 rounded-[28px] bg-paper p-1.5 ring-1 ring-line ring-inset sm:rounded-full">
+      <div
+        {...enter(0.6)}
+        data-tour="calendar-bar"
+        className="flex flex-wrap items-center gap-2 rounded-[28px] bg-paper p-1.5 ring-1 ring-line ring-inset sm:rounded-full"
+      >
         {todayNav}
         <div className="min-w-0 flex-1 sm:w-[184px] sm:flex-none">
           <label htmlFor="cal-mes" className="sr-only">
@@ -194,7 +201,10 @@ export function CalendarView() {
           label="Vista del calendario"
           value={view}
           onChange={(v) => setViewParam(v)}
-          options={(view === "dia" ? [{ value: "dia" as CalView, label: "Día" }, ...CALENDAR_VIEWS] : CALENDAR_VIEWS).map((v) => ({ value: v.value, label: v.label }))}
+          options={(view === "dia" ? [{ value: "dia" as CalView, label: "Día" }, ...CALENDAR_VIEWS] : CALENDAR_VIEWS).map((v) => ({
+            value: v.value,
+            label: v.label,
+          }))}
         />
         <div className="min-w-0 flex-1 sm:ml-auto sm:w-[200px] sm:flex-none">
           <Combobox value={filter} onChange={setFilter} options={cabinOptions} icon={<HomeIcon size={14} className="text-ink-muted" />} />
@@ -287,7 +297,11 @@ function Stat({ label, value, icon, meter, tone }: { label: string; value: React
       </span>
       <strong className={`text-[20px] leading-none font-semibold tracking-[-0.02em] ${tone === "warning" ? "text-warning" : "text-ink"}`}>{value}</strong>
       {meter !== undefined && (
-        <span aria-hidden="true" className="h-1.5 overflow-hidden rounded-full" style={{ background: "color-mix(in srgb, var(--color-chart-a) 18%, transparent)" }}>
+        <span
+          aria-hidden="true"
+          className="h-1.5 overflow-hidden rounded-full"
+          style={{ background: "color-mix(in srgb, var(--color-chart-a) 18%, transparent)" }}
+        >
           <span className="block h-full rounded-full" style={{ width: `${Math.min(100, meter)}%`, background: "var(--color-chart-a)" }} />
         </span>
       )}

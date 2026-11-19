@@ -2,9 +2,9 @@
 
 Flujo obligatorio: **Desarrollo → QA → Validación → Autorización → PDN**.
 
-| Entorno | Rama Git  | Proyecto de Supabase   | Datos                               |
-| ------- | --------- | ---------------------- | ----------------------------------- |
-| QA      | `develop` | `jwgvmdlwbdjbrcdalmta` | De prueba                           |
+| Entorno | Rama Git  | Proyecto de Supabase   | Datos                        |
+| ------- | --------- | ---------------------- | ---------------------------- |
+| QA      | `develop` | `jwgvmdlwbdjbrcdalmta` | De prueba                    |
 | PDN     | `main`    | `zkvyvhzyufvttttzkaks` | Reales (huéspedes del sitio) |
 
 ## Reglas

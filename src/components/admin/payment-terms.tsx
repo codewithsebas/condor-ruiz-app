@@ -73,7 +73,12 @@ export function PaymentTermsView() {
         </div>
 
         <div {...enter(2.2)} className="min-w-0 xl:col-span-7">
-          <Panel id="pt-instructions" title="Datos para pagar" subtitle="Cuenta o llave donde el huésped paga el abono y el saldo. Los ve en «Mi reserva»." action={<WalletIcon size={17} className="text-ink-muted" />}>
+          <Panel
+            id="pt-instructions"
+            title="Datos para pagar"
+            subtitle="Cuenta o llave donde el huésped paga el abono y el saldo. Los ve en «Mi reserva»."
+            action={<WalletIcon size={17} className="text-ink-muted" />}
+          >
             <Field
               label="Instrucciones de pago"
               error={errors.instructions}
@@ -182,7 +187,10 @@ function DepositPanel({ pct, savedPct, onChange, error }: { pct: number; savedPc
         <div className="flex flex-col gap-2.5 rounded-[16px] bg-panel p-4 ring-1 ring-line ring-inset">
           <p className="text-[12px] font-medium text-ink-muted">{`En una reserva de ${cop(SAMPLE)}`}</p>
           <div role="img" aria-label={`Abono ${cop(deposit)} (${pct} %), saldo ${cop(SAMPLE - deposit)} (${100 - pct} %)`} className="flex h-7 gap-[2px]">
-            <span className="flex h-full items-center rounded-[4px] px-2 text-[11.5px] font-semibold text-white transition-[width] duration-300" style={{ width: `${pct}%`, background: ABONO }}>
+            <span
+              className="flex h-full items-center rounded-[4px] px-2 text-[11.5px] font-semibold text-white transition-[width] duration-300"
+              style={{ width: `${pct}%`, background: ABONO }}
+            >
               {pct >= 12 ? `${pct} %` : ""}
             </span>
             {pct < 100 && (
@@ -287,7 +295,10 @@ function Collection() {
   const expired = own.filter((r) => r.status === "expired").length;
   const waiting = data.reservations.filter((r) => r.status === "pending_deposit");
   const rate = own.length ? Math.round((paid.length / own.length) * 100) : 0;
-  const hours = paid.map((r) => (Date.parse(r.depositPaidAt!) - Date.parse(r.createdAt)) / 36e5).filter((h) => h >= 0).sort((a, b) => a - b);
+  const hours = paid
+    .map((r) => (Date.parse(r.depositPaidAt!) - Date.parse(r.createdAt)) / 36e5)
+    .filter((h) => h >= 0)
+    .sort((a, b) => a - b);
   const median = hours.length ? hours[Math.floor(hours.length / 2)] : null;
   const avgDeposit = paid.length ? Math.round(paid.reduce((s, r) => s + r.quote.deposit, 0) / paid.length) : 0;
   const waitingValue = waiting.reduce((s, r) => s + r.quote.deposit, 0);
@@ -299,7 +310,17 @@ function Collection() {
           <div className="relative size-[104px] flex-none">
             <svg viewBox="0 0 100 100" aria-hidden="true" className="size-full -rotate-90">
               <circle cx="50" cy="50" r="42" fill="none" strokeWidth="9" style={{ stroke: "color-mix(in srgb, var(--color-chart-a) 16%, transparent)" }} />
-              <circle cx="50" cy="50" r="42" fill="none" strokeWidth="9" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - rate / 100)} style={{ stroke: ABONO }} />
+              <circle
+                cx="50"
+                cy="50"
+                r="42"
+                fill="none"
+                strokeWidth="9"
+                strokeLinecap="round"
+                strokeDasharray={C}
+                strokeDashoffset={C * (1 - rate / 100)}
+                style={{ stroke: ABONO }}
+              />
             </svg>
             <span className="absolute inset-0 grid place-items-center text-[20px] font-semibold tracking-[-0.03em] text-ink">{`${rate} %`}</span>
           </div>
@@ -313,7 +334,11 @@ function Collection() {
       )}
       <dl className="mt-auto grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-4">
         {[
-          { k: "Tiempo para pagar", v: median === null ? "—" : median < 1 ? "menos de 1 h" : median < 48 ? `${Math.round(median)} h` : `${Math.round(median / 24)} días`, h: "mediana desde que reservan" },
+          {
+            k: "Tiempo para pagar",
+            v: median === null ? "—" : median < 1 ? "menos de 1 h" : median < 48 ? `${Math.round(median)} h` : `${Math.round(median / 24)} días`,
+            h: "mediana desde que reservan",
+          },
           { k: "Abono promedio", v: avgDeposit ? money(avgDeposit) : "—", h: "de las que pagaron" },
           { k: "Esperando abono hoy", v: String(waiting.length), h: plural(waiting.length, "reserva retenida", "reservas retenidas") },
           { k: "Abonos por recibir", v: money(waitingValue), h: "si todas pagan" },

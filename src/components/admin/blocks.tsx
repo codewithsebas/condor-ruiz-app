@@ -176,7 +176,13 @@ export function BlocksView() {
                 label="Baños en servicio"
                 value={`${baths.length - bathsOut}`}
                 of={`de ${baths.length}`}
-                note={!baths.length ? "Aún no hay baños registrados" : bathsOut ? plural(bathsOut, "baño con aviso en su cabaña", "baños con aviso en sus cabañas") : "Todos los baños están disponibles"}
+                note={
+                  !baths.length
+                    ? "Aún no hay baños registrados"
+                    : bathsOut
+                      ? plural(bathsOut, "baño con aviso en su cabaña", "baños con aviso en sus cabañas")
+                      : "Todos los baños están disponibles"
+                }
               />
             </div>
             <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:col-span-7">

@@ -25,7 +25,17 @@ export function Block({ className = "", dark = false, style }: { className?: str
 }
 
 // Encabezado de los módulos: la descripción pequeña arriba y el nombre grande. Con `eyebrow` o `title` en null, barras.
-export function ModHead({ eyebrow, title, actions, className = "" }: { eyebrow: string | null; title: string | null; actions?: ReactNode; className?: string }) {
+export function ModHead({
+  eyebrow,
+  title,
+  actions,
+  className = "",
+}: {
+  eyebrow: string | null;
+  title: string | null;
+  actions?: ReactNode;
+  className?: string;
+}) {
   return (
     <header className={`flex flex-wrap items-end justify-between gap-x-6 gap-y-4 ${className}`}>
       <div className="min-w-0">
@@ -56,7 +66,17 @@ export function PageHead({ title, description, actions, children }: { title: str
 }
 
 // Botón de muestra (no se puede pulsar mientras carga).
-export function Btn({ children, icon, variant = "secondary", className = "" }: { children?: ReactNode; icon?: ReactNode; variant?: "primary" | "secondary" | "ghost"; className?: string }) {
+export function Btn({
+  children,
+  icon,
+  variant = "secondary",
+  className = "",
+}: {
+  children?: ReactNode;
+  icon?: ReactNode;
+  variant?: "primary" | "secondary" | "ghost";
+  className?: string;
+}) {
   return (
     <span aria-hidden="true" className={buttonClass(variant, "md", className)}>
       {icon}
@@ -74,7 +94,21 @@ export function IconBtn({ children, size = "md", className = "" }: { children?: 
 }
 
 // Tarjeta oscura de los módulos: rótulo, círculo con su icono y lo de adentro.
-export function Dark({ label, icon, sub, className = "", gap = "gap-4", children }: { label: string; icon: ReactNode; sub?: ReactNode; className?: string; gap?: string; children?: ReactNode }) {
+export function Dark({
+  label,
+  icon,
+  sub,
+  className = "",
+  gap = "gap-4",
+  children,
+}: {
+  label: string;
+  icon: ReactNode;
+  sub?: ReactNode;
+  className?: string;
+  gap?: string;
+  children?: ReactNode;
+}) {
   return (
     <section aria-hidden="true" className={`flex min-w-0 flex-col rounded-[22px] bg-ink p-6 text-paper ${gap} ${className}`}>
       <div className="flex items-start justify-between gap-3">
@@ -90,10 +124,24 @@ export function Dark({ label, icon, sub, className = "", gap = "gap-4", children
 }
 
 // Cifra grande sobre la tarjeta oscura.
-export const DarkBig = ({ w = "3ch", className = "text-[56px] leading-none font-semibold" }: { w?: string; className?: string }) => <Line w={w} tone="dark" className={className} />;
+export const DarkBig = ({ w = "3ch", className = "text-[56px] leading-none font-semibold" }: { w?: string; className?: string }) => (
+  <Line w={w} tone="dark" className={className} />
+);
 
 // Barra en partes de la tarjeta oscura y las cifras con su raya a la izquierda.
-export function DarkSplit({ labels, bar = true, valueClass = "mt-1 text-[17px] font-semibold", cols = "grid-cols-3", className = "mt-auto" }: { labels: string[]; bar?: boolean; valueClass?: string; cols?: string; className?: string }) {
+export function DarkSplit({
+  labels,
+  bar = true,
+  valueClass = "mt-1 text-[17px] font-semibold",
+  cols = "grid-cols-3",
+  className = "mt-auto",
+}: {
+  labels: string[];
+  bar?: boolean;
+  valueClass?: string;
+  cols?: string;
+  className?: string;
+}) {
   return (
     <div className={`flex flex-col gap-3 ${className}`}>
       {bar && <Block dark className="h-2.5 rounded-full" />}
@@ -102,7 +150,17 @@ export function DarkSplit({ labels, bar = true, valueClass = "mt-1 text-[17px] f
   );
 }
 
-export function DarkFigures({ labels, valueClass = "mt-1 text-[18px] font-semibold", cols = "grid-cols-3", dots = false }: { labels: string[]; valueClass?: string; cols?: string; dots?: boolean }) {
+export function DarkFigures({
+  labels,
+  valueClass = "mt-1 text-[18px] font-semibold",
+  cols = "grid-cols-3",
+  dots = false,
+}: {
+  labels: string[];
+  valueClass?: string;
+  cols?: string;
+  dots?: boolean;
+}) {
   return (
     <dl className={`grid gap-3 ${cols}`}>
       {labels.map((k, i) => (
@@ -121,7 +179,19 @@ export function DarkFigures({ labels, valueClass = "mt-1 text-[18px] font-semibo
 }
 
 // Mosaico blanco con icono y rótulo (Tile de cada módulo). `value`: clases de la cifra.
-export function Tile({ icon, label, value = "text-[26px] leading-none", w = "4ch", className = "" }: { icon: ReactNode; label: string; value?: string; w?: string; className?: string }) {
+export function Tile({
+  icon,
+  label,
+  value = "text-[26px] leading-none",
+  w = "4ch",
+  className = "",
+}: {
+  icon: ReactNode;
+  label: string;
+  value?: string;
+  w?: string;
+  className?: string;
+}) {
   return (
     <section aria-hidden="true" className={`flex min-w-0 flex-col gap-3 rounded-[22px] bg-paper p-5 ring-1 ring-line ring-inset ${className}`}>
       <span className="flex items-center gap-2 text-[12.5px] font-medium text-ink-muted">
@@ -135,7 +205,19 @@ export function Tile({ icon, label, value = "text-[26px] leading-none", w = "4ch
 }
 
 // Opciones de un filtro rápido (Segmented): la elegida (`active`, la primera si no se dice), con la marca; los números, en barras.
-export function Seg({ options, size = "md", counts = true, active = 0, className = "" }: { options: (string | { label: string; icon?: ReactNode; count?: boolean })[]; size?: "sm" | "md"; counts?: boolean; active?: number; className?: string }) {
+export function Seg({
+  options,
+  size = "md",
+  counts = true,
+  active = 0,
+  className = "",
+}: {
+  options: (string | { label: string; icon?: ReactNode; count?: boolean })[];
+  size?: "sm" | "md";
+  counts?: boolean;
+  active?: number;
+  className?: string;
+}) {
   return (
     <div aria-hidden="true" className={`no-scrollbar inline-flex max-w-full items-center gap-1.5 overflow-x-auto p-0.5 ${className}`}>
       {options.map((o, i) => {
@@ -199,7 +281,9 @@ export function Pager({ className = "rounded-[18px] bg-paper px-4 py-3 ring-1 ri
           <IconBtn size="sm">
             <ChevronLeftIcon size={15} />
           </IconBtn>
-          <span className="grid h-8 min-w-8 place-items-center rounded-full bg-ink px-2 text-[13px] font-semibold text-paper pointer-coarse:h-10 pointer-coarse:min-w-10">1</span>
+          <span className="grid h-8 min-w-8 place-items-center rounded-full bg-ink px-2 text-[13px] font-semibold text-paper pointer-coarse:h-10 pointer-coarse:min-w-10">
+            1
+          </span>
           <span className="grid h-8 min-w-8 place-items-center rounded-full px-2 text-[13px] font-semibold pointer-coarse:h-10 pointer-coarse:min-w-10">2</span>
           <IconBtn size="sm">
             <ChevronRightIcon size={15} />
@@ -211,7 +295,19 @@ export function Pager({ className = "rounded-[18px] bg-paper px-4 py-3 ring-1 ri
 }
 
 // Tarjeta del tablero (board.tsx, Panel) con su título fijo.
-export function Box({ title, subtitle, action, className = "", children }: { title: string | null; subtitle?: string | null; action?: ReactNode; className?: string; children?: ReactNode }) {
+export function Box({
+  title,
+  subtitle,
+  action,
+  className = "",
+  children,
+}: {
+  title: string | null;
+  subtitle?: string | null;
+  action?: ReactNode;
+  className?: string;
+  children?: ReactNode;
+}) {
   return (
     <section aria-hidden="true" className={`flex h-full min-w-0 flex-col gap-4 rounded-[22px] bg-paper p-5 ring-1 ring-line ring-inset ${className}`}>
       <div className="flex min-h-8 items-start justify-between gap-3">
@@ -272,7 +368,23 @@ export const Dot = ({ size = "size-9", className = "" }: { size?: string; classN
 );
 
 // Tarjeta del panel (ui.tsx, Card) con su cabecera: círculo con icono, título fijo y subtítulo.
-export function CardSk({ title, subtitle, icon, accent = "bg-paper", actions, className = "flex flex-col gap-4 p-4 sm:p-5", children }: { title: string; subtitle?: string | null; icon?: ReactNode; accent?: string; actions?: ReactNode; className?: string; children?: ReactNode }) {
+export function CardSk({
+  title,
+  subtitle,
+  icon,
+  accent = "bg-paper",
+  actions,
+  className = "flex flex-col gap-4 p-4 sm:p-5",
+  children,
+}: {
+  title: string;
+  subtitle?: string | null;
+  icon?: ReactNode;
+  accent?: string;
+  actions?: ReactNode;
+  className?: string;
+  children?: ReactNode;
+}) {
   return (
     <section aria-hidden="true" className={`rounded-[20px] bg-panel ring-1 ring-line ring-inset ${className}`}>
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">

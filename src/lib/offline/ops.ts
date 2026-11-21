@@ -1125,10 +1125,13 @@ const contentOps = {
         : null,
     request: (body) => ({ method: "PUT", path: "/admin/payment-terms", body }),
     apply: (d, p) =>
-      withSite(d, { settings: { ...d.site.settings, depositPct: p.depositPct }, texts: { ...d.site.texts, payment: { instructions: p.instructions } } }),
+      withSite(d, {
+        settings: { ...d.site.settings, depositPct: p.depositPct },
+        texts: { ...d.site.texts, payment: { instructions: p.instructions, key: p.key ?? d.site.texts.payment.key } },
+      }),
     result: (d) => d.site,
     version: (d) => d.site.version,
-    view: (d) => ({ depositPct: d.site.settings.depositPct, instructions: d.site.texts.payment.instructions }),
+    view: (d) => ({ depositPct: d.site.settings.depositPct, instructions: d.site.texts.payment.instructions, key: d.site.texts.payment.key }),
   } satisfies OpDef<PaymentTerms>,
   "sitePhoto.set": {
     perm: "content",

@@ -73,7 +73,7 @@ export function LandingPreview() {
     };
   }, [target, hasData]);
 
-  const site = useMemo(() => (data ? mergeSite(data.content.settings, data.content.policies, data.content.texts) : null), [data]);
+  const site = useMemo(() => (data ? mergeSite(data.content.settings, data.content.policies, data.content.texts, data.content.photos) : null), [data]);
   if (!data || !site) return null;
 
   return (

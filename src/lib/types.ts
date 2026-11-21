@@ -471,7 +471,7 @@ export type BookingInboxAction = { action: "assign"; ref: string; cabinTypeId: C
 export type SiteInput = { settings: SiteSettings; policies: SitePolicy[]; content: SiteTexts; theme?: SiteTheme }; // sin theme: se conservan los colores guardados
 
 // Condiciones de pago (solo administradores): el abono para confirmar (% del total) y los datos para pagar que ve el huésped.
-export type PaymentTerms = { depositPct: number; instructions: string };
+export type PaymentTerms = { depositPct: number; instructions: string; key?: string }; // key: llave Bre-B (sin el campo, se conserva)
 
 export type CabinInput = {
   id?: string; // solo al crear; si falta se genera a partir del nombre

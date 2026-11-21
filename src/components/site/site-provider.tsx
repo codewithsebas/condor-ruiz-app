@@ -13,7 +13,7 @@ export function SiteProvider({ content, cabins, children }: { content: SiteConte
   const value = useMemo(
     () => ({
       ...content,
-      c: mergeSite(content.settings, content.policies, content.texts),
+      c: mergeSite(content.settings, content.policies, content.texts, content.photos),
       cabins,
       cabinName: (id: string) => cabins.find((x) => x.id === id)?.full ?? id,
     }),

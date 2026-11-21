@@ -61,7 +61,7 @@ export const getSiteContent = cache(async (): Promise<SiteContent> => {
 
 export async function getSite() {
   const content = await getSiteContent();
-  return { ...content, c: mergeSite(content.settings, content.policies, content.texts) };
+  return { ...content, c: mergeSite(content.settings, content.policies, content.texts, content.photos) };
 }
 
 // URL base del sitio para los enlaces que salen de él (correos).

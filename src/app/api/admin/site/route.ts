@@ -49,7 +49,7 @@ export const PUT = syncRoute(async (req: NextRequest) => {
       description: trim(t.hero.description),
     },
     location: { note: trim(t.location.note) },
-    payment: { instructions: trim(t.payment.instructions) },
+    payment: { instructions: trim(t.payment.instructions), key: trim(t.payment.key ?? "") },
     social: { instagram: trim(t.social.instagram), facebook: trim(t.social.facebook), tiktok: trim(t.social.tiktok) },
   };
   if (!texts.hero.title || texts.hero.title.length > TEXT_LIMITS.title || texts.hero.highlight.length > TEXT_LIMITS.highlight)

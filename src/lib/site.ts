@@ -21,7 +21,7 @@ export type SiteTexts = {
   // Título de la portada: title + highlight (resaltado); words: frases que reemplazan a highlight una tras otra.
   hero: { title: string; highlight: string; words: string; badge: string; description: string };
   location: { note: string };
-  payment: { instructions: string };
+  payment: { instructions: string; key: string }; // key: llave Bre-B (celular, correo, documento o alfanumérica)
   social: { instagram: string; facebook: string; tiktok: string };
 };
 
@@ -52,12 +52,15 @@ export const defaultTexts: SiteTexts = {
     description: "Cabañas tipo chalet con vista al Nevado del Ruiz y a una hermosa cascada, sendero ecológico, avistamiento de aves y zona de fogata.",
   },
   location: { note: "Nevado del Ruiz a aproximadamente 1 hora en carro." },
-  payment: { instructions: "" },
+  payment: { instructions: "", key: "" },
   social: { instagram: "", facebook: "", tiktok: "" },
 };
 
 // Límites de cada texto (los aplica la API al guardar). Las listas: cuántas líneas y cuántos caracteres por línea.
-export const TEXT_LIMITS = { title: 40, highlight: 40, badge: 60, description: 320, note: 160, instructions: 600, url: 200 };
+export const TEXT_LIMITS = { title: 40, highlight: 40, badge: 60, description: 320, note: 160, instructions: 600, paymentKey: 80, url: 200 };
+
+// Hueco de imagen del QR para pagar (Condiciones de pago). Va en site_photos como los demás, pero no es una foto del sitio.
+export const PAYMENT_QR_SLOT = "payment-qr";
 export const LIST_LIMITS = {
   words: { lines: 5, chars: 40 },
 } as const;
@@ -239,10 +242,12 @@ export function arrivalOptions(start: string, end: string): [value: string, labe
 // Foto de cabaña: lado mayor y mínimo (horizontal 4:3), igual que los huecos del sitio.
 export const CABIN_PHOTO = { aspect: "4/3", hint: "Horizontal 4:3", min: [1600, 1200] as const };
 
-export function mergeSite(s: SiteSettings, policies: SitePolicy[], texts: SiteTexts = defaultTexts): SiteConfig {
+export function mergeSite(s: SiteSettings, policies: SitePolicy[], texts: SiteTexts = defaultTexts, photos: Record<string, string> = {}): SiteConfig {
   return {
     ...config,
     datosPagoAbono: texts.payment.instructions.trim() || config.datosPagoAbono,
+    llavePago: texts.payment.key.trim(),
+    qrPago: photos[PAYMENT_QR_SLOT] ?? "",
     phones: s.phones,
     whatsapp: s.whatsapp,
     rnt: s.rnt,

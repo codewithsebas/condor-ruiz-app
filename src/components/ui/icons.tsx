@@ -236,6 +236,14 @@ export const UploadIcon = (p: IconProps) => (
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
   </Stroke>
 );
+export const QrIcon = (p: IconProps) => (
+  <Stroke stroke={2} {...p}>
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <path d="M14 14h3v3h-3zM20 14v.01M14 20v.01M17 20h4v-3M20 17v.01" />
+  </Stroke>
+);
 export const TrashIcon = (p: IconProps) => (
   <Stroke stroke={2} {...p}>
     <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />

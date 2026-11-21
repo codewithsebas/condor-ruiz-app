@@ -278,10 +278,19 @@ export function reservationReceivedEmail(c: Cfg, d: ReceivedEmailData): Rendered
   const first = firstName(d.nombre);
   const nights = plural(nightsBetween(d.checkIn, d.checkOut), "noche", "noches");
   const datos = payInfo(c);
-  const payHtml = datos
-    ? p(esc(datos).replace(/\n/g, "<br>")) +
-      small(`Cuando transfieras, envíanos el comprobante por WhatsApp${d.miReservaUrl ? " o súbelo en «Mi reserva»" : ""}.`)
-    : p(`Escríbenos por WhatsApp y te enviamos los datos para transferir el abono.`);
+  const llave = c.llavePago.trim();
+  // QR: solo una URL absoluta (la de Storage); una ruta relativa no carga en el correo.
+  const qr = /^https:\/\//.test(c.qrPago) ? c.qrPago : "";
+  const payHtml =
+    datos || llave || qr
+      ? (datos ? p(esc(datos).replace(/\n/g, "<br>")) : "") +
+        (llave ? p(`<strong>Llave Bre-B:</strong> <span style="font-family:monospace;font-size:16px">${esc(llave)}</span>`) : "") +
+        (qr
+          ? `<p style="margin:0 0 14px"><img src="${esc(qr)}" width="180" height="180" alt="Código QR para pagar" style="display:block;border:0;width:180px;height:180px;border-radius:12px;background:#fff"></p>` +
+            small("Escanea el QR desde la app de tu banco.")
+          : "") +
+        small(`Cuando transfieras, envíanos el comprobante por WhatsApp${d.miReservaUrl ? " o súbelo en «Mi reserva»" : ""}.`)
+      : p(`Escríbenos por WhatsApp y te enviamos los datos para transferir el abono.`);
   const body =
     pill("Reserva recibida", "yellow") +
     h1(`¡Gracias, ${esc(first)}!`) +
@@ -312,7 +321,7 @@ export function reservationReceivedEmail(c: Cfg, d: ReceivedEmailData): Rendered
     `¡Gracias, ${first}! Recibimos tu reserva.\n\n` +
     `Código: ${d.codigo} (pendiente de abono)\nCabaña: ${d.cabana}\nFechas: ${stayOf(d)} · ${nights}\nHuéspedes: ${guestsOf(d)}${d.mascota ? " · con mascota" : ""}\n\n` +
     `PARA CONFIRMAR\nValor total: ${cop(d.total)}\nAbono: ${cop(d.abono)} (asegura tus fechas)\nSaldo al llegar: ${cop(Math.max(0, d.total - d.abono))}\n\n` +
-    `CÓMO PAGAR EL ABONO\n${datos || "Escríbenos por WhatsApp y te enviamos los datos para transferir."}\n\n` +
+    `CÓMO PAGAR EL ABONO\n${[datos, llave && `Llave Bre-B: ${llave}`].filter(Boolean).join("\n") || "Escríbenos por WhatsApp y te enviamos los datos para transferir."}\n\n` +
     `${linkLine("Ver mi reserva", d.miReservaUrl)}WhatsApp: ${d.whatsappUrl}\n\nTus fechas se aseguran cuando recibamos el abono. Si alguien las paga antes, te movemos a las próximas libres con el mismo valor.` +
     footText(c);
   return finish(c, d.logoUrl, {

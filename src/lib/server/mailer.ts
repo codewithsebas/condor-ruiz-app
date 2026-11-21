@@ -65,7 +65,7 @@ type Ctx = { sb: Db; base: string; site?: SiteConfig };
 async function siteOf(ctx: Ctx) {
   if (!ctx.site) {
     const content = await loadSiteContent(ctx.sb);
-    ctx.site = mergeSite(content.settings, content.policies, content.texts);
+    ctx.site = mergeSite(content.settings, content.policies, content.texts, content.photos);
   }
   return ctx.site;
 }

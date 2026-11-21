@@ -840,7 +840,10 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
     db.site = {
       ...site,
       settings: { ...site.settings, depositPct: pct },
-      texts: { ...site.texts, payment: { instructions: String(b.instructions ?? "").trim() } },
+      texts: {
+        ...site.texts,
+        payment: { instructions: String(b.instructions ?? "").trim(), key: b.key === undefined ? site.texts.payment.key : String(b.key).trim() },
+      },
     };
     save(db);
     return ok(db.site);

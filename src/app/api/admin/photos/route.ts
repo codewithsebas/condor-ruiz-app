@@ -2,12 +2,13 @@ import { revalidatePath } from "next/cache";
 import type { NextRequest } from "next/server";
 import { fail, json, requireAdmin, syncRoute } from "@/lib/server/http";
 import { loadSiteContent, PHOTO_BUCKET } from "@/lib/server/site";
-import { PHOTO_SLOTS } from "@/lib/site";
+import { PAYMENT_QR_SLOT, PHOTO_SLOTS } from "@/lib/site";
 
 const TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 const MAX_BYTES = 5 * 1024 * 1024;
 
-const isSlot = (slot: unknown): slot is string => typeof slot === "string" && PHOTO_SLOTS.some((s) => s.id === slot);
+// Los huecos del sitio y el QR para pagar (Condiciones de pago).
+const isSlot = (slot: unknown): slot is string => typeof slot === "string" && (slot === PAYMENT_QR_SLOT || PHOTO_SLOTS.some((s) => s.id === slot));
 
 // POST /api/admin/photos (multipart: slot, file) → sube la foto a Storage y la asigna al hueco.
 export const POST = syncRoute(async (req: NextRequest) => {

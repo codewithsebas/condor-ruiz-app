@@ -7,12 +7,14 @@ import {
   cleanDayRates,
   cleanPersonRates,
   cleanUnitLabels,
+  cleanUnitNames,
   adjustedQuote,
   cleanCompanions,
   computeQuote,
   busyBlocks,
   invalidPersonRates,
   invalidUnitLabels,
+  invalidUnitNames,
   findUnit,
   unitFree,
   invalidDayRates,
@@ -842,6 +844,8 @@ const cabinErrors = (b: CabinInput) => {
   if (!Number.isInteger(b.units) || b.units < 0 || b.units > 20) fields.units = "El número de cabañas debe estar entre 0 y 20.";
   const badLabels = Number.isInteger(b.units) ? invalidUnitLabels(b.unitLabels, b.units) : null;
   if (badLabels) fields.unitLabels = badLabels;
+  const badNames = Number.isInteger(b.units) ? invalidUnitNames(b.unitNames, b.units) : null;
+  if (badNames) fields.unitNames = badNames;
   return Object.keys(fields).length ? fieldErr(fields) : null;
 };
 
@@ -853,6 +857,7 @@ const cabinFields = (b: CabinInput) => ({
   maxPersonas: b.maxPersonas,
   units: b.units,
   ...(b.unitLabels !== undefined && { unitLabels: cleanUnitLabels(b.unitLabels, b.units) }),
+  ...(b.unitNames !== undefined && { unitNames: cleanUnitNames(b.unitNames, b.units) }),
   precioPareja: b.precioPareja,
   personaAdicional: b.personaAdicional,
   activa: !!b.activa,

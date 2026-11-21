@@ -139,8 +139,31 @@ type Priced = Pick<CabinType, "id" | "precioPareja" | "personaAdicional" | "prec
 // Número con el que se muestra una unidad: el propio, si tiene; si no, su posición. Internamente siempre es la posición.
 export const unitLabel = (c: { unitLabels?: string[] } | null | undefined, unit: number) => c?.unitLabels?.[unit - 1]?.trim() || String(unit);
 
-// Nombre de una cabaña física, como en Booking: «Cabaña 3». El tipo (Doble, Familiar…) se muestra aparte cuando hace falta.
-export const cabinName = (c: { unitLabels?: string[] } | null | undefined, unit: number) => `Cabaña ${unitLabel(c, unit)}`;
+// Nombre propio de una unidad ("El Mirador") o "" si no tiene.
+export const unitName = (c: { unitNames?: string[] } | null | undefined, unit: number) => c?.unitNames?.[unit - 1]?.trim() ?? "";
+
+// Nombre de una cabaña física: el propio si lo tiene («El Mirador»); si no, como en Booking, «Cabaña 3». El tipo (Doble,
+// Familiar…) se muestra aparte cuando hace falta.
+export const cabinName = (c: { unitLabels?: string[]; unitNames?: string[] } | null | undefined, unit: number) =>
+  unitName(c, unit) || `Cabaña ${unitLabel(c, unit)}`;
+
+// Nombres de unidad limpios: uno por unidad, sin espacios de más (al reducir unidades se descartan los que sobran).
+export const cleanUnitNames = (names: unknown, units: number): string[] =>
+  Array.from({ length: units }, (_, i) =>
+    String((Array.isArray(names) ? names[i] : "") ?? "")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+
+// Hasta 40 caracteres, sin repetirse dentro de la cabaña. En blanco: sin nombre.
+export function invalidUnitNames(names: unknown, units: number): string | null {
+  const clean = cleanUnitNames(names, units);
+  if (clean.some((x) => x.length > 40)) return "Cada nombre admite hasta 40 caracteres.";
+  if (clean.some((x) => x && !/^[\p{L}\p{N}][\p{L}\p{N} .,'&()-]*$/u.test(x))) return "Usa letras, números y espacios en los nombres.";
+  const keys = clean.map((x) => x.toLocaleLowerCase("es"));
+  const repeated = clean.find((x, i) => x && keys.indexOf(keys[i]) !== i);
+  return repeated ? `El nombre «${repeated}» está repetido en esta cabaña.` : null;
+}
 
 // Números de unidad limpios: uno por unidad, sin espacios y sin nada de más (al reducir unidades se descartan los que sobran).
 export const cleanUnitLabels = (labels: unknown, units: number): string[] =>

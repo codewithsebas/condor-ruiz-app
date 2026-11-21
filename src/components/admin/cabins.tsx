@@ -1,6 +1,18 @@
 "use client";
 
-import { ACTIVE_STATUSES, BLOCKING_STATUSES, cleanUnitLabels, invalidUnitLabels, personRatesText, personSteps, rateFrom, unitLabel } from "@/lib/booking";
+import {
+  ACTIVE_STATUSES,
+  BLOCKING_STATUSES,
+  cleanUnitLabels,
+  cleanUnitNames,
+  invalidUnitLabels,
+  invalidUnitNames,
+  personRatesText,
+  personSteps,
+  rateFrom,
+  unitLabel,
+  unitName,
+} from "@/lib/booking";
 import { paymentsOf, recordsByCode } from "@/lib/admin-metrics";
 import Image from "next/image";
 import Link from "next/link";
@@ -268,7 +280,7 @@ export function CabinList() {
                   <div className="flex flex-wrap gap-1.5 text-[12px]">
                     <span className="rounded-full bg-panel px-2.5 py-1 text-ink ring-1 ring-line ring-inset">{`Hasta ${plural(c.maxPersonas, "persona", "personas")}`}</span>
                     <span className="rounded-full bg-panel px-2.5 py-1 text-ink ring-1 ring-line ring-inset">
-                      {`${plural(c.units, "unidad", "unidades")}: ${Array.from({ length: c.units }, (_, k) => unitLabel(c, k + 1)).join(", ") || "ninguna"}`}
+                      {`${plural(c.units, "unidad", "unidades")}: ${Array.from({ length: c.units }, (_, k) => unitName(c, k + 1) || unitLabel(c, k + 1)).join(", ") || "ninguna"}`}
                     </span>
                     <span className="rounded-full bg-panel px-2.5 py-1 text-ink-muted ring-1 ring-line ring-inset">
                       {`${plural(c.fotos.length, "foto", "fotos")} · ${plural(c.caracteristicas.length, "característica", "características")}`}
@@ -397,6 +409,7 @@ export function CabinEditor({ id }: { id?: string }) {
         maxPersonas: current.maxPersonas,
         units: current.units,
         unitLabels: cleanUnitLabels(current.unitLabels, current.units),
+        unitNames: cleanUnitNames(current.unitNames, current.units),
         precioPareja: current.precioPareja,
         personaAdicional: current.personaAdicional,
         activa: current.activa,
@@ -448,6 +461,8 @@ export function CabinEditor({ id }: { id?: string }) {
     if (v.precioPareja <= 0) e.precioPareja = "Escribe la tarifa por noche para 2 personas.";
     const badLabels = invalidUnitLabels(v.unitLabels, v.units);
     if (badLabels) e.unitLabels = badLabels;
+    const badNames = invalidUnitNames(v.unitNames, v.units);
+    if (badNames) e.unitNames = badNames;
     setErrors(e);
     if (Object.keys(e).length) {
       requestAnimationFrame(() => document.querySelector<HTMLElement>('main [aria-invalid="true"]')?.focus());
@@ -458,6 +473,7 @@ export function CabinEditor({ id }: { id?: string }) {
       const body = {
         ...v,
         unitLabels: cleanUnitLabels(v.unitLabels, v.units),
+        unitNames: cleanUnitNames(v.unitNames, v.units),
         nombre: v.nombre.trim(),
         descripcion: v.descripcion.trim(),
         badge: v.badge.trim(),
@@ -567,34 +583,56 @@ export function CabinEditor({ id }: { id?: string }) {
               </Field>
               {v.units > 0 && (
                 <fieldset className="flex min-w-0 flex-col gap-2 sm:col-span-2">
-                  <legend className="text-[13px] font-semibold text-ink">Número de cada cabaña</legend>
+                  <legend className="text-[13px] font-semibold text-ink">Número y nombre de cada cabaña</legend>
                   <p className="text-[12.5px] text-ink-muted">
-                    El mismo de la finca y de Booking: con el 3 se llama «Cabaña 3» en el calendario, las reservas, los bloqueos y Booking. En blanco, se usa el
-                    orden (1, 2, 3…).
+                    El número es el de la finca y de Booking (en blanco, el orden 1, 2, 3…). El nombre es opcional: si lo pones, se muestra en lugar de «Cabaña
+                    N» en el calendario, las reservas, los bloqueos y los correos.
                   </p>
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-                    {cleanUnitLabels(v.unitLabels, v.units).map((label, i) => (
-                      <label key={i} className="flex min-w-0 flex-col gap-1 text-[12px] font-semibold text-ink-muted">
-                        {`Cabaña ${label.trim() || i + 1}`}
-                        <input
-                          aria-label={`Número de la cabaña ${i + 1} de este tipo`}
-                          type="text"
-                          autoComplete="off"
-                          maxLength={6}
-                          value={label}
-                          placeholder={String(i + 1)}
-                          aria-invalid={!!errors.unitLabels || undefined}
-                          onChange={(e) => {
-                            const next = cleanUnitLabels(v.unitLabels, v.units);
-                            next[i] = e.target.value;
-                            set({ unitLabels: next });
-                          }}
-                          className={`${adminInput} text-center`}
-                        />
-                      </label>
-                    ))}
+                  <div className="flex flex-col gap-2">
+                    <div aria-hidden="true" className="grid grid-cols-[84px_1fr] gap-2 text-[12px] font-semibold text-ink-muted">
+                      <span>Número</span>
+                      <span>Nombre (opcional)</span>
+                    </div>
+                    {cleanUnitLabels(v.unitLabels, v.units).map((label, i) => {
+                      const raw = v.unitNames?.[i] ?? "";
+                      return (
+                        <div key={i} className="grid grid-cols-[84px_1fr] gap-2">
+                          <input
+                            aria-label={`Número de la cabaña ${i + 1} de este tipo`}
+                            type="text"
+                            autoComplete="off"
+                            maxLength={6}
+                            value={label}
+                            placeholder={String(i + 1)}
+                            aria-invalid={!!errors.unitLabels || undefined}
+                            onChange={(e) => {
+                              const next = cleanUnitLabels(v.unitLabels, v.units);
+                              next[i] = e.target.value;
+                              set({ unitLabels: next });
+                            }}
+                            className={`${adminInput} text-center`}
+                          />
+                          <input
+                            aria-label={`Nombre de la cabaña ${label.trim() || i + 1}`}
+                            type="text"
+                            autoComplete="off"
+                            maxLength={40}
+                            value={raw}
+                            placeholder={`Cabaña ${label.trim() || i + 1}`}
+                            aria-invalid={!!errors.unitNames || undefined}
+                            onChange={(e) => {
+                              const next = Array.from({ length: v.units }, (_, j) => v.unitNames?.[j] ?? "");
+                              next[i] = e.target.value;
+                              set({ unitNames: next });
+                            }}
+                            className={adminInput}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                   {errors.unitLabels && <FieldError>{errors.unitLabels}</FieldError>}
+                  {errors.unitNames && <FieldError>{errors.unitNames}</FieldError>}
                   {repeatedElsewhere.length > 0 && (
                     <Callout tone="warning">
                       {`${repeatedElsewhere.map((x) => `El ${x.label} también está en ${x.cabin}`).join(". ")}. Revisa si es la misma cabaña física.`}

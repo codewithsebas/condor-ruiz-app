@@ -55,6 +55,7 @@ export function toCabinType(row: Tables<"cabin_types">): CabinType {
     maxPersonas: row.max_personas,
     units: row.units,
     unitLabels: row.unit_labels,
+    unitNames: row.unit_names ?? [],
     dayRates: (row.day_rates ?? []) as SeasonDayRate[],
     badge: row.badge,
     descripcion: row.descripcion,

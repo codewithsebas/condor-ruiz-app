@@ -379,6 +379,7 @@ export type Database = {
           precios_personas: Json
           sort: number
           unit_labels: string[]
+          unit_names: string[]
           units: number
           updated_at: string
           version: number
@@ -399,6 +400,7 @@ export type Database = {
           precios_personas?: Json
           sort?: number
           unit_labels?: string[]
+          unit_names?: string[]
           units: number
           updated_at?: string
           version?: number
@@ -419,6 +421,7 @@ export type Database = {
           precios_personas?: Json
           sort?: number
           unit_labels?: string[]
+          unit_names?: string[]
           units?: number
           updated_at?: string
           version?: number

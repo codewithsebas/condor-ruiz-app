@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { CheckIcon, SwapIcon } from "@/components/ui/icons";
 import { Combobox } from "@/components/ui/combobox";
-import { busyBlocks, unitFree, unitLabel } from "@/lib/booking";
+import { busyBlocks, cabinName, unitFree, unitLabel } from "@/lib/booking";
 import { api } from "@/lib/client/api";
 import { fmtDate, plural } from "@/lib/format";
 import type { Reservation } from "@/lib/types";
@@ -35,9 +35,9 @@ export function MoveCabinDialog({ r, onClose }: { r: Reservation; onClose: () =>
         .filter((u) => !(c.id === r.cabinTypeId && u === r.unit) && unitFree(occ, c.units, c.id, u, r.checkIn, r.checkOut, r.code))
         .map((u) => ({
           value: `${c.id}:${u}`,
-          label: `Cabaña ${unitLabel(c, u)}`,
+          label: cabinName(c, u),
           description: `${c.nombre} · hasta ${plural(c.maxPersonas, "persona", "personas")}`,
-          keywords: c.nombre,
+          keywords: `${c.nombre} ${unitLabel(c, u)}`,
         })),
     );
   const linked = (data.channelStays ?? []).some((s) => s.reservationCode === r.code && !s.removedAt);

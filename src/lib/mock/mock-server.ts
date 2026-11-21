@@ -5,8 +5,10 @@ import {
   clashingReservations,
   computeQuote,
   cleanUnitLabels,
+  cleanUnitNames,
   invalidPersonRates,
   invalidUnitLabels,
+  invalidUnitNames,
   depositDueAt,
   findUnit,
   importDocNumber,
@@ -1114,6 +1116,8 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
       if (!b.nombre || b.nombre.trim().length < 3) return invalid({ nombre: "El nombre debe tener entre 3 y 60 caracteres." });
       const badLabels = invalidUnitLabels(b.unitLabels, b.units);
       if (badLabels) return invalid({ unitLabels: badLabels });
+      const badNames = invalidUnitNames(b.unitNames, b.units);
+      if (badNames) return invalid({ unitNames: badNames });
       const fields = {
         nombre: b.nombre.trim(),
         descripcion: b.descripcion,
@@ -1122,6 +1126,7 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
         maxPersonas: b.maxPersonas,
         units: b.units,
         unitLabels: cleanUnitLabels(b.unitLabels, b.units),
+        unitNames: cleanUnitNames(b.unitNames, b.units),
         precioPareja: b.precioPareja,
         personaAdicional: b.personaAdicional,
         activa: b.activa,

@@ -10,6 +10,7 @@ import { api, type ApiError, type ValidationError } from "@/lib/client/api";
 import {
   MAX_GROUP_CABINS,
   busyBlocks,
+  cabinName,
   computeQuote,
   findUnit,
   normalizePhone,
@@ -298,9 +299,9 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
           return {
             n: unitLabel(c, u),
             value: pickValue(c.id, String(u)),
-            label: `Cabaña ${unitLabel(c, u)}`,
+            label: cabinName(c, u),
             description: `${c.nombre} · ${peopleText(c)} · desde ${cop(rateFrom(c).price)}${range ? (ok ? " · Libre" : " · Ocupada en esas fechas") : ""}`,
-            keywords: c.nombre,
+            keywords: `${c.nombre} ${unitLabel(c, u)}`,
           };
         }),
       )

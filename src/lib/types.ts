@@ -23,6 +23,7 @@ export type CabinType = {
   maxPersonas: number;
   units: number;
   unitLabels?: string[]; // número propio de cada unidad, por posición: ["9", "2"]. En blanco: la posición.
+  unitNames?: string[]; // nombre propio de cada unidad, por posición: ["El Mirador", ""]. Con nombre, reemplaza a «Cabaña N».
   dayRates?: SeasonDayRate[]; // tarifa base por día de la semana (solo `weekdays`); vacío: la misma todos los días
   badge: string;
   descripcion: string;
@@ -481,6 +482,7 @@ export type CabinInput = {
   maxPersonas: number;
   units: number;
   unitLabels?: string[];
+  unitNames?: string[];
   precioPareja: number;
   personaAdicional: number;
   activa: boolean;

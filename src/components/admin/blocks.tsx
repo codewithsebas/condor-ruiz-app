@@ -16,7 +16,7 @@ import {
   WarningIcon,
   WrenchIcon,
 } from "@/components/ui/icons";
-import { BLOCK_REASONS, busyBlocks, clashingReservations, unitLabel } from "@/lib/booking";
+import { BLOCK_REASONS, busyBlocks, cabinName, clashingReservations } from "@/lib/booking";
 import { unitMarks } from "@/lib/admin-metrics";
 import { api } from "@/lib/client/api";
 import { addDays, fmtDate, isISO, nightsBetween, parseISO, plural } from "@/lib/format";
@@ -606,7 +606,7 @@ function BlockEditor({ initial, onClose, onDelete }: { initial: Draft; onClose: 
                 value={d.unit}
                 onChange={(v) => set({ unit: v })}
                 options={[
-                  ...Array.from({ length: units }, (_, i) => ({ value: String(i + 1), label: `Cabaña ${unitLabel(cabin, i + 1)}` })),
+                  ...Array.from({ length: units }, (_, i) => ({ value: String(i + 1), label: cabinName(cabin, i + 1) })),
                   ...(!d.id && units > 1 ? [{ value: "all", label: "Todas las unidades", description: "Cierra este tipo de cabaña completo" }] : []),
                 ]}
               />

@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/icons";
 import { StatusPill } from "@/components/ui/status-pill";
 import { balanceDue, buildClients, pendingOf, typeMarks, type ClientSummary } from "@/lib/admin-metrics";
-import { ACTIVE_STATUSES, CHANNEL_NAME, busyBlocks, isFromBooking, unitLabel, validateCompanions, validateGuest } from "@/lib/booking";
+import { ACTIVE_STATUSES, CHANNEL_NAME, busyBlocks, isFromBooking, unitLabel, unitName, validateCompanions, validateGuest } from "@/lib/booking";
 import { api } from "@/lib/client/api";
 import { config } from "@/lib/config";
 import { can } from "@/lib/permissions";
@@ -287,7 +287,7 @@ function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean
           <StatCard
             accent="pink"
             label="Cabaña"
-            value={unitLabel(cabinType, r.unit)}
+            value={unitName(cabinType, r.unit) || unitLabel(cabinType, r.unit)}
             hint={cabinType?.nombre}
             icon={<HomeIcon size={15} />}
             action={cardAction("move", "Cambiar")}

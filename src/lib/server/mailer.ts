@@ -108,12 +108,19 @@ async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: str
   const group = members.length ? members : [lead];
   const { data: cabins } = await ctx.sb
     .from("cabin_types")
-    .select("id,nombre")
+    .select("id,nombre,unit_names")
     .in("id", [...new Set(group.map((m) => m.cabin_type_id))])
     .throwOnError();
   const r = { ...lead, ...sumGroup(group) };
   const q = r.quote as Quote;
-  const cabana = cabinList(group.map((m) => cabins.find((c) => c.id === m.cabin_type_id)?.nombre ?? m.cabin_type_id));
+  // El tipo de cabaña y, si la unidad tiene nombre propio, el nombre: «Cabaña Premium con Jacuzzi «El Mirador»».
+  const cabana = cabinList(
+    group.map((m) => {
+      const c = cabins.find((x) => x.id === m.cabin_type_id);
+      const own = c?.unit_names?.[m.unit - 1]?.trim();
+      return `${c?.nombre ?? m.cabin_type_id}${own ? ` «${own}»` : ""}`;
+    }),
+  );
   const stay = {
     nombre: r.guest_full_name,
     codigo: r.code,

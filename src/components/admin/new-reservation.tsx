@@ -327,7 +327,7 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
       onClose={onClose}
       labelledBy="nr-title"
       dismissOnBackdrop={false}
-      initialFocus={range ? "[data-autofocus]" : "[data-dates] button"}
+      initialFocus="[data-autofocus]"
       className="m-auto w-[calc(100%-32px)] max-w-[1240px] rounded-[26px] p-0"
     >
       <div className="flex flex-col gap-5 p-4 pb-0 sm:p-5 sm:pb-0">
@@ -348,10 +348,105 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
           </IconButton>
         </div>
 
-        {/* Tres columnas en pantallas anchas: estadía, huésped y pago (con el resumen). En el celular, una debajo de otra. */}
+        {/* Tres columnas en pantallas anchas: huésped, estadía y pago (con el resumen). En el celular, una debajo de otra. */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-0">
+          {/* Huésped */}
+          <section aria-labelledby="nr-guest" className="flex min-w-0 flex-col gap-3 pb-4 lg:pr-6">
+            <h3 id="nr-guest" className="flex items-center gap-2 text-[12px] font-bold tracking-[.06em] text-ink-muted uppercase">
+              <UsersIcon size={14} />
+              Huésped
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Nombre completo" className="col-span-2" error={err("guest.fullName")}>
+                {(p) => (
+                  <input
+                    {...p}
+                    data-autofocus
+                    type="text"
+                    autoComplete="off"
+                    maxLength={120}
+                    value={f.fullName}
+                    onChange={(e) => set({ fullName: e.target.value })}
+                    className={adminInput}
+                  />
+                )}
+              </Field>
+              <Field label="Celular (WhatsApp)" error={err("guest.phone")}>
+                {(p) => (
+                  <input
+                    {...p}
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="off"
+                    maxLength={24}
+                    value={f.phone}
+                    onChange={(e) => set({ phone: e.target.value })}
+                    placeholder="300 123 4567"
+                    className={adminInput}
+                  />
+                )}
+              </Field>
+              <Field label="Ciudad (opcional)" error={err("guest.city")}>
+                {(p) => (
+                  <input
+                    {...p}
+                    type="text"
+                    autoComplete="off"
+                    maxLength={80}
+                    value={f.city}
+                    onChange={(e) => set({ city: e.target.value })}
+                    className={adminInput}
+                  />
+                )}
+              </Field>
+              <Field label="Correo" className="col-span-2" error={err("guest.email")}>
+                {(p) => (
+                  <input
+                    {...p}
+                    type="email"
+                    inputMode="email"
+                    autoComplete="off"
+                    maxLength={160}
+                    value={f.email}
+                    onChange={(e) => set({ email: e.target.value })}
+                    className={adminInput}
+                  />
+                )}
+              </Field>
+              <fieldset className="col-span-2 flex min-w-0 flex-col gap-1.5">
+                <legend className="mb-1.5 text-[13px] font-semibold text-ink">Tipo de documento</legend>
+                <Segmented label="Tipo de documento" size="sm" value={f.docType} onChange={(v) => set({ docType: v })} options={DOCS} />
+              </fieldset>
+              <Field label="Número de documento" className="col-span-2" error={err("guest.docNumber")}>
+                {(p) => (
+                  <input
+                    {...p}
+                    type="text"
+                    autoComplete="off"
+                    maxLength={15}
+                    value={f.docNumber}
+                    onChange={(e) => set({ docNumber: e.target.value.replace(/[^A-Za-z0-9]/g, "") })}
+                    className={adminInput}
+                  />
+                )}
+              </Field>
+              <Field label="Notas (opcional)" className="col-span-2" error={err("specialRequests")}>
+                {(p) => (
+                  <textarea
+                    {...p}
+                    rows={2}
+                    maxLength={1000}
+                    value={f.notes}
+                    onChange={(e) => set({ notes: e.target.value })}
+                    className={`${adminInput} resize-y`}
+                  />
+                )}
+              </Field>
+            </div>
+          </section>
+
           {/* Estadía */}
-          <section aria-labelledby="nr-stay" className="flex min-w-0 flex-col gap-3 pb-4 lg:pr-6">
+          <section aria-labelledby="nr-stay" className="flex min-w-0 flex-col gap-3 border-t border-line pt-4 pb-3 lg:border-t-0 lg:border-l lg:px-6 lg:pt-0">
             <h3 id="nr-stay" className="flex items-center gap-2 text-[12px] font-bold tracking-[.06em] text-ink-muted uppercase">
               <HomeIcon size={14} />
               Estadía
@@ -454,101 +549,6 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
               <div className="col-span-2">
                 <Switch checked={f.pet} onChange={(v) => set({ pet: v })} label="Viene con mascota" description="Sin costo adicional, según las políticas." />
               </div>
-            </div>
-          </section>
-
-          {/* Huésped */}
-          <section aria-labelledby="nr-guest" className="flex min-w-0 flex-col gap-3 border-t border-line pt-4 pb-3 lg:border-t-0 lg:border-l lg:px-6 lg:pt-0">
-            <h3 id="nr-guest" className="flex items-center gap-2 text-[12px] font-bold tracking-[.06em] text-ink-muted uppercase">
-              <UsersIcon size={14} />
-              Huésped
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Nombre completo" className="col-span-2" error={err("guest.fullName")}>
-                {(p) => (
-                  <input
-                    {...p}
-                    data-autofocus
-                    type="text"
-                    autoComplete="off"
-                    maxLength={120}
-                    value={f.fullName}
-                    onChange={(e) => set({ fullName: e.target.value })}
-                    className={adminInput}
-                  />
-                )}
-              </Field>
-              <Field label="Celular (WhatsApp)" error={err("guest.phone")}>
-                {(p) => (
-                  <input
-                    {...p}
-                    type="tel"
-                    inputMode="tel"
-                    autoComplete="off"
-                    maxLength={24}
-                    value={f.phone}
-                    onChange={(e) => set({ phone: e.target.value })}
-                    placeholder="300 123 4567"
-                    className={adminInput}
-                  />
-                )}
-              </Field>
-              <Field label="Ciudad (opcional)" error={err("guest.city")}>
-                {(p) => (
-                  <input
-                    {...p}
-                    type="text"
-                    autoComplete="off"
-                    maxLength={80}
-                    value={f.city}
-                    onChange={(e) => set({ city: e.target.value })}
-                    className={adminInput}
-                  />
-                )}
-              </Field>
-              <Field label="Correo" className="col-span-2" error={err("guest.email")}>
-                {(p) => (
-                  <input
-                    {...p}
-                    type="email"
-                    inputMode="email"
-                    autoComplete="off"
-                    maxLength={160}
-                    value={f.email}
-                    onChange={(e) => set({ email: e.target.value })}
-                    className={adminInput}
-                  />
-                )}
-              </Field>
-              <fieldset className="col-span-2 flex min-w-0 flex-col gap-1.5">
-                <legend className="mb-1.5 text-[13px] font-semibold text-ink">Tipo de documento</legend>
-                <Segmented label="Tipo de documento" size="sm" value={f.docType} onChange={(v) => set({ docType: v })} options={DOCS} />
-              </fieldset>
-              <Field label="Número de documento" className="col-span-2" error={err("guest.docNumber")}>
-                {(p) => (
-                  <input
-                    {...p}
-                    type="text"
-                    autoComplete="off"
-                    maxLength={15}
-                    value={f.docNumber}
-                    onChange={(e) => set({ docNumber: e.target.value.replace(/[^A-Za-z0-9]/g, "") })}
-                    className={adminInput}
-                  />
-                )}
-              </Field>
-              <Field label="Notas (opcional)" className="col-span-2" error={err("specialRequests")}>
-                {(p) => (
-                  <textarea
-                    {...p}
-                    rows={2}
-                    maxLength={1000}
-                    value={f.notes}
-                    onChange={(e) => set({ notes: e.target.value })}
-                    className={`${adminInput} resize-y`}
-                  />
-                )}
-              </Field>
             </div>
           </section>
 

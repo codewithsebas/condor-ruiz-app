@@ -31,4 +31,10 @@ revoke execute on function public.notify_reservation_change() from public, anon,
 
 -- 2) rls_auto_enable() es la función del event trigger ensure_rls (activa RLS en tablas nuevas).
 --    Nadie debe llamarla por la API; el event trigger se sigue ejecutando sin este permiso.
-revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
+--    La crea Supabase en los proyectos alojados («Enable automatic RLS»); en la base local no existe, así que se omite.
+do $$
+begin
+  if to_regprocedure('public.rls_auto_enable()') is not null then
+    revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
+  end if;
+end $$;

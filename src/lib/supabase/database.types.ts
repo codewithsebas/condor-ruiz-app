@@ -965,6 +965,7 @@ export type Database = {
           code: string
           commission: number
           consents: Json
+          companions: Json
           created_at: string
           decoration: Json
           deposit_due_at: string
@@ -1003,6 +1004,7 @@ export type Database = {
           code: string
           commission?: number
           consents: Json
+          companions?: Json
           created_at?: string
           decoration?: Json
           deposit_due_at: string
@@ -1041,6 +1043,7 @@ export type Database = {
           code?: string
           commission?: number
           consents?: Json
+          companions?: Json
           created_at?: string
           decoration?: Json
           deposit_due_at?: string

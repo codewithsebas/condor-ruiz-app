@@ -8,6 +8,7 @@ import {
   cleanPersonRates,
   cleanUnitLabels,
   adjustedQuote,
+  cleanCompanions,
   computeQuote,
   busyBlocks,
   invalidPersonRates,
@@ -18,6 +19,7 @@ import {
   newReservationCode,
   normalizePhone,
   slugify,
+  validateCompanions,
   validateGuest,
   validateManualReservation,
   withTotal,
@@ -41,6 +43,7 @@ import type {
   CabinType,
   ClientProfile,
   ClientProfileInput,
+  Companion,
   EmailRecord,
   Guest,
   ImportRow,
@@ -209,7 +212,7 @@ function freeUnitFor(d: AdminData, r: Reservation) {
 
 const reservationOf = (d: AdminData, code: string) => d.reservations.find((r) => r.code === code) ?? null;
 
-type GuestEdit = Guest & { code: string };
+type GuestEdit = Guest & { code: string; companions?: Companion[] };
 
 const guestFields = (g: Guest) => ({ fullName: g.fullName, docType: g.docType, docNumber: g.docNumber, email: g.email, phone: g.phone, city: g.city });
 const ACTION_LABEL: Record<string, string> = {
@@ -280,6 +283,7 @@ const reservationOps = {
         decoration: { requested: false, occasion: "", notes: "" },
         estimatedArrival: p.arrival,
         guest: { fullName: g.fullName.trim(), docType: g.docType, docNumber, email: g.email.trim(), phone: g.phone, city: (g.city ?? "").trim() },
+        companions: cleanCompanions(p.companions),
         specialRequests: (p.specialRequests ?? "").trim(),
         consents: { policies: false, dataProcessing: false, marketing: false },
         quote: p.localQuote,
@@ -304,11 +308,22 @@ const reservationOps = {
   "reservation.guest": {
     label: (p) => `Datos de ${p.fullName} · ${p.code}`,
     entities: (p) => [`reservations:${p.code}`],
-    validate: (p) => {
-      const fields = validateGuest(p);
-      return Object.keys(fields).length ? fieldErr(Object.fromEntries(Object.entries(fields).map(([k, v]) => [`guest.${k}`, v]))) : null;
+    validate: (p, d) => {
+      // Cupo de acompañantes: las personas de la reserva (o de su grupo) menos el titular.
+      const r = reservationOf(d, p.code);
+      const group = r?.groupCode ? d.reservations.filter((x) => x.groupCode === r.groupCode && x.status !== "cancelled") : r ? [r] : [];
+      const people = group.reduce((sum, x) => sum + x.adults + x.children, 0);
+      const fields = {
+        ...Object.fromEntries(Object.entries(validateGuest(p)).map(([k, v]) => [`guest.${k}`, v])),
+        ...(r ? validateCompanions(p.companions, people) : {}),
+      };
+      return Object.keys(fields).length ? fieldErr(fields) : null;
     },
-    request: ({ code, ...guest }) => ({ method: "POST", path: "/admin/action", body: { code, action: "guest", guest: guestFields(guest) } }),
+    request: ({ code, companions, ...guest }) => ({
+      method: "POST",
+      path: "/admin/action",
+      body: { code, action: "guest", guest: guestFields(guest), ...(companions && { companions }) },
+    }),
     apply: (d, p) =>
       updateReservation(d, p.code, (r) => ({
         ...r,
@@ -320,6 +335,7 @@ const reservationOps = {
           email: (p.email ?? "").trim(),
           city: (p.city ?? "").trim(),
         },
+        ...(p.companions && { companions: cleanCompanions(p.companions) }),
       })),
     result: (d, p) => reservationOf(d, p.code),
     version: (d, p) => reservationOf(d, p.code)?.version,

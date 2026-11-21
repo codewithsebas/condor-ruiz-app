@@ -87,6 +87,19 @@ export type Guest = {
   city: string;
 };
 
+// Documento de un acompañante: además de los del titular, los de menores (tarjeta de identidad y registro civil).
+export type CompanionDocType = "CC" | "CE" | "Pasaporte" | "PPT" | "TI" | "RC";
+
+// Otra persona que se hospeda con el titular. Nombre y documento obligatorios; lo demás, opcional ("" si no se dio).
+export type Companion = {
+  fullName: string;
+  docType: CompanionDocType;
+  docNumber: string;
+  phone: string;
+  email: string;
+  city: string;
+};
+
 // Otra cabaña de la misma reserva (mismas fechas y huésped). unit: solo el panel la elige; null = la primera libre.
 export type ExtraCabin = { cabinTypeId: CabinTypeId; adults: number; children: number; unit?: number | null };
 
@@ -187,6 +200,7 @@ export type Reservation = ReservationInput & {
   commission?: number; // comisión del canal
   demo?: boolean;
   groupCode?: string | null; // reserva con varias cabañas: código de la principal (la principal tiene el suyo)
+  companions?: Companion[]; // los demás huéspedes; en un grupo, los mismos en todas las cabañas
 };
 
 // Cuerpo de POST /admin/reservations: reserva tomada por el equipo. Queda sin confirmar (y sin apartar fechas) hasta que
@@ -203,6 +217,7 @@ export type ManualReservationInput = {
   children: number;
   pet: { hasPet: boolean; smallBreedConfirmed: boolean };
   guest: Guest;
+  companions?: Companion[]; // los demás huéspedes (hasta el total de personas menos el titular)
   estimatedArrival: string; // "HH:MM" o "" (inicio del check-in)
   specialRequests: string;
   total: number | null; // precio especial; null = tarifa vigente
@@ -505,7 +520,7 @@ export type AdminAction =
   | { code: string; action: "extend_hold"; group?: boolean } // reactiva una vencida, sin plazo
   | { code: string; action: "note"; text: string }
   // Corregir o completar los datos del huésped (p. ej. el documento de una reserva importada).
-  | { code: string; action: "guest"; guest: Guest };
+  | { code: string; action: "guest"; guest: Guest; companions?: Companion[] };
 
 export type ProofReview = { id: string; decision: "approve" | "reject"; note: string; confirmReservation: boolean };
 

@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/icons";
 import { StatusPill } from "@/components/ui/status-pill";
 import { balanceDue, buildClients, pendingOf, typeMarks, type ClientSummary } from "@/lib/admin-metrics";
-import { ACTIVE_STATUSES, CHANNEL_NAME, busyBlocks, isFromBooking, unitLabel, validateGuest } from "@/lib/booking";
+import { ACTIVE_STATUSES, CHANNEL_NAME, busyBlocks, isFromBooking, unitLabel, validateCompanions, validateGuest } from "@/lib/booking";
 import { api } from "@/lib/client/api";
 import { config } from "@/lib/config";
 import { can } from "@/lib/permissions";
@@ -40,8 +40,9 @@ import { addDays, cop, dateOf, fmtClock, fmtDate, fmtDateTime, nightsBetween, pl
 import { PaymentFields, type PayChoice, type PayOption } from "@/components/admin/payment-fields";
 import { PAYMENT_STATUS, depositPctOf, kindLabel, unpaidUntil } from "@/lib/payments";
 import { fmtTime } from "@/lib/site";
-import type { DocType, EmailRecord, Guest, PayMethod, PaymentRecord, Reservation } from "@/lib/types";
+import type { Companion, DocType, EmailRecord, Guest, PayMethod, PaymentRecord, Reservation } from "@/lib/types";
 import { Combobox } from "@/components/ui/combobox";
+import { CompanionFields } from "@/components/admin/companions";
 import { useAdmin } from "@/components/admin/context";
 import { BathroomWarning } from "@/components/admin/bathrooms";
 import { initialsOf } from "@/components/admin/calendar/shared";
@@ -643,6 +644,28 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
         ]}
       />
 
+      {/* Los demás huéspedes: nombre y documento siempre; el contacto, si lo dieron. */}
+      {(r.companions?.length ?? 0) > 0 && (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-[12px] font-bold tracking-[.06em] text-ink/60 uppercase">{`Acompañantes · ${r.companions!.length}`}</h3>
+          <ul className="flex flex-col gap-1.5">
+            {r.companions!.map((c, i) => (
+              <li key={i} className="flex items-center gap-3 rounded-[14px] bg-paper/45 px-3 py-2">
+                <span aria-hidden="true" className="grid size-8 flex-none place-items-center rounded-full bg-paper text-[12px] font-bold text-ink">
+                  {initialsOf(c.fullName)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[14px] font-semibold text-ink">{c.fullName}</span>
+                  <span className="block truncate text-[12.5px] text-ink/70">
+                    {[`${c.docType} ${c.docNumber}`, c.phone, c.email, c.city].filter(Boolean).join(" · ")}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {client && (
         <Link href={paths.cliente(client.key)} className={buttonClass("secondary", "sm", "mt-auto self-start bg-paper/60! ring-0!")}>
           Ver ficha del cliente
@@ -655,13 +678,16 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
 
 // Corregir los datos del huésped (nombre, documento, contacto). Cambiar el documento cambia el cliente al que pertenece.
 function GuestEditor({ r, onClose }: { r: Reservation; onClose: () => void }) {
-  const { reload, toast, onAuthError } = useAdmin();
+  const { data, reload, toast, onAuthError } = useAdmin();
   const [g, setG] = useState<Guest>({ ...r.guest, docNumber: r.guest.docType === "SD" ? "" : r.guest.docNumber });
+  const [companions, setCompanions] = useState<Companion[]>(r.companions ?? []);
+  // Personas de la reserva (o de todas las cabañas del grupo): el titular y hasta ese total menos uno acompañantes.
+  const people = groupOf(data.reservations, r).reduce((sum, x) => sum + x.adults + x.children, 0);
   const [busy, setBusy] = useState(false);
   const [tried, setTried] = useState(false);
   const [server, setServer] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
-  const local = validateGuest(g);
+  const local: Record<string, string> = { ...validateGuest(g), ...validateCompanions(companions, people) };
   const err = (k: string) => server[k] || (tried ? local[k] : "") || undefined;
   const set = (p: Partial<Guest>) => {
     setG((x) => ({ ...x, ...p }));
@@ -674,7 +700,7 @@ function GuestEditor({ r, onClose }: { r: Reservation; onClose: () => void }) {
     if (busy || Object.keys(local).length) return;
     setBusy(true);
     try {
-      const res = await api.admin.action({ code: r.code, action: "guest", guest: g });
+      const res = await api.admin.action({ code: r.code, action: "guest", guest: g, companions });
       if (res.status === 401 || res.status === 403) return onAuthError();
       if (res.status !== 200) {
         const fields = (res.data as { fields?: Record<string, string> } | null)?.fields;
@@ -683,7 +709,7 @@ function GuestEditor({ r, onClose }: { r: Reservation; onClose: () => void }) {
         return;
       }
       await reload();
-      toast("Datos del huésped actualizados");
+      toast("Datos de los huéspedes actualizados");
       onClose();
     } catch {
       setError("Error de conexión. Inténtalo de nuevo.");
@@ -707,13 +733,13 @@ function GuestEditor({ r, onClose }: { r: Reservation; onClose: () => void }) {
             </span>
             <div className="pt-1">
               <h2 id="ge-title" className="text-[18px] font-bold tracking-[-0.02em] text-ink">
-                Datos del huésped
+                Datos de los huéspedes
               </h2>
               <p className="text-[13.5px] text-ink-muted">{`${r.code} · se usan en los correos y para agrupar al cliente.`}</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Nombre completo" error={err("fullName")} className="col-span-2">
+            <Field label="Nombre completo del titular" error={err("fullName")} className="col-span-2">
               {(p) => (
                 <input
                   {...p}
@@ -775,6 +801,16 @@ function GuestEditor({ r, onClose }: { r: Reservation; onClose: () => void }) {
                 />
               )}
             </Field>
+            <CompanionFields
+              list={companions}
+              onChange={(l) => {
+                setCompanions(l);
+                setServer({});
+                setError("");
+              }}
+              people={people}
+              err={err}
+            />
           </div>
           {error && <FieldError>{error}</FieldError>}
         </div>

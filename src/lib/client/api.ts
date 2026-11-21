@@ -86,7 +86,7 @@ export const api = {
       // Pagos, plazo y cancelación de un grupo: con conexión (el reparto lo hace el servidor).
       if ("group" in b && b.group) return onlineOnly(direct);
       if (b.action !== "guest") return mutate("reservation.action", b, direct);
-      return mutate("reservation.guest", { code: b.code, ...b.guest }, direct);
+      return mutate("reservation.guest", { code: b.code, ...b.guest, ...(b.companions && { companions: b.companions }) }, direct);
     },
     createReservation: (b: ManualReservationInput) => {
       const direct = () => request<ManualReservationResult | ValidationError | ApiError>("POST", "/admin/reservations", { body: b });

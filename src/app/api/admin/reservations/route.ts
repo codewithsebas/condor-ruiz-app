@@ -1,5 +1,5 @@
 import { after, type NextRequest } from "next/server";
-import { computeQuote, normalizePhone, splitTotal, validateExtraCabins, validateManualReservation, withTotal } from "@/lib/booking";
+import { cleanCompanions, computeQuote, normalizePhone, splitTotal, validateExtraCabins, validateManualReservation, withTotal } from "@/lib/booking";
 import { unpaidUntil } from "@/lib/payments";
 import { loadPricing, runDeadlines, toReservation } from "@/lib/server/db";
 import { fail, json, operationDay, readJson, requireStaff, syncRoute } from "@/lib/server/http";
@@ -65,6 +65,7 @@ export const POST = syncRoute(async (req: NextRequest) => {
     guest_email: g.email.trim(),
     guest_phone: g.phone,
     guest_city: (g.city ?? "").trim(),
+    companions: cleanCompanions(input.companions),
     special_requests: (input.specialRequests ?? "").trim(),
     // Reserva tomada por el equipo: el huésped no pasó por los consentimientos de la web.
     consents: { policies: false, dataProcessing: false, marketing: false },

@@ -1,5 +1,15 @@
 import { after, type NextRequest } from "next/server";
-import { TRANSITIONS, adjustedQuote, computeQuote, findUnit, normalizePhone, unitFree, validateGuest } from "@/lib/booking";
+import {
+  TRANSITIONS,
+  adjustedQuote,
+  cleanCompanions,
+  computeQuote,
+  findUnit,
+  normalizePhone,
+  unitFree,
+  validateCompanions,
+  validateGuest,
+} from "@/lib/booking";
 import { addDays, isISO, nightsBetween } from "@/lib/format";
 import { isExclusionViolation, loadCabinTypes, loadDepositPct, loadOccupancy, loadSeasons, toReservation } from "@/lib/server/db";
 import { baseVersionOf, businessError, fail, json, occurredAtOf, opIdOf, operationDay, readJson, requireStaff, syncRoute } from "@/lib/server/http";
@@ -39,9 +49,18 @@ export const POST = syncRoute(async (req: NextRequest) => {
   try {
     if (b.action === "guest") {
       const g = b.guest ?? ({} as typeof b.guest);
-      const fields = validateGuest(g);
-      if (Object.keys(fields).length)
-        return fail(422, "VALIDATION_ERROR", { fields: Object.fromEntries(Object.entries(fields).map(([k, v]) => [`guest.${k}`, v])) });
+      // Acompañantes (opcional: sin la lista, no se tocan). Caben las personas de la reserva (o del grupo) menos el titular.
+      const people = groupCode
+        ? (await sb.from("reservations").select("adults,children,status").eq("group_code", groupCode).throwOnError()).data
+            .filter((m) => m.status !== "cancelled")
+            .reduce((sum, m) => sum + m.adults + m.children, 0)
+        : current.adults + current.children;
+      const fields = {
+        ...Object.fromEntries(Object.entries(validateGuest(g)).map(([k, v]) => [`guest.${k}`, v])),
+        ...validateCompanions(b.companions, people),
+      };
+      if (Object.keys(fields).length) return fail(422, "VALIDATION_ERROR", { fields });
+      const companions = b.companions === undefined ? {} : { companions: cleanCompanions(b.companions) };
       const phone = normalizePhone(g.phone);
       const base = baseVersionOf(req);
       let q = sb
@@ -54,6 +73,7 @@ export const POST = syncRoute(async (req: NextRequest) => {
           guest_email: (g.email ?? "").trim(),
           guest_phone: phone,
           guest_city: (g.city ?? "").trim(),
+          ...companions,
         })
         .eq("code", current.code);
       if (base !== null) q = q.eq("version", base);
@@ -70,6 +90,7 @@ export const POST = syncRoute(async (req: NextRequest) => {
             guest_email: same.guest_email,
             guest_phone: same.guest_phone,
             guest_city: same.guest_city,
+            companions: same.companions,
           })
           .eq("group_code", groupCode)
           .neq("code", current.code)

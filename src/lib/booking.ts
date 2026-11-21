@@ -8,6 +8,8 @@ import type {
   CabinType,
   ChannelStay,
   ExtraCabin,
+  Companion,
+  CompanionDocType,
   FieldErrors,
   ImportRow,
   ManualReservationInput,
@@ -59,6 +61,43 @@ export function validateGuest(g: { fullName?: string; docType?: string; docNumbe
   if (phone.length < 7 || phone.length > 15) f.phone = "Escribe un celular válido.";
   if ((g.city ?? "").length > 60) f.city = "Máximo 60 caracteres.";
   return f;
+}
+
+export const COMPANION_DOC_TYPES: CompanionDocType[] = ["CC", "CE", "Pasaporte", "PPT", "TI", "RC"];
+
+// Acompañantes del titular: como mucho, las personas de la reserva menos el titular. Nombre, tipo y número de documento
+// obligatorios; celular, correo y ciudad opcionales (si vienen, válidos). Errores con clave "companions.<i>.<campo>".
+export function validateCompanions(list: unknown, people: number): FieldErrors {
+  if (list === undefined || list === null) return {};
+  if (!Array.isArray(list)) return { companions: "Lista de huéspedes no válida." };
+  if (list.length > Math.max(0, people - 1))
+    return { companions: `Con ${people} ${people === 1 ? "persona" : "personas"} caben ${Math.max(0, people - 1)} huéspedes además del titular.` };
+  const f: FieldErrors = {};
+  list.forEach((raw, i) => {
+    const c = (raw ?? {}) as Partial<Record<keyof Companion, unknown>>;
+    const s = (v: unknown) => (typeof v === "string" ? v : "");
+    const k = (x: string) => `companions.${i}.${x}`;
+    if (s(c.fullName).trim().length < 3 || s(c.fullName).length > 120) f[k("fullName")] = "Escribe el nombre completo.";
+    if (!COMPANION_DOC_TYPES.includes(s(c.docType) as CompanionDocType)) f[k("docType")] = "Elige el tipo de documento.";
+    if (!/^[A-Za-z0-9]{5,15}$/.test(s(c.docNumber).trim())) f[k("docNumber")] = "Escribe el número de documento (sin puntos).";
+    const phone = s(c.phone).replace(/\D/g, "");
+    if (phone && (phone.length < 7 || phone.length > 15)) f[k("phone")] = "Escribe un celular válido.";
+    if (s(c.email).trim() && (!EMAIL_RE.test(s(c.email).trim()) || s(c.email).length > 160)) f[k("email")] = "Escribe un correo válido.";
+    if (s(c.city).length > 80) f[k("city")] = "La ciudad es demasiado larga.";
+  });
+  return f;
+}
+
+// Acompañantes listos para guardar (ya validados): sin espacios de más, documento en mayúsculas y celular normalizado.
+export function cleanCompanions(list: Companion[] | undefined): Companion[] {
+  return (list ?? []).map((c) => ({
+    fullName: c.fullName.trim(),
+    docType: c.docType,
+    docNumber: c.docNumber.trim().toUpperCase(),
+    phone: c.phone?.trim() ? normalizePhone(c.phone) : "",
+    email: (c.email ?? "").trim(),
+    city: (c.city ?? "").trim(),
+  }));
 }
 
 const IMPORT_STATUSES: ImportRow["status"][] = ["confirmed", "completed", "cancelled"];
@@ -349,6 +388,9 @@ export function validateManualReservation(b: ManualReservationInput, types: Cabi
   if (b.estimatedArrival && !/^\d{2}:\d{2}$/.test(b.estimatedArrival)) f.estimatedArrival = "Hora de llegada no válida.";
   if ((b.specialRequests ?? "").length > 1000) f.specialRequests = "El texto es demasiado largo.";
   if (b.total !== null && (!Number.isInteger(b.total) || b.total < SPECIAL_TOTAL.min || b.total > SPECIAL_TOTAL.max)) f.total = "Escribe un precio válido.";
+  // Todas las personas de la reserva (la primera cabaña y las demás): el titular y hasta ese total menos uno acompañantes.
+  const people = [{ adults, children }, ...(Array.isArray(b.more) ? b.more : [])].reduce((s, c) => s + (Number(c.adults) || 0) + (Number(c.children) || 0), 0);
+  Object.assign(f, validateCompanions(b.companions, people));
   return f;
 }
 

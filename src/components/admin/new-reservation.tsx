@@ -17,14 +17,16 @@ import {
   rateFrom,
   splitTotal,
   unitFree,
+  validateCompanions,
   unitLabel,
   withTotal,
   type Occupancy,
 } from "@/lib/booking";
 import { addDays, cop, fmtDate, nightsBetween, plural } from "@/lib/format";
+import { CompanionFields } from "@/components/admin/companions";
 import { depositPctOf } from "@/lib/payments";
 import { groupMoney } from "@/lib/groups";
-import type { DocType, ManualReservationInput, ManualReservationResult, PayMethod, Quote, Reservation } from "@/lib/types";
+import type { Companion, DocType, ManualReservationInput, ManualReservationResult, PayMethod, Quote, Reservation } from "@/lib/types";
 import { Combobox } from "@/components/ui/combobox";
 import { typeMarks, unitMarks } from "@/lib/admin-metrics";
 import { useAdmin } from "@/components/admin/context";
@@ -51,6 +53,7 @@ type Form = {
   docType: DocType;
   docNumber: string;
   city: string;
+  companions: Companion[]; // los demás huéspedes
   notes: string;
   special: boolean;
   total: number;
@@ -104,6 +107,7 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
     docType: "CC",
     docNumber: "",
     city: "",
+    companions: [],
     notes: "",
     special: false,
     total: 0,
@@ -194,6 +198,9 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
   if (!/^\+\d{8,15}$/.test(normalizePhone(f.phone))) errs["guest.phone"] = "Escribe el celular con WhatsApp.";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) errs["guest.email"] = "Escribe un correo válido: ahí le llega la confirmación.";
   if (!/^[A-Za-z0-9]{5,15}$/.test(f.docNumber.trim())) errs["guest.docNumber"] = "Escribe el número de documento (sin puntos).";
+  // Todas las personas de la reserva (todas las cabañas): el titular y hasta ese total menos uno acompañantes.
+  const people = all.reduce((s, c) => s + c.adults + c.children, 0);
+  Object.assign(errs, validateCompanions(f.companions, people));
   if (f.special && (!f.total || f.total < 10_000)) errs.total = "Escribe el precio acordado.";
   if (f.payNow && payAmountError) errs.payAmount = payAmountError;
   if (f.payNow && !f.payMethod) errs.payMethod = "Elige si pagó en efectivo o por transferencia.";
@@ -233,6 +240,7 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
       children: f.children,
       pet: { hasPet: f.pet, smallBreedConfirmed: f.pet },
       guest: { fullName: f.fullName.trim(), docType: f.docType, docNumber: f.docNumber.trim(), email: f.email.trim(), phone: f.phone, city: f.city.trim() },
+      ...(f.companions.length > 0 && { companions: f.companions }),
       estimatedArrival: "",
       specialRequests: f.notes.trim(),
       total: f.special && f.total ? f.total : null,
@@ -354,10 +362,10 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
           <section aria-labelledby="nr-guest" className="flex min-w-0 flex-col gap-3 pb-4 lg:pr-6">
             <h3 id="nr-guest" className="flex items-center gap-2 text-[12px] font-bold tracking-[.06em] text-ink-muted uppercase">
               <UsersIcon size={14} />
-              Huésped
+              Huéspedes
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Nombre completo" className="col-span-2" error={err("guest.fullName")}>
+              <Field label="Nombre completo del titular" className="col-span-2" error={err("guest.fullName")}>
                 {(p) => (
                   <input
                     {...p}
@@ -430,6 +438,7 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
                   />
                 )}
               </Field>
+              <CompanionFields list={f.companions} onChange={(companions) => set({ companions })} people={people} err={err} />
               <Field label="Notas (opcional)" className="col-span-2" error={err("specialRequests")}>
                 {(p) => (
                   <textarea

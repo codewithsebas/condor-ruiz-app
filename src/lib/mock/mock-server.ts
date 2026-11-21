@@ -12,6 +12,7 @@ import {
   importDocNumber,
   invalidDayRates,
   invalidImportRow,
+  cleanCompanions,
   newReservationCode,
   normalizePhone,
   slugify,
@@ -19,6 +20,7 @@ import {
   unavailableDates,
   validateExtraCabins,
   unitFree,
+  validateCompanions,
   validateGuest,
   validateManualReservation,
   validateReservation,
@@ -38,6 +40,7 @@ import type {
   ActivityEntry,
   ActivityPage,
   AdminNotification,
+  Companion,
   ApiResult,
   Block,
   BlockInput,
@@ -913,6 +916,7 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
         email: b.guest.email.trim(),
         city: (b.guest.city ?? "").trim(),
       },
+      companions: cleanCompanions(b.companions),
       specialRequests: (b.specialRequests ?? "").trim(),
       consents: { policies: false, dataProcessing: false, marketing: false },
       code: newReservationCode(),
@@ -1036,9 +1040,14 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
         balancePaidAt: r.balancePaidAt && b.total > r.paid ? null : r.balancePaidAt,
       });
     } else if (body.action === "guest") {
-      const g = (opts.body as { guest: Reservation["guest"] }).guest;
-      const fields = validateGuest(g);
-      if (Object.keys(fields).length) return invalid(Object.fromEntries(Object.entries(fields).map(([k, v]) => [`guest.${k}`, v])));
+      const { guest: g, companions } = opts.body as { guest: Reservation["guest"]; companions?: Companion[] };
+      const people = group.filter((x) => x.status !== "cancelled").reduce((sum, x) => sum + x.adults + x.children, 0);
+      const fields = {
+        ...Object.fromEntries(Object.entries(validateGuest(g)).map(([k, v]) => [`guest.${k}`, v])),
+        ...validateCompanions(companions, people),
+      };
+      if (Object.keys(fields).length) return invalid(fields);
+      if (companions) r.companions = cleanCompanions(companions);
       const phone = normalizePhone(g.phone);
       r.guest = {
         ...g,
@@ -1049,7 +1058,7 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
       };
       r.clientKey = keyOf(r);
       // En un grupo el huésped es el mismo para todas las cabañas.
-      group.forEach((x) => Object.assign(x, { guest: r.guest, clientKey: r.clientKey }));
+      group.forEach((x) => Object.assign(x, { guest: r.guest, clientKey: r.clientKey, companions: r.companions }));
     } else if (body.action === "note") r.notes.push({ at: now, text: body.text });
     else {
       r.status = map[body.action] || r.status;

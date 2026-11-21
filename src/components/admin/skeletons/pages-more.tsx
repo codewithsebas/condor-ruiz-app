@@ -12,7 +12,6 @@ import {
   ClockIcon,
   FileTextIcon,
   HomeIcon,
-  IdCardIcon,
   ListIcon,
   LockIcon,
   LoginIcon,
@@ -808,9 +807,12 @@ export function EmployeesSkeleton() {
         eyebrow="Cada persona entra con su propio correo; el rol decide qué puede ver y hacer"
         title={MODULES.empleados.label}
         actions={
-          <Btn variant="primary" icon={<UserPlusIcon size={15} />}>
-            Nuevo empleado
-          </Btn>
+          <>
+            <Btn icon={<ShieldIcon size={15} />}>Roles y permisos</Btn>
+            <Btn variant="primary" icon={<UserPlusIcon size={15} />}>
+              Nuevo empleado
+            </Btn>
+          </>
         }
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
@@ -842,20 +844,6 @@ export function EmployeesSkeleton() {
           <Box title="Actividad reciente" subtitle="Último ingreso de cada cuenta" className="h-auto!">
             <RecentSignInsSkeleton />
           </Box>
-          {[
-            { title: "Recepción", icon: <IdCardIcon size={15} /> },
-            { title: "Administrador", icon: <ShieldIcon size={15} /> },
-          ].map((r) => (
-            <Box
-              key={r.title}
-              title={r.title}
-              subtitle={null}
-              className="h-auto!"
-              action={<span className="grid size-8 place-items-center rounded-full bg-panel text-ink ring-1 ring-line">{r.icon}</span>}
-            >
-              <Block className="h-[120px] rounded-[16px]" />
-            </Box>
-          ))}
         </div>
       </div>
     </>

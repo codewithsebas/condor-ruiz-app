@@ -100,6 +100,7 @@ export function AdjustReservationDialog({ r, onClose }: { r: Reservation; onClos
           >
             {(p) => <MoneyInput id={p.id} value={total} onChange={setTyped} invalid={!!p["aria-invalid"]} describedBy={p["aria-describedby"]} />}
           </Field>
+          {!!r.quote.addons && <p className="text-[13.5px] text-ink-muted">{`Incluye decoraciones por ${cop(r.quote.addons)}: se conservan.`}</p>}
           <p className="text-[13.5px] text-ink-muted">{`Ya pagado: ${cop(r.paid)} · Queda por cobrar: ${cop(pending)}`}</p>
           {surplus > 0 && (
             <Callout tone="warning">{`Lo pagado supera el valor nuevo por ${cop(surplus)}. Este cambio no registra ninguna devolución.`}</Callout>

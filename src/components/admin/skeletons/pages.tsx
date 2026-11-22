@@ -42,6 +42,7 @@ import {
   CabinsSkeleton,
   ClientDetailSkeleton,
   ContentSkeleton,
+  DecorationsSkeleton,
   EmployeesSkeleton,
   FinanceSkeleton,
   ProfileSkeleton,
@@ -103,6 +104,8 @@ export function ModuleSkeleton() {
       return <BlocksSkeleton />;
     case "tarifas":
       return <RatesSkeleton />;
+    case "decoraciones":
+      return <DecorationsSkeleton />;
     case "finanzas":
       return <FinanceSkeleton />;
     case "condiciones":

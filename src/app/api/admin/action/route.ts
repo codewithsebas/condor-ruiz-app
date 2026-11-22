@@ -5,20 +5,22 @@ import {
   cleanCompanions,
   computeQuote,
   findUnit,
+  pickAddons,
+  withAddons,
   normalizePhone,
   unitFree,
   validateCompanions,
   validateGuest,
 } from "@/lib/booking";
 import { addDays, isISO, nightsBetween } from "@/lib/format";
-import { isExclusionViolation, loadCabinTypes, loadDepositPct, loadOccupancy, loadSeasons, toReservation } from "@/lib/server/db";
+import { isExclusionViolation, loadCabinTypes, loadDecorations, loadDepositPct, loadOccupancy, loadSeasons, toReservation } from "@/lib/server/db";
 import { baseVersionOf, businessError, fail, json, occurredAtOf, opIdOf, operationDay, readJson, requireStaff, syncRoute } from "@/lib/server/http";
 import { processOutbox } from "@/lib/server/mailer";
 import { dispatchPush } from "@/lib/server/push";
 import { originOf, siteUrl } from "@/lib/server/site";
 import { PAY_METHODS, manualPaymentNote, unpaidUntil } from "@/lib/payments";
 import { can } from "@/lib/permissions";
-import type { AdminAction, Quote } from "@/lib/types";
+import type { AdminAction, Quote, ReservationAddon } from "@/lib/types";
 
 // POST /api/admin/action { code, action, ... } → cambia el estado, registra un pago, reprograma o agrega una nota.
 // confirm / balance: pago recibido en persona (efectivo o transferencia) registrado por el equipo, por el abono, por todo
@@ -141,7 +143,8 @@ export const POST = syncRoute(async (req: NextRequest) => {
       const occ = await loadOccupancy(sb, ci, addDays(co, -1), type.id);
       const unit = findUnit(occ, units[type.id] ?? 0, type.id, ci, co, current.code);
       if (!unit) return fail(409, "DATES_UNAVAILABLE");
-      const quote = computeQuote(type, ci, co, current.adults + current.children, seasons, depositPct);
+      // Las decoraciones se conservan con su precio acordado.
+      const quote = withAddons(computeQuote(type, ci, co, current.adults + current.children, seasons, depositPct), current.addons as ReservationAddon[]);
       // Con el abono ya pagado, el abono es lo que se pagó y el saldo es el resto del nuevo total.
       // Si ya estaba todo pagado y el nuevo total es mayor, vuelve a quedar saldo pendiente.
       const reopensBalance = !!current.balance_paid_at && quote.total > current.paid_amount;
@@ -195,6 +198,29 @@ export const POST = syncRoute(async (req: NextRequest) => {
           .eq("code", current.code)
           .throwOnError();
       }
+    } else if (b.action === "addons") {
+      // Decoraciones de la reserva: reemplaza la lista. Las que ya tenía conservan su precio; las nuevas, el del catálogo.
+      // En una reserva con varias cabañas van en la principal.
+      if (groupCode && current.code !== groupCode) return fail(400, "INVALID_BODY");
+      const had = (current.addons as ReservationAddon[]) ?? [];
+      const addons = pickAddons(b.addons, await loadDecorations(sb), had);
+      if (!addons) return fail(422, "VALIDATION_ERROR", { fields: { addons: "Alguna decoración ya no está disponible. Actualiza la página." } });
+      const q = current.quote as Quote;
+      const quote = withAddons(q, addons);
+      if (current.deposit_paid_at) quote.balance = Math.max(0, quote.total - current.paid_amount);
+      // Quitar una decoración ya pagada dejaría pagado más que el total: eso se resuelve con un reembolso, no aquí.
+      if (quote.total < current.paid_amount)
+        return fail(422, "VALIDATION_ERROR", { fields: { addons: "Ya se pagó más que el nuevo total: no se puede quitar esa decoración." } });
+      await sb
+        .from("reservations")
+        .update({
+          addons,
+          quote,
+          // Si ya estaba todo pagado y el valor nuevo es mayor, vuelve a quedar saldo pendiente.
+          ...(current.balance_paid_at && quote.total > current.paid_amount && { balance_paid_at: null }),
+        })
+        .eq("code", current.code)
+        .throwOnError();
     } else if (b.action === "cancel" && groupCode) {
       if (b.group) {
         // La principal al final: su aviso y su correo hablan por el grupo.

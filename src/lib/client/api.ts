@@ -50,7 +50,7 @@ import type {
   SiteInput,
 } from "@/lib/types";
 import type { NotificationGroup } from "@/lib/notification-groups";
-import type { SiteContent, SiteService } from "@/lib/site";
+import type { Decoration, SiteContent, SiteService } from "@/lib/site";
 
 // Clave de idempotencia por intento de reserva (sobrevive a reintentos y recargas de la pestaña).
 function idemKey() {
@@ -147,6 +147,13 @@ export const api = {
       mutate("sitePhoto.set", { slot, file, name }, () => upload<Record<string, string>>("/admin/photos", formOf({ slot, file }, name))),
     deletePhoto: (slot: string) => mutate("sitePhoto.delete", { slot }, () => request<Record<string, string>>("DELETE", "/admin/photos", { query: { slot } })),
     // Servicios del sitio: cada operación responde con la lista completa en orden.
+    decorations: {
+      create: (b: Omit<Decoration, "id">) =>
+        mutate("decoration.create", b, () => request<Decoration[] | ValidationError>("POST", "/admin/decorations", { body: b })),
+      update: (b: Decoration) => mutate("decoration.update", b, () => request<Decoration[] | ValidationError>("PUT", "/admin/decorations", { body: b })),
+      reorder: (order: string[]) => mutate("decoration.reorder", { order }, () => request<Decoration[]>("PATCH", "/admin/decorations", { body: { order } })),
+      remove: (id: string) => mutate("decoration.delete", { id }, () => request<Decoration[]>("DELETE", "/admin/decorations", { query: { id } })),
+    },
     services: {
       create: (b: Omit<SiteService, "id">) =>
         mutate("service.create", b, () => request<SiteService[] | ValidationError>("POST", "/admin/services", { body: b })),

@@ -30,6 +30,10 @@ export type SiteTexts = {
 export type SiteService = { id: string; title: string; description: string; icon: string; note: string; visible: boolean };
 export const SERVICE_LIMITS = { title: 60, description: 160, note: 30, max: 40 };
 
+// Decoración con costo (tabla decorations): se agrega, opcional, a una reserva. Precio fijo por reserva.
+export type Decoration = { id: string; name: string; description: string; price: number; visible: boolean };
+export const DECORATION_LIMITS = { name: 60, description: 200, maxPrice: 20_000_000, max: 30 };
+
 export type SiteContent = {
   version?: number;
   settings: SiteSettings;
@@ -37,6 +41,7 @@ export type SiteContent = {
   photos: Record<string, string>; // slot → URL pública
   texts: SiteTexts;
   services: SiteService[]; // en el orden en que se muestran
+  decorations: Decoration[]; // catálogo de decoraciones, en orden (también las ocultas)
   theme: SiteTheme; // colores del sitio público
 };
 
@@ -287,5 +292,6 @@ export const defaultContent: SiteContent = {
     note: x.note ?? "",
     visible: true,
   })),
+  decorations: [],
   theme: DEFAULT_THEME,
 };

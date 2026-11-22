@@ -21,9 +21,11 @@ import {
   validateCompanions,
   unitLabel,
   withTotal,
+  withAddons,
   type Occupancy,
 } from "@/lib/booking";
 import { addDays, cop, fmtDate, nightsBetween, plural } from "@/lib/format";
+import { AddonPicker } from "@/components/admin/addons";
 import { CompanionFields } from "@/components/admin/companions";
 import { depositPctOf } from "@/lib/payments";
 import { groupMoney } from "@/lib/groups";
@@ -58,6 +60,7 @@ type Form = {
   notes: string;
   special: boolean;
   total: number;
+  addons: string[]; // decoraciones con costo (ids del catálogo)
   payNow: boolean;
   payChoice: PayChoice;
   payCustom: number;
@@ -112,6 +115,7 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
     notes: "",
     special: false,
     total: 0,
+    addons: [],
     payNow: false,
     payChoice: "deposit",
     payCustom: 0,
@@ -160,7 +164,10 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
       ? splitTotal(rates as Quote[], f.total).map((t, i) => withTotal((rates as Quote[])[i], t, pct))
       : (rates as Quote[])
     : null;
-  const quote = quotes ? sumQuotes(quotes) : null;
+  // Decoraciones con costo: se suman al total (el precio especial es del alojamiento); el abono no cambia.
+  const decoOptions = data.site.decorations.filter((d) => d.visible);
+  const addons = decoOptions.filter((d) => f.addons.includes(d.id));
+  const quote = quotes ? withAddons(sumQuotes(quotes), addons) : null;
 
   // Pago recibido al crear: el abono solo se ofrece si es menos que el total (con un abono del 100 %, es lo mismo).
   const offerDeposit = !!quote && quote.deposit > 0 && quote.deposit < quote.total;
@@ -245,6 +252,7 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
       estimatedArrival: "",
       specialRequests: f.notes.trim(),
       total: f.special && f.total ? f.total : null,
+      ...(addons.length > 0 && { addons: addons.map((d) => d.id) }),
       ...(extra.length > 0 && {
         more: extra.map((c) => ({ cabinTypeId: c.type, unit: c.unit ? Number(c.unit) : null, adults: c.adults, children: c.children })),
       }),
@@ -568,16 +576,26 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
               <WalletIcon size={14} />
               Pago
             </h3>
+            {decoOptions.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[13px] font-semibold text-ink">Decoraciones</p>
+                <AddonPicker options={decoOptions} value={f.addons} onChange={(ids) => set({ addons: ids })} />
+                {err("addons") && <FieldError>{err("addons")}</FieldError>}
+                <p className="text-[12px] text-ink-muted">Se suman al total y se pagan con el saldo: el abono no cambia.</p>
+              </div>
+            )}
             <Switch
               checked={f.special}
               onChange={(v) => set({ special: v, total: v && !f.total && rate ? rate.total : f.total })}
               label="Precio especial"
               description={
-                rate ? `Tarifa vigente: ${cop(rate.total)}. Úsalo si acordaste otro valor con el huésped.` : "Úsalo si acordaste otro valor con el huésped."
+                rate
+                  ? `Tarifa vigente: ${cop(rate.total)}${addons.length ? " (alojamiento, sin decoraciones)" : ""}. Úsalo si acordaste otro valor con el huésped.`
+                  : "Úsalo si acordaste otro valor con el huésped."
               }
             />
             {f.special && (
-              <Field label="Total acordado" error={err("total")} className="max-w-[260px]">
+              <Field label={addons.length ? "Total acordado del alojamiento" : "Total acordado"} error={err("total")} className="max-w-[260px]">
                 {(p) => (
                   <MoneyInput id={p.id} value={f.total} onChange={(v) => set({ total: v })} invalid={!!p["aria-invalid"]} describedBy={p["aria-describedby"]} />
                 )}
@@ -632,8 +650,8 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
                 )}
                 <span className="mt-1 block">
                   Total <strong>{cop(quote.total)}</strong>
-                  {quote.adjustment ? ` (${quote.adjustment < 0 ? "descuento" : "recargo"} de ${cop(Math.abs(quote.adjustment))})` : ""} · abono para confirmar{" "}
-                  <strong>{cop(quote.deposit)}</strong>
+                  {quote.adjustment ? ` (${quote.adjustment < 0 ? "descuento" : "recargo"} de ${cop(Math.abs(quote.adjustment))})` : ""}
+                  {quote.addons ? ` · incluye decoraciones por ${cop(quote.addons)}` : ""} · abono para confirmar <strong>{cop(quote.deposit)}</strong>
                 </span>
                 {f.payNow && payAmount > 0 && !payAmountError && (
                   <span className="mt-1 block">

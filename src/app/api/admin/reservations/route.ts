@@ -1,7 +1,17 @@
 import { after, type NextRequest } from "next/server";
-import { cleanCompanions, computeQuote, normalizePhone, splitTotal, validateExtraCabins, validateManualReservation, withTotal } from "@/lib/booking";
+import {
+  cleanCompanions,
+  computeQuote,
+  normalizePhone,
+  pickAddons,
+  splitTotal,
+  validateExtraCabins,
+  validateManualReservation,
+  withAddons,
+  withTotal,
+} from "@/lib/booking";
 import { unpaidUntil } from "@/lib/payments";
-import { loadPricing, runDeadlines, toReservation } from "@/lib/server/db";
+import { loadDecorations, loadPricing, runDeadlines, toReservation } from "@/lib/server/db";
 import { fail, json, operationDay, readJson, requireStaff, syncRoute } from "@/lib/server/http";
 import { processOutbox } from "@/lib/server/mailer";
 import { holdGroup, holdReservation } from "@/lib/server/reservations";
@@ -23,10 +33,13 @@ export const POST = syncRoute(async (req: NextRequest) => {
   // La retención y la inserción usan la misma conexión de servicio que la web: ven todas las reservas.
   const sb = await createActorClient(me.id);
   await runDeadlines();
-  const { types, units, seasons, depositPct } = await loadPricing(sb);
+  const [{ types, units, seasons, depositPct }, decorations] = await Promise.all([loadPricing(sb), loadDecorations(sb)]);
   const input: ManualReservationInput = { ...b, unit: b.unit ?? null, total: b.total ?? null, guest: { ...b.guest, phone: normalizePhone(b.guest.phone) } };
   const fields = { ...validateManualReservation(input, types, units, operationDay(req)), ...validateExtraCabins(input.more, types, units) };
-  if (Object.keys(fields).length) return validation(fields);
+  // Decoraciones con costo (en la cabaña principal), con el precio del catálogo.
+  const addons = pickAddons(input.addons, decorations);
+  if (!addons) fields.addons = "Alguna decoración ya no está disponible. Vuelve a elegirlas.";
+  if (Object.keys(fields).length || !addons) return validation(fields);
 
   const type = types.find((t) => t.id === input.cabinTypeId)!;
   const { data: settings } = await sb.from("site_settings").select("check_in_start").maybeSingle().throwOnError();
@@ -42,7 +55,10 @@ export const POST = syncRoute(async (req: NextRequest) => {
       depositPct,
     ),
   );
-  const finalQuotes = input.total ? splitTotal(quotes, input.total).map((t, i) => withTotal(quotes[i], t, depositPct)) : quotes;
+  // El precio especial es del alojamiento; las decoraciones se suman aparte, en la principal.
+  const finalQuotes = (input.total ? splitTotal(quotes, input.total).map((t, i) => withTotal(quotes[i], t, depositPct)) : quotes).map((q, i) =>
+    i === 0 ? withAddons(q, addons) : q,
+  );
   const finalTotal = finalQuotes.reduce((sum, q) => sum + q.total, 0);
   // Creada sin conexión: el usuario le dijo un valor al huésped; si las tarifas cambiaron, lo decide él.
   if (input.expectedTotal !== undefined && input.expectedTotal !== finalTotal) return fail(409, "QUOTE_CHANGED", { total: finalTotal });
@@ -70,6 +86,7 @@ export const POST = syncRoute(async (req: NextRequest) => {
     // Reserva tomada por el equipo: el huésped no pasó por los consentimientos de la web.
     consents: { policies: false, dataProcessing: false, marketing: false },
     quote: finalQuote,
+    addons,
     deposit_due_at: unpaidUntil(input.checkIn), // sin plazo: hasta su día de llegada
   };
 
@@ -82,6 +99,7 @@ export const POST = syncRoute(async (req: NextRequest) => {
         adults: Number(c.adults),
         children: Number(c.children ?? 0),
         quote: finalQuotes[i],
+        addons: i === 0 ? addons : [],
         unit: c.unit ?? null,
       })),
       { units: units as Record<string, number>, code: input.code },

@@ -62,6 +62,7 @@ export type Form = {
   decoRequested: boolean;
   occasion: string;
   decoNotes: string;
+  decoItems: string[]; // decoraciones con costo elegidas (ids del catálogo)
   specialRequests: string;
   policies: boolean;
   dataProcessing: boolean;
@@ -82,6 +83,7 @@ export const EMPTY_FORM: Form = {
   decoRequested: false,
   occasion: "",
   decoNotes: "",
+  decoItems: [],
   specialRequests: "",
   policies: false,
   dataProcessing: false,

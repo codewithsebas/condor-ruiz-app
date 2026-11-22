@@ -65,7 +65,12 @@ export type Quote = {
   seasonNights?: number; // noches con tarifa de temporada
   // Precio especial acordado por el equipo (reservas del panel): total = base + extraAmount + adjustment (negativo = descuento).
   adjustment?: number;
+  // Decoraciones con costo: ya sumadas en total; el abono no las incluye (se pagan con el saldo).
+  addons?: number;
 };
+
+// Decoración elegida para una reserva: copia del catálogo al momento de agregarla (nombre y precio acordados).
+export type ReservationAddon = { id: string; name: string; price: number };
 
 export type AvailabilityOption = {
   cabinTypeId: CabinTypeId;
@@ -113,6 +118,7 @@ export type ReservationInput = {
   children: number;
   pet: { hasPet: boolean; smallBreedConfirmed: boolean };
   decoration: { requested: boolean; occasion: string; notes: string };
+  addons?: string[]; // decoraciones del catálogo (ids); el precio lo pone el servidor
   estimatedArrival: string;
   guest: Guest;
   specialRequests: string;
@@ -181,7 +187,7 @@ export type PaymentProof = {
   createdAt: string;
 };
 
-export type Reservation = ReservationInput & {
+export type Reservation = Omit<ReservationInput, "addons"> & {
   version?: number;
   code: string;
   unit: number;
@@ -202,6 +208,7 @@ export type Reservation = ReservationInput & {
   demo?: boolean;
   groupCode?: string | null; // reserva con varias cabañas: código de la principal (la principal tiene el suyo)
   companions?: Companion[]; // los demás huéspedes; en un grupo, los mismos en todas las cabañas
+  addons?: ReservationAddon[]; // decoraciones con costo; en un grupo, solo en la principal
 };
 
 // Cuerpo de POST /admin/reservations: reserva tomada por el equipo. Queda sin confirmar (y sin apartar fechas) hasta que
@@ -221,7 +228,8 @@ export type ManualReservationInput = {
   companions?: Companion[]; // los demás huéspedes (hasta el total de personas menos el titular)
   estimatedArrival: string; // "HH:MM" o "" (inicio del check-in)
   specialRequests: string;
-  total: number | null; // precio especial; null = tarifa vigente
+  total: number | null; // precio especial del alojamiento (sin decoraciones); null = tarifa vigente
+  addons?: string[]; // decoraciones del catálogo (ids), en la cabaña principal
 };
 
 export type ManualReservationResult = { reservation: Reservation; group?: Reservation[] }; // group: todas las cabañas, la principal primero
@@ -523,7 +531,9 @@ export type AdminAction =
   | { code: string; action: "extend_hold"; group?: boolean } // reactiva una vencida, sin plazo
   | { code: string; action: "note"; text: string }
   // Corregir o completar los datos del huésped (p. ej. el documento de una reserva importada).
-  | { code: string; action: "guest"; guest: Guest; companions?: Companion[] };
+  | { code: string; action: "guest"; guest: Guest; companions?: Companion[] }
+  // Decoraciones de la reserva (ids del catálogo): reemplaza la lista y ajusta el total.
+  | { code: string; action: "addons"; addons: string[] };
 
 // Pagos en línea (Wompi). Lo que el huésped puede pagar ahora y el resumen que ve antes de pagar.
 export type OnlinePayOption = { kind: PaymentKind; amount: number };

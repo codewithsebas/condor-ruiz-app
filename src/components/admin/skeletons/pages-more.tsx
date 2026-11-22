@@ -227,6 +227,24 @@ export function CabinEditorSkeleton() {
   );
 }
 
+/* ───────────── Decoraciones ───────────── */
+
+export function DecorationsSkeleton() {
+  return (
+    <>
+      <ModHead eyebrow="Extras con costo que se agregan, opcionales, a una reserva" title={MODULES.decoraciones.label} />
+      <Block className="h-[64px] rounded-[16px]" />
+      <Box title="Decoraciones" subtitle={null}>
+        <div className="flex flex-col gap-2">
+          {[0, 1, 2].map((i) => (
+            <Block key={i} className="h-[60px] rounded-[14px]" />
+          ))}
+        </div>
+      </Box>
+    </>
+  );
+}
+
 /* ───────────── Tarifas ───────────── */
 
 export function RatesSkeleton() {

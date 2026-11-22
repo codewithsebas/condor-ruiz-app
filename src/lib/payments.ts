@@ -26,7 +26,11 @@ export function unpaidUntil(checkIn: string) {
 }
 
 // Porcentaje del abono de una reserva según su cotización (el configurado cuando se cotizó; puede ser distinto del actual).
-export const depositPctOf = (q: Quote) => (q.total ? Math.round((q.deposit / q.total) * 100) : 0);
+// Sobre el alojamiento: las decoraciones no cuentan para el abono.
+export const depositPctOf = (q: Quote) => {
+  const lodging = q.total - (q.addons ?? 0);
+  return lodging > 0 ? Math.round((q.deposit / lodging) * 100) : 0;
+};
 
 type Money = { quote: Quote; paid?: number; depositPaidAt?: string | null };
 

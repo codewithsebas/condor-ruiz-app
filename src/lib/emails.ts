@@ -150,6 +150,7 @@ type ConfirmedEmailData = {
   mascota: boolean;
   total: number;
   pagado: number;
+  decoraciones?: { name: string; price: number }[];
   miReservaUrl: string; // vacío: sin el sitio público
   comoLlegarUrl: string;
   whatsappUrl: string;
@@ -188,6 +189,7 @@ export function reservationConfirmedEmail(c: Cfg, d: ConfirmedEmailData): Render
       ["Llegada", `${llegada}<br><span style="font-weight:normal">Check-in ${checkInWindow}</span>`],
       ["Salida", `${salida}<br><span style="font-weight:normal">Check-out hasta las ${c.checkOut}</span>`],
       ["Estadía", `${nights} · ${guests}`],
+      ...decoRow(d),
     ]) +
     h2("Pagos") +
     amounts([
@@ -255,7 +257,12 @@ type StayData = {
   adultos: number;
   ninos: number;
   logoUrl: string;
+  decoraciones?: { name: string; price: number }[]; // decoraciones con costo (incluidas en el total)
 };
+
+// «Pétalos y velas ($80.000), Globos ($50.000)»: fila de la estadía; vacío sin decoraciones.
+const decoOf = (d: { decoraciones?: { name: string; price: number }[] }) => (d.decoraciones ?? []).map((x) => `${x.name} (${cop(x.price)})`).join(", ");
+const decoRow = (d: { decoraciones?: { name: string; price: number }[] }): [string, string][] => (decoOf(d) ? [["Decoración", esc(decoOf(d))]] : []);
 
 const firstName = (nombre: string) => nombre.trim().split(/\s+/)[0] || nombre;
 const guestsOf = (d: StayData) => `${plural(d.adultos, "adulto", "adultos")}${d.ninos ? ` · ${plural(d.ninos, "niño", "niños")}` : ""}`;
@@ -304,6 +311,7 @@ export function reservationReceivedEmail(c: Cfg, d: ReceivedEmailData): Rendered
       ["Cabaña", esc(d.cabana)],
       ["Fechas", `${esc(stayOf(d))}<br><span style="font-weight:normal">${nights}</span>`],
       ["Huéspedes", `${guestsOf(d)}${d.mascota ? " · con mascota" : ""}`],
+      ...decoRow(d),
     ]) +
     h2("Para confirmar") +
     amounts([
@@ -312,7 +320,7 @@ export function reservationReceivedEmail(c: Cfg, d: ReceivedEmailData): Rendered
       ["Abono para confirmar", cop(d.abono), "Asegura tus fechas"],
     ]) +
     h2("Cómo pagar el abono") +
-    (d.pagarUrl ? p("Paga en línea con tarjeta, PSE o Nequi, o por transferencia:") + btns([["Pagar en línea", d.pagarUrl, X.hl, X.ink]]) : "") +
+    (d.pagarUrl ? p("Paga en línea con tarjeta de crédito, o por transferencia:") + btns([["Pagar en línea", d.pagarUrl, X.hl, X.ink]]) : "") +
     payHtml +
     btns([
       ["Ver mi reserva", d.miReservaUrl, X.hl, X.ink],
@@ -322,7 +330,7 @@ export function reservationReceivedEmail(c: Cfg, d: ReceivedEmailData): Rendered
   const text =
     `¡Gracias, ${first}! Recibimos tu reserva.\n\n` +
     `Código: ${d.codigo} (pendiente de abono)\nCabaña: ${d.cabana}\nFechas: ${stayOf(d)} · ${nights}\nHuéspedes: ${guestsOf(d)}${d.mascota ? " · con mascota" : ""}\n\n` +
-    `PARA CONFIRMAR\nValor total: ${cop(d.total)}\nAbono: ${cop(d.abono)} (asegura tus fechas)\nSaldo al llegar: ${cop(Math.max(0, d.total - d.abono))}\n\n` +
+    `${decoOf(d) ? `Decoración: ${decoOf(d)}\n\n` : ""}PARA CONFIRMAR\nValor total: ${cop(d.total)}\nAbono: ${cop(d.abono)} (asegura tus fechas)\nSaldo al llegar: ${cop(Math.max(0, d.total - d.abono))}\n\n` +
     `CÓMO PAGAR EL ABONO\n${[datos, llave && `Llave Bre-B: ${llave}`].filter(Boolean).join("\n") || "Escríbenos por WhatsApp y te enviamos los datos para transferir."}\n\n` +
     `${linkLine("Pagar en línea", d.pagarUrl ?? "")}${linkLine("Ver mi reserva", d.miReservaUrl)}WhatsApp: ${d.whatsappUrl}\n\nTus fechas se aseguran cuando recibamos el abono. Si alguien las paga antes, te movemos a las próximas libres con el mismo valor.` +
     footText(c);

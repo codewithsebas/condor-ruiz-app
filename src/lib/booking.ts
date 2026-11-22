@@ -3,6 +3,7 @@ import { config, type CabinTypeId } from "@/lib/config";
 import { unpaidUntil } from "@/lib/payments";
 import { WD, WD_FULL, addDays, cop, fmtDate, isISO, nightsBetween, parseISO } from "@/lib/format";
 import type {
+  ReservationAddon,
   Availability,
   Block,
   CabinType,
@@ -37,6 +38,7 @@ export const TRANSITIONS: Record<string, { from: ReservationStatus[]; to?: Reser
   reschedule: { from: ["pending_deposit", "confirmed", "rescheduled"] },
   move: { from: ["pending_deposit", "confirmed", "rescheduled", "checked_in"] },
   adjust: { from: ["pending_deposit", "confirmed", "rescheduled", "checked_in"] },
+  addons: { from: ["pending_deposit", "confirmed", "rescheduled", "checked_in"] },
   extend_hold: { from: ["pending_deposit", "expired"] },
   note: { from: ["pending_deposit", "confirmed", "cancelled", "expired", "rescheduled", "checked_in", "completed"] },
   guest: { from: ["pending_deposit", "confirmed", "cancelled", "expired", "rescheduled", "checked_in", "completed"] },
@@ -344,6 +346,53 @@ export function withTotal(q: Quote, total: number, depositPct = config.depositPc
   return { ...q, total, deposit, balance: total - deposit, adjustment: total - (q.base + q.extraAmount) };
 }
 
+/* ───────────── Decoraciones con costo ───────────── */
+
+export const addonsTotal = (addons: readonly { price: number }[] | undefined) => (addons ?? []).reduce((s, a) => s + a.price, 0);
+
+// Pone las decoraciones en la cotización: el total es el alojamiento más las decoraciones; el abono no cambia (se calcula
+// sobre el alojamiento) y la diferencia va al saldo. Reemplaza las que tuviera.
+export function withAddons(q: Quote, addons: readonly { price: number }[] | undefined): Quote {
+  const lodging = q.total - (q.addons ?? 0);
+  const sum = addonsTotal(addons);
+  const total = lodging + sum;
+  const rest: Quote = { ...q };
+  delete rest.addons;
+  return { ...rest, total, balance: Math.max(0, total - q.deposit), ...(sum > 0 && { addons: sum }) };
+}
+
+// Una decoración del catálogo (panel): nombre, descripción y precio. Errores por campo.
+export function invalidDecoration(d: { name: string; description: string; price: number }): FieldErrors {
+  const f: FieldErrors = {};
+  if (!d.name || d.name.length > 60) f.name = "Escribe el nombre de la decoración (máximo 60 caracteres).";
+  if (d.description.length > 200) f.description = "La descripción admite hasta 200 caracteres.";
+  if (!Number.isInteger(d.price) || d.price < 0 || d.price > 20_000_000) f.price = "Escribe el precio en pesos, sin decimales.";
+  return f;
+}
+
+// Decoraciones elegidas (ids) → copia del catálogo { id, name, price }. null si la lista no es válida: ids repetidos,
+// desconocidos u ocultos (salvo `keep`: las que la reserva ya tenía, que se conservan con su precio acordado).
+export function pickAddons(
+  ids: unknown,
+  catalog: readonly { id: string; name: string; price: number; visible: boolean }[],
+  keep: readonly ReservationAddon[] = [],
+): ReservationAddon[] | null {
+  if (ids === undefined || ids === null) return [];
+  if (!Array.isArray(ids) || ids.length > 30 || new Set(ids).size !== ids.length) return null;
+  const out: ReservationAddon[] = [];
+  for (const id of ids) {
+    const had = keep.find((a) => a.id === id);
+    if (had) {
+      out.push({ id: had.id, name: had.name, price: had.price });
+      continue;
+    }
+    const d = catalog.find((x) => x.id === id && x.visible);
+    if (!d) return null;
+    out.push({ id: d.id, name: d.name, price: d.price });
+  }
+  return out;
+}
+
 type PricedStay = {
   quote: Quote;
   checkIn: string;
@@ -364,9 +413,18 @@ export function suggestedTotal(r: PricedStay, t: Priced, people: number, seasons
 }
 
 // Otras personas y otro valor, mismas fechas. Con el abono ya pagado, el abono es lo que se pagó y el saldo es el resto.
-export function adjustedQuote(r: PricedStay, t: Priced, people: number, total: number, seasons: RateSeason[] = [], depositPct = config.depositPct): Quote {
+// `total` incluye las decoraciones de la reserva, que se conservan: el precio especial queda en el alojamiento.
+export function adjustedQuote(
+  r: PricedStay & { addons?: ReservationAddon[] },
+  t: Priced,
+  people: number,
+  total: number,
+  seasons: RateSeason[] = [],
+  depositPct = config.depositPct,
+): Quote {
   const rate = computeQuote(t, r.checkIn, r.checkOut, people, seasons, depositPct);
-  const q = total === rate.total ? rate : withTotal(rate, total, depositPct);
+  const lodging = Math.max(0, total - addonsTotal(r.addons));
+  const q = withAddons(lodging === rate.total ? rate : withTotal(rate, lodging, depositPct), r.addons);
   return r.depositPaidAt ? { ...q, deposit: r.quote.deposit, balance: Math.max(0, total - r.paid) } : q;
 }
 

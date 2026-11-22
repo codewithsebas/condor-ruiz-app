@@ -48,6 +48,7 @@ import { useAdmin } from "@/components/admin/context";
 import { BathroomWarning } from "@/components/admin/bathrooms";
 import { initialsOf } from "@/components/admin/calendar/shared";
 import { MoveCabinDialog } from "@/components/admin/move-cabin";
+import { AddonsCard } from "@/components/admin/addons";
 import { AdjustReservationDialog } from "@/components/admin/adjust-reservation";
 import { ACTION_ICON, ActionMenu, inMenu, type Action, type ActionKind } from "@/components/admin/action-menu";
 import { ProofCard } from "@/components/admin/proofs";
@@ -362,6 +363,7 @@ function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean
         <div className="grid grid-cols-1 items-start gap-4 @3xl:grid-cols-2">
           <div className="flex min-w-0 flex-col gap-4">
             <PaymentSummary r={m} payments={payments} />
+            <AddonsCard r={r} />
             <EmailsCard emails={emails} />
             {proofs.length > 0 && (
               <Card aria-labelledby="dt-proofs" className="flex flex-col gap-3 p-5 sm:p-6">

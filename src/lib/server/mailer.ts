@@ -131,6 +131,8 @@ async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: str
     adultos: r.adults,
     ninos: r.children,
     logoUrl,
+    // Decoraciones con costo: en un grupo van en la principal.
+    decoraciones: Array.isArray(lead.addons) ? (lead.addons as { name: string; price: number }[]) : [],
   };
   const mascota = !!(r.pet as { hasPet?: boolean } | null)?.hasPet;
   // Con el sitio público sin publicar (solo panel), los enlaces a «Mi reserva» y «Reservar» llevarían al ingreso del

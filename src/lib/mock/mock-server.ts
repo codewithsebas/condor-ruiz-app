@@ -27,6 +27,9 @@ import {
   validateManualReservation,
   validateReservation,
   withTotal,
+  invalidDecoration,
+  pickAddons,
+  withAddons,
   adjustedQuote,
 } from "@/lib/booking";
 import { config } from "@/lib/config";
@@ -35,7 +38,7 @@ import { MOCK_DB_KEY } from "@/lib/mock/keys";
 import { groupMoney, groupOf } from "@/lib/groups";
 import { addDays, sleep, todayISO } from "@/lib/format";
 import { manualPaymentNote, unpaidUntil } from "@/lib/payments";
-import { defaultContent, defaultTexts, mergeTexts, type SiteContent, type SiteService } from "@/lib/site";
+import { defaultContent, defaultTexts, mergeTexts, type Decoration, type SiteContent, type SiteService } from "@/lib/site";
 import { mergeTheme } from "@/lib/theme";
 import type {
   ActivityAction,
@@ -467,6 +470,7 @@ const siteOf = (d: Db): SiteContent => ({
   ...d.site,
   settings: { ...defaultContent.settings, ...d.site?.settings },
   services: d.site?.services ?? defaultContent.services,
+  decorations: d.site?.decorations ?? [],
   theme: mergeTheme(d.site?.theme),
 });
 
@@ -580,6 +584,7 @@ const ACTIVITY_ENTITY: [string, string][] = [
   ["/admin/payment-terms", "site_settings"],
   ["/admin/photos", "site_photos"],
   ["/admin/services", "site_services"],
+  ["/admin/decorations", "decorations"],
   ["/admin/employees", "employees"],
   ["/admin/channels", "channel_calendars"],
   ["/admin/booking", "booking_inbox"],
@@ -724,17 +729,20 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
         ),
       };
     const f = { ...validateReservation(body, activeTypes(db), todayISO()), ...validateExtraCabins(body.more, activeTypes(db)) };
-    if (Object.keys(f).length) return invalid(f);
+    const addons = pickAddons(body.addons, siteOf(db).decorations);
+    if (!addons) f.addons = "Alguna decoración ya no está disponible. Vuelve a elegirlas.";
+    if (Object.keys(f).length || !addons) return invalid(f);
     const cabins = [{ cabinTypeId: body.cabinTypeId, adults: body.adults, children: body.children }, ...(body.more ?? [])];
     const units = allocateUnits(db, cabins, body.checkIn, body.checkOut);
     if (!units) return { status: 409, data: { error: "DATES_UNAVAILABLE" } };
     const unit = units[0];
     const r: Reservation = {
       ...body,
+      addons,
       code: newReservationCode(),
       unit,
       status: "pending_deposit",
-      quote: quoteFor(db, body.cabinTypeId, body.checkIn, body.checkOut, body.adults + body.children),
+      quote: withAddons(quoteFor(db, body.cabinTypeId, body.checkIn, body.checkOut, body.adults + body.children), addons),
       depositDueAt: depositDueAt(body.checkIn),
       createdAt: new Date().toISOString(),
       notes: [],
@@ -761,6 +769,7 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
           adults: Number(c.adults),
           children: Number(c.children ?? 0),
           quote: quoteFor(db, c.cabinTypeId, body.checkIn, body.checkOut, people),
+          addons: [],
           notes: [],
         });
       });
@@ -858,6 +867,7 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
       photos: {},
       texts: { ...mergeTexts(b.content ?? defaultTexts), payment: prev.texts.payment },
       services: siteOf(db).services,
+      decorations: siteOf(db).decorations,
       theme: b.theme ? mergeTheme(b.theme) : prev.theme,
     };
     save(db);
@@ -883,6 +893,28 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
     save(db);
     return ok(site.services);
   }
+  // Decoraciones con costo (en modo simulado, solo en este navegador).
+  if (path === "/admin/decorations") {
+    const site = siteOf(db);
+    const b = (opts.body ?? {}) as Partial<Decoration> & { order?: string[] };
+    const clean = (x: Partial<Decoration>) => ({
+      name: String(x.name ?? "").trim(),
+      description: String(x.description ?? "").trim(),
+      price: Number(x.price),
+      visible: x.visible !== false,
+    });
+    if (method === "POST" || method === "PUT") {
+      const errs = invalidDecoration(clean(b));
+      if (Object.keys(errs).length) return invalid(errs);
+    }
+    if (method === "POST") site.decorations = [...site.decorations, { id: b.id ?? crypto.randomUUID(), ...clean(b) }];
+    else if (method === "PUT") site.decorations = site.decorations.map((x) => (x.id === b.id ? { id: x.id, ...clean(b) } : x));
+    else if (method === "PATCH") site.decorations = (b.order ?? []).map((id) => site.decorations.find((x) => x.id === id)).filter((x): x is Decoration => !!x);
+    else if (method === "DELETE") site.decorations = site.decorations.filter((x) => x.id !== q.id);
+    db.site = site;
+    save(db);
+    return ok(site.decorations);
+  }
   // Pagos en línea: la firma del enlace la hace el servidor real.
   if (path === "/admin/pay-link" || path.startsWith("/payments")) return { status: 503, data: { error: "PAYMENTS_DISABLED" } };
   if (path === "/admin/photos" || path === "/admin/cabins/photos" || path === "/admin/profile/photo" || path === "/admin/proofs" || path === "/admin/push")
@@ -898,7 +930,9 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
       guest: { ...raw.guest, phone: normalizePhone(raw.guest?.phone ?? "") },
     };
     const f = { ...validateManualReservation(b, activeTypes(db), unitsOf(db), todayISO()), ...validateExtraCabins(b.more, activeTypes(db), unitsOf(db)) };
-    if (Object.keys(f).length) return invalid(f);
+    const addons = pickAddons(b.addons, siteOf(db).decorations);
+    if (!addons) f.addons = "Alguna decoración ya no está disponible. Vuelve a elegirlas.";
+    if (Object.keys(f).length || !addons) return invalid(f);
     const cabins = [{ cabinTypeId: b.cabinTypeId, unit: b.unit, adults: b.adults, children: b.children }, ...(b.more ?? [])];
     const units = allocateUnits(db, cabins, b.checkIn, b.checkOut);
     if (!units) return { status: 409, data: { error: "DATES_UNAVAILABLE" } };
@@ -924,12 +958,13 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
         city: (b.guest.city ?? "").trim(),
       },
       companions: cleanCompanions(b.companions),
+      addons,
       specialRequests: (b.specialRequests ?? "").trim(),
       consents: { policies: false, dataProcessing: false, marketing: false },
       code: newReservationCode(),
       unit,
       status: "pending_deposit",
-      quote: quotes[0] ?? quote,
+      quote: withAddons(quotes[0] ?? quote, addons),
       depositDueAt: unpaidUntil(b.checkIn),
       createdAt: new Date().toISOString(),
       notes: [],
@@ -954,6 +989,7 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
           adults: Number(c.adults),
           children: Number(c.children ?? 0),
           quote: quotes[i + 1],
+          addons: [],
           notes: [],
         })),
       ];
@@ -1027,8 +1063,16 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
         checkOut: body.checkOut,
         unit,
         status: r.status === "pending_deposit" ? "pending_deposit" : "rescheduled",
-        quote: quoteFor(db, r.cabinTypeId, body.checkIn, body.checkOut, r.adults + r.children),
+        quote: withAddons(quoteFor(db, r.cabinTypeId, body.checkIn, body.checkOut, r.adults + r.children), r.addons),
       });
+    } else if (body.action === "addons") {
+      if (r.groupCode && r.groupCode !== r.code) return { status: 400, data: { error: "INVALID_BODY" } };
+      const addons = pickAddons((opts.body as { addons?: unknown }).addons, siteOf(db).decorations, r.addons);
+      if (!addons) return invalid({ addons: "Alguna decoración ya no está disponible. Actualiza la página." });
+      const quote = withAddons(r.quote, addons);
+      if (quote.total < r.paid) return invalid({ addons: "Ya se pagó más que el nuevo total: no se puede quitar esa decoración." });
+      if (r.depositPaidAt) quote.balance = Math.max(0, quote.total - r.paid);
+      Object.assign(r, { addons, quote, balancePaidAt: r.balancePaidAt && quote.total > r.paid ? null : r.balancePaidAt });
     } else if (body.action === "move") {
       const type = db.cabins.find((c) => c.id === body.cabinTypeId);
       const unit = Number(body.unit);

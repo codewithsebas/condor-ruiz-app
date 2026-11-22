@@ -15,6 +15,7 @@ import type {
   ClientEntry,
   ClientProfile,
   Companion,
+  ReservationAddon,
   DocType,
   EmailKind,
   EmailRecord,
@@ -101,6 +102,15 @@ export async function loadSeasons(sb: Db, { activeOnly = false } = {}) {
 export async function loadDepositPct(sb: Db) {
   const { data } = await sb.from("site_settings").select("deposit_pct").maybeSingle().throwOnError();
   return data?.deposit_pct ?? config.depositPct;
+}
+
+// Catálogo de decoraciones con costo (también las ocultas: una reserva puede conservar una que ya no se ofrece).
+// Si no se puede leer (p. ej. la migración aún no llegó a esa base), queda vacío: reservar sin decoraciones sigue
+// funcionando y el sitio no pierde el resto de su contenido.
+export async function loadDecorations(sb: Db) {
+  const { data, error } = await sb.from("decorations").select("id, name, description, price, visible").order("sort").order("created_at");
+  if (error) console.error("No se pudo leer el catálogo de decoraciones:", error.message);
+  return data ?? [];
 }
 
 // Tarifas vigentes para cotizar: cabañas activas, unidades, temporadas activas y el porcentaje del abono.
@@ -325,6 +335,7 @@ export function toReservation(r: ReservationRow & { reservation_notes?: { text: 
       city: r.guest_city,
     },
     companions: Array.isArray(r.companions) ? (r.companions as Companion[]) : [],
+    addons: Array.isArray(r.addons) ? (r.addons as ReservationAddon[]) : [],
     specialRequests: r.special_requests,
     consents: r.consents as Reservation["consents"],
     createdAt: r.created_at,

@@ -7,6 +7,7 @@ import {
   BookingIcon,
   CalendarIcon,
   FileTextIcon,
+  GiftIcon,
   GridIcon,
   HomeIcon,
   IdCardIcon,
@@ -37,6 +38,7 @@ export type ModuleId =
   | "cabanas"
   | "bloqueos"
   | "tarifas"
+  | "decoraciones"
   | "finanzas"
   | "condiciones"
   | "contenido"
@@ -126,6 +128,14 @@ export const MODULES: Record<ModuleId, Module> = {
     icon: TagIcon,
     group: "Alojamiento",
     description: "Precio base por cabaña y temporadas con precio especial.",
+    perm: "rates",
+  },
+  decoraciones: {
+    label: "Decoraciones",
+    href: "/admin/decoraciones",
+    icon: GiftIcon,
+    group: "Alojamiento",
+    description: "Decoraciones con costo que se agregan, opcionales, a una reserva.",
     perm: "rates",
   },
   bloqueos: {
@@ -311,6 +321,7 @@ export const paths = {
   nuevaCabana: "/admin/cabanas/nueva",
   cabana: (id: string) => `/admin/cabanas/${encodeURIComponent(id)}`,
   tarifas: (q?: Query) => withQuery("/admin/tarifas", q),
+  decoraciones: "/admin/decoraciones",
   contenido: (section?: ContentSectionId) => (section ? `/admin/contenido/${section}` : "/admin/contenido"),
   notificaciones: (q?: Query) => withQuery("/admin/notificaciones", q),
   configuracion: "/admin/configuracion",

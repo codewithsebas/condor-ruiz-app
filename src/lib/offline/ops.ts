@@ -25,6 +25,8 @@ import {
   validateGuest,
   validateManualReservation,
   withTotal,
+  pickAddons,
+  withAddons,
   TRANSITIONS,
   type Occupancy,
 } from "@/lib/booking";
@@ -33,7 +35,7 @@ import { uuid } from "@/lib/offline/config";
 import { sorted, unitsOf } from "@/lib/offline/data";
 import { manualPaymentNote, unpaidUntil } from "@/lib/payments";
 import { can, type Permission } from "@/lib/permissions";
-import type { SiteContent, SiteService } from "@/lib/site";
+import type { Decoration, SiteContent, SiteService } from "@/lib/site";
 import type {
   AdminAction,
   AdminData,
@@ -56,6 +58,7 @@ import type {
   ProofReview,
   Rates,
   Reservation,
+  ReservationAddon,
   SeasonInput,
   SiteInput,
 } from "@/lib/types";
@@ -151,7 +154,13 @@ const occupancy = (d: AdminData): Occupancy => ({
 const activeSeasons = (d: AdminData) => d.seasons.filter((s) => s.activa);
 const depositPct = (d: AdminData) => d.site.settings.depositPct;
 
-export type NewReservation = ManualReservationInput & { code: string; localUnit: number; localQuote: Reservation["quote"]; arrival: string };
+export type NewReservation = ManualReservationInput & {
+  code: string;
+  localUnit: number;
+  localQuote: Reservation["quote"];
+  localAddons?: ReservationAddon[];
+  arrival: string;
+};
 
 const clientKeyOf = (g: Pick<Guest, "docType" | "docNumber">) => `${g.docType}:${g.docNumber.trim().toUpperCase()}`;
 
@@ -227,6 +236,8 @@ const ACTION_LABEL: Record<string, string> = {
   move: "Cambio de cabaña",
   extend_hold: "Plazo de pago",
   note: "Nota",
+  adjust: "Cambio de valor",
+  addons: "Decoraciones",
 };
 const ACTION_TARGET: Record<string, string> = { cancel: "cancelled", checkin: "checked_in", checkout: "completed" };
 
@@ -244,7 +255,9 @@ const reservationOps = {
         guest: { ...input.guest, phone: normalizePhone(input.guest.phone) },
       };
       const fields = validateManualReservation(b, types, units, today);
-      if (Object.keys(fields).length) return fieldErr(fields);
+      const addons = pickAddons(b.addons, d.site.decorations);
+      if (!addons) fields.addons = "Alguna decoración ya no está disponible. Vuelve a elegirlas.";
+      if (Object.keys(fields).length || !addons) return fieldErr(fields);
       const type = types.find((t) => t.id === b.cabinTypeId)!;
       const occ = occupancy(d);
       // Solo la unidad pedida, si se eligió una: las demás cuentan como ocupadas.
@@ -258,17 +271,18 @@ const reservationOps = {
       );
       if (!unit) return err(409, "DATES_UNAVAILABLE");
       const quote = computeQuote(type, b.checkIn, b.checkOut, b.adults + b.children, activeSeasons(d), depositPct(d));
-      const finalQuote = b.total ? withTotal(quote, b.total, depositPct(d)) : quote;
+      const finalQuote = withAddons(b.total ? withTotal(quote, b.total, depositPct(d)) : quote, addons);
       return {
         ...b,
         code: newReservationCode(),
         expectedTotal: finalQuote.total,
         localUnit: unit,
         localQuote: finalQuote,
+        localAddons: addons,
         arrival: b.estimatedArrival || d.site.settings.checkInStart,
       } as NewReservation;
     },
-    request: (p) => ({ method: "POST", path: "/admin/reservations", body: omit(p, "localUnit", "localQuote", "arrival") }),
+    request: (p) => ({ method: "POST", path: "/admin/reservations", body: omit(p, "localUnit", "localQuote", "localAddons", "arrival") }),
     apply: (d, p, op) => {
       const g = p.guest;
       const docNumber = g.docNumber.trim().toUpperCase();
@@ -286,6 +300,7 @@ const reservationOps = {
         estimatedArrival: p.arrival,
         guest: { fullName: g.fullName.trim(), docType: g.docType, docNumber, email: g.email.trim(), phone: g.phone, city: (g.city ?? "").trim() },
         companions: cleanCompanions(p.companions),
+        addons: p.localAddons ?? [],
         specialRequests: (p.specialRequests ?? "").trim(),
         consents: { policies: false, dataProcessing: false, marketing: false },
         quote: p.localQuote,
@@ -388,6 +403,12 @@ const reservationOps = {
           return err(400, "INVALID_BODY");
         if (p.adults + p.children > type.maxPersonas) return err(422, "OVER_CAPACITY");
       }
+      if (p.action === "addons") {
+        if (r.groupCode && r.groupCode !== r.code) return err(400, "INVALID_BODY");
+        const addons = pickAddons(p.addons, d.site.decorations, r.addons);
+        if (!addons) return fieldErr({ addons: "Alguna decoración ya no está disponible. Actualiza la página." });
+        if (withAddons(r.quote, addons).total < r.paid) return fieldErr({ addons: "Ya se pagó más que el nuevo total: no se puede quitar esa decoración." });
+      }
       return p;
     },
     request: (body) => ({ method: "POST", path: "/admin/action", body }),
@@ -419,10 +440,21 @@ const reservationOps = {
           balancePaidAt: x.balancePaidAt && p.total > x.paid ? null : x.balancePaidAt,
         }));
       }
+      if (p.action === "addons") {
+        const addons = pickAddons(p.addons, d.site.decorations, r.addons) ?? r.addons ?? [];
+        const quote = withAddons(r.quote, addons);
+        if (r.depositPaidAt) quote.balance = Math.max(0, quote.total - r.paid);
+        return updateReservation(d, p.code, (x) => ({
+          ...x,
+          addons,
+          quote,
+          balancePaidAt: x.balancePaidAt && quote.total > x.paid ? null : x.balancePaidAt,
+        }));
+      }
       if (p.action === "reschedule") {
         const type = d.cabinTypes.find((t) => t.id === r.cabinTypeId);
         if (!type) return d;
-        const quote = computeQuote(type, p.checkIn, p.checkOut, r.adults + r.children, activeSeasons(d), depositPct(d));
+        const quote = withAddons(computeQuote(type, p.checkIn, p.checkOut, r.adults + r.children, activeSeasons(d), depositPct(d)), r.addons);
         if (r.depositPaidAt) {
           quote.deposit = r.quote.deposit;
           quote.balance = Math.max(0, quote.total - r.paid);
@@ -1194,6 +1226,50 @@ const contentOps = {
     apply: (d, p) => withSite(d, { services: d.site.services.filter((s) => s.id !== p.id) }),
     result: (d) => d.site.services,
     family: { name: "service", role: "delete" },
+  } satisfies OpDef<{ id: string }>,
+  "decoration.create": {
+    perm: "rates",
+    label: (p) => `Decoración ${p.name}`,
+    entities: (p) => [`decorations:${p.id}`],
+    prepare: (p) => ({ ...p, id: uuid() }),
+    request: (body) => ({ method: "POST", path: "/admin/decorations", body }),
+    apply: (d, p) => withSite(d, { decorations: [...d.site.decorations.filter((s) => s.id !== p.id), p] }),
+    result: (d) => d.site.decorations,
+    family: { name: "decoration", role: "create" },
+  } satisfies OpDef<Decoration>,
+  "decoration.update": {
+    perm: "rates",
+    label: (p) => `Decoración ${p.name}`,
+    entities: (p) => [`decorations:${p.id}`],
+    request: (body) => ({ method: "PUT", path: "/admin/decorations", body }),
+    apply: (d, p) =>
+      withSite(d, {
+        decorations: swap(
+          d.site.decorations,
+          (s) => s.id === p.id,
+          () => p,
+        ),
+      }),
+    result: (d) => d.site.decorations,
+    family: { name: "decoration", role: "update" },
+  } satisfies OpDef<Decoration>,
+  "decoration.reorder": {
+    perm: "rates",
+    label: () => "Orden de las decoraciones",
+    entities: () => ["decorationOrder"],
+    request: (body) => ({ method: "PATCH", path: "/admin/decorations", body }),
+    apply: (d, p) => withSite(d, { decorations: [...d.site.decorations].sort((a, b) => p.order.indexOf(a.id) - p.order.indexOf(b.id)) }),
+    result: (d) => d.site.decorations,
+    family: { name: "decorationOrder", role: "update" },
+  } satisfies OpDef<{ order: string[] }>,
+  "decoration.delete": {
+    perm: "rates",
+    label: () => "Eliminar decoración",
+    entities: (p) => [`decorations:${p.id}`],
+    request: (p) => ({ method: "DELETE", path: "/admin/decorations", query: { id: p.id } }),
+    apply: (d, p) => withSite(d, { decorations: d.site.decorations.filter((s) => s.id !== p.id) }),
+    result: (d) => d.site.decorations,
+    family: { name: "decoration", role: "delete" },
   } satisfies OpDef<{ id: string }>,
   // Nunca lleva contraseña: cambiarla exige conexión (api.ts).
   "profile.save": {

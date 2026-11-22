@@ -641,6 +641,42 @@ export type Database = {
         }
         Relationships: []
       }
+      decorations: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          name: string
+          price: number
+          sort: number
+          updated_at: string
+          version: number
+          visible: boolean
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          name: string
+          price: number
+          sort?: number
+          updated_at?: string
+          version?: number
+          visible?: boolean
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          price?: number
+          sort?: number
+          updated_at?: string
+          version?: number
+          visible?: boolean
+        }
+        Relationships: []
+      }
       email_outbox: {
         Row: {
           attempts: number
@@ -1021,6 +1057,7 @@ export type Database = {
           code: string
           commission: number
           consents: Json
+          addons: Json
           companions: Json
           created_at: string
           decoration: Json
@@ -1060,6 +1097,7 @@ export type Database = {
           code: string
           commission?: number
           consents: Json
+          addons?: Json
           companions?: Json
           created_at?: string
           decoration?: Json
@@ -1099,6 +1137,7 @@ export type Database = {
           code?: string
           commission?: number
           consents?: Json
+          addons?: Json
           companions?: Json
           created_at?: string
           decoration?: Json

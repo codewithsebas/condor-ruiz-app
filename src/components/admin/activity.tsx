@@ -40,6 +40,7 @@ export const ENTITY_LABEL: Record<string, string> = {
   site_policies: "Política del sitio",
   site_photos: "Foto del sitio",
   site_services: "Servicio del sitio",
+  decorations: "Decoración",
   channel_calendars: "Calendario de Booking",
   channel_stays: "Estadía de Booking",
   booking_inbox: "Reserva de Booking por correo",
@@ -128,6 +129,8 @@ function linkOf(e: ActivityEntry): { href: string; label: string } | null {
       return e.action !== "delete" && e.entityId ? { href: paths.cabana(e.entityId), label: "Ver cabaña" } : { href: paths.cabanas, label: "Cabañas" };
     case "rate_seasons":
       return { href: paths.tarifas(), label: "Tarifas" };
+    case "decorations":
+      return { href: paths.decoraciones, label: "Decoraciones" };
     case "blocks":
     case "bathrooms":
     case "bathroom_blocks":

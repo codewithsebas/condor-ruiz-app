@@ -17,7 +17,7 @@ import { Badge, Button, Callout, Field, IconButton, Modal, Segmented } from "@/c
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // UUID v4 (crypto.randomUUID solo existe en contextos seguros: https o localhost).
-function newRequestId() {
+export function newRequestId() {
   if (crypto.randomUUID) return crypto.randomUUID();
   const b = crypto.getRandomValues(new Uint8Array(16));
   b[6] = (b[6] & 0x0f) | 0x40;

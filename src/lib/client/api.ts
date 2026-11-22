@@ -141,6 +141,9 @@ export const api = {
       mutate("email.send", b, () => request<EmailRecord | ApiError>("POST", "/admin/emails", { body: { action: "send", ...b } })),
     retryEmail: (id: string) =>
       mutate("email.retry", { id }, () => request<EmailRecord | ApiError>("POST", "/admin/emails", { body: { action: "retry", id } })),
+    // Reenviar el correo del estado de la reserva: con conexión (el servidor elige el correo y lo envía en el momento).
+    resendEmail: (code: string, requestId: string) =>
+      onlineOnly(() => request<EmailRecord | ValidationError | ApiError>("POST", "/admin/emails", { body: { action: "resend", code, requestId } })),
     reset: () => request<object>("POST", "/admin/reset"),
     saveSite: (b: SiteInput) => mutate("site.save", b, () => request<SiteContent>("PUT", "/admin/site", { body: b })),
     savePaymentTerms: (b: PaymentTerms) => mutate("terms.save", b, () => request<SiteContent>("PUT", "/admin/payment-terms", { body: b })),

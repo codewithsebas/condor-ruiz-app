@@ -38,7 +38,7 @@ import { MOCK_DB_KEY } from "@/lib/mock/keys";
 import { groupMoney, groupOf } from "@/lib/groups";
 import { addDays, sleep, todayISO } from "@/lib/format";
 import { manualPaymentNote, paymentParts, splitByMethod, unpaidUntil, type PaymentPart } from "@/lib/payments";
-import { invalidTemplate, isTemplateKind, type EmailTemplate } from "@/lib/email-templates";
+import { invalidTemplate, isTemplateKind, stateEmailKind, type EmailTemplate } from "@/lib/email-templates";
 import { defaultContent, defaultTexts, mergeTexts, type Decoration, type SiteContent, type SiteService } from "@/lib/site";
 import { mergeTheme } from "@/lib/theme";
 import type {
@@ -1145,6 +1145,9 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
       r.clientKey = keyOf(r);
       // En un grupo el huésped es el mismo para todas las cabañas.
       group.forEach((x) => Object.assign(x, { guest: r.guest, clientKey: r.clientKey, companions: r.companions }));
+      // Dirección nueva: los correos que aún no salen van a ella.
+      const codes = new Set(group.map((x) => x.code));
+      db.emails.forEach((e) => e.reservationCode && codes.has(e.reservationCode) && e.status !== "sent" && (e.to = r.guest.email));
     } else if (body.action === "note") r.notes.push({ at: now, text: body.text });
     else {
       r.status = map[body.action] || r.status;
@@ -1309,6 +1312,35 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
       const e = db.emails.find((x) => x.id === b.id);
       if (!e) return { status: 404, data: { error: "NOT_FOUND" } };
       Object.assign(e, { status: "sent", attempts: e.attempts + 1, lastError: "", sentAt: new Date().toISOString() });
+      save(db);
+      return ok(e);
+    }
+    // Reenviar el correo del estado (mismas reglas que /api/admin/emails).
+    if (b.action === "resend") {
+      const r = db.reservations.find((x) => x.code === (b as { code?: string }).code);
+      if (!r) return { status: 404, data: { error: "NOT_FOUND" } };
+      const lead = db.reservations.find((x) => x.code === (r.groupCode ?? r.code)) ?? r;
+      const kind = stateEmailKind(groupMoney(groupOf(db.reservations, lead)));
+      if (!kind) return invalid({ email: "Esta reserva no tiene un correo para su estado." });
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.guest.email ?? "")) return invalid({ email: "El huésped no tiene un correo válido." });
+      if (db.emailTemplates?.some((t) => t.kind === kind && !t.enabled)) return invalid({ email: "Este correo está apagado en Correos." });
+      const now = new Date().toISOString();
+      const waiting = db.emails.find((x) => x.reservationCode === lead.code && x.kind === kind && (x.status === "pending" || x.status === "failed"));
+      const e: EmailRecord = waiting ?? {
+        id: crypto.randomUUID(),
+        kind,
+        reservationCode: lead.code,
+        to: "",
+        subject: "",
+        status: "pending",
+        attempts: 0,
+        lastError: "",
+        sentAt: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      Object.assign(e, { to: lead.guest.email, status: "sent", attempts: e.attempts + 1, lastError: "", sentAt: now, updatedAt: now });
+      if (!waiting) db.emails.unshift(e);
       save(db);
       return ok(e);
     }

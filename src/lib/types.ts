@@ -1,4 +1,5 @@
 import type { CabinTypeId } from "@/lib/config";
+import type { EmailTemplateKind } from "@/lib/email-templates";
 import type { SiteContent, SitePolicy, SiteSettings, SiteTexts } from "@/lib/site";
 import type { SiteTheme } from "@/lib/theme";
 
@@ -158,7 +159,8 @@ export type PublicPayment = {
 export type PaymentRecord = PublicPayment & { id: string; reservationCode: string };
 
 // Correos transaccionales (bandeja de salida).
-export type EmailKind = "reservation_confirmed" | "team_message";
+// Los automáticos (EmailTemplateKind), el mensaje del equipo y el antiguo aviso al negocio (solo historial).
+export type EmailKind = EmailTemplateKind | "team_message" | "new_reservation";
 export type EmailStatus = "pending" | "sending" | "sent" | "failed";
 export type EmailRecord = {
   id: string;

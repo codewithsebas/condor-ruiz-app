@@ -18,9 +18,12 @@ import { baseVersionOf, businessError, fail, json, occurredAtOf, opIdOf, operati
 import { processOutbox } from "@/lib/server/mailer";
 import { dispatchPush } from "@/lib/server/push";
 import { originOf, siteUrl } from "@/lib/server/site";
+import { createActorClient } from "@/lib/supabase/server";
 import { PAY_METHODS, unpaidUntil } from "@/lib/payments";
 import { can } from "@/lib/permissions";
 import type { AdminAction, Quote, ReservationAddon } from "@/lib/types";
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // POST /api/admin/action { code, action, ... } → cambia el estado, registra un pago, reprograma o agrega una nota.
 // confirm / balance: pago recibido en persona (efectivo o transferencia) registrado por el equipo, por el abono, por todo
@@ -97,6 +100,15 @@ export const POST = syncRoute(async (req: NextRequest) => {
           .eq("group_code", groupCode)
           .neq("code", current.code)
           .throwOnError();
+      }
+      // Dirección nueva: los correos que aún no salen (en cola o fallidos) van a ella; cada fila guarda la suya al encolarse.
+      const email = (g.email ?? "").trim();
+      if (email !== (current.guest_email ?? "") && EMAIL.test(email)) {
+        const codes = groupCode
+          ? (await sb.from("reservations").select("code").eq("group_code", groupCode).throwOnError()).data.map((m) => m.code)
+          : [current.code];
+        const service = await createActorClient(me.id);
+        await service.from("email_outbox").update({ to_email: email }).in("reservation_code", codes).in("status", ["pending", "failed"]).throwOnError();
       }
     } else if (b.action === "note") {
       const text = String(b.text ?? "")

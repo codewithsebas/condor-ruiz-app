@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fillVariables, invalidTemplate, overridesOf, unknownVariables, EMPTY_TEXTS } from "@/lib/email-templates";
+import { fillVariables, invalidTemplate, overridesOf, stateEmailKind, unknownVariables, EMPTY_TEXTS } from "@/lib/email-templates";
 import { arrivalReminderEmail, reservationEndedEmail, sampleEmail } from "@/lib/emails";
 import { defaultContent, mergeSite } from "@/lib/site";
 
@@ -41,5 +41,22 @@ describe("plantillas de correo", () => {
     expect(reservationEndedEmail(c, { ...stay, vencida: true, pagado: 0, reservarUrl: "", whatsappUrl: "#" }).html).toContain("Se venció");
     expect(reservationEndedEmail(c, { ...stay, vencida: false, pagado: 0, reservarUrl: "", whatsappUrl: "#" }).html).not.toContain("Se venció");
     expect(sampleEmail(c, "reservation_moved").subject).toContain("cambió de fecha");
+  });
+});
+
+describe("stateEmailKind", () => {
+  const at = (status: string, depositPaidAt: string | null = null, balancePaidAt: string | null = null) => ({ status, depositPaidAt, balancePaidAt });
+  it("elige el correo del estado de la reserva", () => {
+    expect(stateEmailKind(at("pending_deposit"))).toBe("reservation_received");
+    expect(stateEmailKind(at("confirmed", "2026-11-01T10:00:00Z"))).toBe("reservation_confirmed");
+    expect(stateEmailKind(at("rescheduled", "2026-11-01T10:00:00Z"))).toBe("reservation_confirmed");
+    expect(stateEmailKind(at("cancelled"))).toBe("reservation_cancelled");
+    expect(stateEmailKind(at("expired"))).toBe("reservation_expired");
+    expect(stateEmailKind(at("checked_in"))).toBeNull();
+    expect(stateEmailKind(at("completed"))).toBeNull();
+  });
+  it("pago total: solo si el saldo se pagó después del abono", () => {
+    expect(stateEmailKind(at("confirmed", "2026-11-01T10:00:00Z", "2026-11-05T10:00:00Z"))).toBe("balance_paid");
+    expect(stateEmailKind(at("confirmed", "2026-11-01T10:00:00Z", "2026-11-01T10:00:00Z"))).toBe("reservation_confirmed");
   });
 });

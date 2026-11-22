@@ -5,7 +5,7 @@
 // paso); debajo, a la izquierda, la estadía como línea de tiempo, el pago, las decoraciones y los correos; a la derecha, el
 // huésped (editable, con su historial de cliente), las notas y los comprobantes.
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   AlertIcon,
   ArrowRightIcon,
@@ -40,7 +40,7 @@ import { addDays, cop, dateOf, fmtClock, fmtDate, fmtDateTime, nightsBetween, pl
 import { PaymentFields, cashSplitError, type PayChoice, type PayOption } from "@/components/admin/payment-fields";
 import { PAYMENT_STATUS, depositPctOf, kindLabel, unpaidUntil } from "@/lib/payments";
 import { fmtTime } from "@/lib/site";
-import type { Companion, DocType, EmailRecord, Guest, PayMethod, PaymentRecord, Reservation } from "@/lib/types";
+import type { ApiResult, Companion, DocType, EmailRecord, Guest, PayMethod, PaymentRecord, Reservation } from "@/lib/types";
 import { Combobox } from "@/components/ui/combobox";
 import { CompanionFields } from "@/components/admin/companions";
 import { useAdmin } from "@/components/admin/context";
@@ -56,6 +56,8 @@ import { paths } from "@/components/admin/routes";
 import { SyncMark } from "@/components/admin/sync";
 import { useRouteParam } from "@/components/admin/route-param";
 import { EMAIL_KIND, TRUST, type ConfirmCfg, adminInput } from "@/components/admin/shared";
+import { hasEmail, newRequestId } from "@/components/admin/email-composer";
+import { stateEmailKind, type EmailTemplateKind } from "@/lib/email-templates";
 import {
   Badge,
   Button,
@@ -190,6 +192,7 @@ function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean
   const proofs = data.proofs.filter((p) => codes.has(p.reservationCode));
   const payments = data.payments.filter((p) => codes.has(p.reservationCode));
   const emails = data.emails.filter((e) => !!e.reservationCode && codes.has(e.reservationCode));
+  const emailsOff = useEmailsOff();
   const pendingProof = proofs.some((p) => p.status === "pending");
   const due = balanceDue(m);
   const nights = nightsBetween(r.checkIn, r.checkOut);
@@ -351,7 +354,7 @@ function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean
             <StayCard r={r} cabin={cabin} />
             <PaymentSummary r={m} payments={payments} />
             <AddonsCard r={r} />
-            <EmailsCard emails={emails} />
+            <EmailsCard r={gm} emails={emails} off={emailsOff} />
           </div>
           <div className="flex min-w-0 flex-col gap-4">
             <GuestCard r={r} client={client} onEdit={() => setEditing(true)} />
@@ -379,7 +382,7 @@ function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean
         </div>
       </div>
 
-      <ModalPresence>{editing && <GuestEditor r={r} onClose={() => setEditing(false)} />}</ModalPresence>
+      <ModalPresence>{editing && <GuestEditor r={r} lead={gm} off={emailsOff} onClose={() => setEditing(false)} />}</ModalPresence>
       {dialog}
     </>
   );
@@ -680,8 +683,10 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
 }
 
 // Corregir los datos del huésped (nombre, documento, contacto). Cambiar el documento cambia el cliente al que pertenece.
-function GuestEditor({ r, onClose }: { r: Reservation; onClose: () => void }) {
-  const { data, reload, toast, onAuthError } = useAdmin();
+// Si cambia el correo, los que aún no salen pasan a la dirección nueva (servidor) y se ofrece reenviar el de su estado.
+// `lead`: la reserva con los pagos del grupo; `off`: los correos apagados en Correos.
+function GuestEditor({ r, lead, off, onClose }: { r: Reservation; lead: Reservation; off: ReadonlySet<EmailTemplateKind>; onClose: () => void }) {
+  const { data, reload, toast, onAuthError, ask } = useAdmin();
   const [g, setG] = useState<Guest>({ ...r.guest, docNumber: r.guest.docType === "SD" ? "" : r.guest.docNumber });
   const [companions, setCompanions] = useState<Companion[]>(r.companions ?? []);
   // Personas de la reserva (o de todas las cabañas del grupo): el titular y hasta ese total menos uno acompañantes.
@@ -714,6 +719,10 @@ function GuestEditor({ r, onClose }: { r: Reservation; onClose: () => void }) {
       await reload();
       toast("Datos de los huéspedes actualizados");
       onClose();
+      const email = (g.email ?? "").trim();
+      const kind = stateEmailKind(lead);
+      if (email !== (r.guest.email ?? "").trim() && hasEmail(email) && kind && !off.has(kind) && !res.queued)
+        ask(resendDialog(kind, { ...lead, guest: { ...lead.guest, email } }, "¿Reenviar el correo a la dirección nueva?"));
     } catch {
       setError("Error de conexión. Inténtalo de nuevo.");
     } finally {
@@ -1356,10 +1365,49 @@ const EMAIL_STATUS: Record<EmailRecord["status"], { label: string; tone: "succes
 };
 
 // Correos de la reserva: si la confirmación no salió, se ve el motivo y se puede reintentar (sin duplicarla).
-function EmailsCard({ emails }: { emails: EmailRecord[] }) {
-  const { reload, toast, onAuthError, now } = useAdmin();
+// Correos apagados en el módulo Correos (sin conexión se suponen activos: el servidor igual se niega a reenviarlos).
+function useEmailsOff() {
+  const [off, setOff] = useState<ReadonlySet<EmailTemplateKind>>(() => new Set());
+  useEffect(() => {
+    let live = true;
+    api.admin.emailTemplates.list().then(
+      (res) => {
+        if (live && res.status === 200 && Array.isArray(res.data)) setOff(new Set(res.data.filter((t) => !t.enabled).map((t) => t.kind)));
+      },
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  return off;
+}
+
+// Reenvía el correo del estado de la reserva. Si no salió, vuelve como error con el motivo (para el diálogo).
+async function resendStateEmail(code: string): Promise<ApiResult<unknown>> {
+  const res = await api.admin.resendEmail(code, newRequestId());
+  const e = res.data as EmailRecord | null;
+  if (res.status === 200 && e && e.status !== "sent")
+    return { status: 502, data: { fields: { email: `No se pudo enviar: ${e.lastError || "inténtalo de nuevo en un momento."}` } } };
+  return res;
+}
+
+// El diálogo para reenviar el correo del estado, con la dirección vigente.
+const resendDialog = (kind: EmailTemplateKind, r: Reservation, title = `Reenviar «${EMAIL_KIND[kind]}»`): ConfirmCfg => ({
+  title,
+  text: `«${EMAIL_KIND[kind]}» le llega a ${r.guest.email} con los datos de hoy de la reserva.`,
+  okLabel: "Reenviar",
+  done: "Correo reenviado",
+  run: () => resendStateEmail(r.code),
+});
+
+// `r`: la reserva con los pagos del grupo (groupMoney), para elegir el correo de su estado.
+function EmailsCard({ r, emails, off }: { r: Reservation; emails: EmailRecord[]; off: ReadonlySet<EmailTemplateKind> }) {
+  const { reload, toast, onAuthError, now, ask } = useAdmin();
   const [busy, setBusy] = useState<string | null>(null);
-  if (!emails.length) return null;
+  const kind = stateEmailKind(r);
+  if (!emails.length && !kind) return null;
+  const blocked = !kind ? "" : off.has(kind) ? "Este correo está apagado en Correos." : !hasEmail(r.guest.email) ? "El huésped no tiene un correo válido." : "";
   const retry = async (id: string) => {
     setBusy(id);
     try {
@@ -1380,34 +1428,48 @@ function EmailsCard({ emails }: { emails: EmailRecord[] }) {
       id="dt-mail"
       title="Correos"
       subtitle="Los de la reserva salen solos: al crearla, al confirmarla, si se cancela o vence y dos días antes de la llegada."
+      action={
+        kind && (
+          <Button size="sm" icon={<RefreshIcon size={14} />} disabled={!!blocked} title={blocked || undefined} onClick={() => ask(resendDialog(kind, r))}>
+            Reenviar
+          </Button>
+        )
+      }
     >
-      <ul className="flex flex-col gap-2">
-        {emails.map((e) => {
-          const st = EMAIL_STATUS[e.status];
-          return (
-            <li
-              key={e.id}
-              className={`flex flex-wrap items-center justify-between gap-3 rounded-[16px] px-4 py-2.5 ${e.status === "failed" ? "bg-error-soft" : "bg-panel"}`}
-            >
-              <span className="min-w-0 flex-1">
-                <span className="flex flex-wrap items-center gap-1.5 text-[13.5px] font-semibold text-ink">
-                  {EMAIL_KIND[e.kind] ?? (e.subject || "Mensaje del equipo")}
-                  <Badge tone={st.tone}>{st.label}</Badge>
+      {kind && (
+        <p className="-mt-2 text-[12px] text-ink-muted">
+          {blocked || `Reenviar manda otra vez «${EMAIL_KIND[kind]}», el correo de su estado actual, a la dirección vigente.`}
+        </p>
+      )}
+      {emails.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {emails.map((e) => {
+            const st = EMAIL_STATUS[e.status];
+            return (
+              <li
+                key={e.id}
+                className={`flex flex-wrap items-center justify-between gap-3 rounded-[16px] px-4 py-2.5 ${e.status === "failed" ? "bg-error-soft" : "bg-panel"}`}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-1.5 text-[13.5px] font-semibold text-ink">
+                    {EMAIL_KIND[e.kind] ?? (e.subject || "Mensaje del equipo")}
+                    <Badge tone={st.tone}>{st.label}</Badge>
+                  </span>
+                  <span className="block text-[12px] text-ink-muted">
+                    {e.to} · {e.sentAt ? `enviado ${timeAgo(e.sentAt, now)}` : `${plural(e.attempts, "intento", "intentos")}`}
+                  </span>
+                  {e.status === "failed" && e.lastError && <span className="block text-[12px] text-error">{e.lastError}</span>}
                 </span>
-                <span className="block text-[12px] text-ink-muted">
-                  {e.to} · {e.sentAt ? `enviado ${timeAgo(e.sentAt, now)}` : `${plural(e.attempts, "intento", "intentos")}`}
-                </span>
-                {e.status === "failed" && e.lastError && <span className="block text-[12px] text-error">{e.lastError}</span>}
-              </span>
-              {e.status !== "sent" && e.status !== "sending" && (
-                <Button size="sm" icon={<RefreshIcon size={14} />} loading={busy === e.id} onClick={() => retry(e.id)}>
-                  Reintentar
-                </Button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+                {e.status !== "sent" && e.status !== "sending" && (
+                  <Button size="sm" icon={<RefreshIcon size={14} />} loading={busy === e.id} onClick={() => retry(e.id)}>
+                    Reintentar
+                  </Button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </Panel>
   );
 }

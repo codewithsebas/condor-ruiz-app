@@ -147,3 +147,22 @@ export function overridesOf(rows: Pick<EmailTemplate, "kind" | EmailTextKey>[]):
   }
   return out;
 }
+
+// El correo que corresponde al estado de la reserva, para reenviarlo desde el panel: sin abono, la reserva recibida;
+// confirmada, la confirmación (o el pago total si el saldo se pagó después del abono); cancelada o vencida, su aviso.
+// Hospedada y finalizada no tienen. En un grupo se pasan los pagos del grupo (groupMoney).
+export function stateEmailKind(r: { status: string; depositPaidAt: string | null; balancePaidAt: string | null }): EmailTemplateKind | null {
+  switch (r.status) {
+    case "pending_deposit":
+      return "reservation_received";
+    case "confirmed":
+    case "rescheduled":
+      return r.depositPaidAt && r.balancePaidAt && r.balancePaidAt > r.depositPaidAt ? "balance_paid" : "reservation_confirmed";
+    case "cancelled":
+      return "reservation_cancelled";
+    case "expired":
+      return "reservation_expired";
+    default:
+      return null;
+  }
+}

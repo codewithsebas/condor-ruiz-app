@@ -1,7 +1,7 @@
 "use client";
 
 // Inicio del panel, como un tablero de control: el pulso del día en una franja; el dinero generado (mes, año, ticket,
-// ingreso por noche y los últimos 12 meses); lo que falta por cobrar; la ocupación de las próximas dos semanas; de dónde
+// ingreso por noche y los últimos 12 meses); lo que falta por cobrar; la ocupación de dos semanas atrás a dos adelante; de dónde
 // llegan las reservas y qué cabaña genera más; el movimiento de hoy en una tabla; las próximas llegadas y los huéspedes.
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
@@ -438,93 +438,145 @@ function ToCollect() {
 
 /* ───────────── Ocupación ───────────── */
 
-// Las próximas dos semanas en columnas: el alto es la ocupación de cada noche y debajo, las llegadas del día.
+// Curva suave (Catmull-Rom → Bézier) por los puntos. Los puntos de control no pasan de 0 ni de 100 %: la curva no se sale
+// de la gráfica entre dos días iguales.
+function smooth(pts: [number, number][]) {
+  const clampY = (v: number) => Math.min(100, Math.max(0, v));
+  let d = `M${pts[0][0].toFixed(2)},${pts[0][1].toFixed(2)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const [p1, p2] = [pts[i], pts[i + 1]];
+    const p3 = pts[i + 2] ?? p2;
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, clampY(p1[1] + (p2[1] - p0[1]) / 6)];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, clampY(p2[1] - (p3[1] - p1[1]) / 6)];
+    d += ` C${c1[0].toFixed(2)},${c1[1].toFixed(2)} ${c2[0].toFixed(2)},${c2[1].toFixed(2)} ${p2[0].toFixed(2)},${p2[1].toFixed(2)}`;
+  }
+  return d;
+}
+
+const SPAN = 14; // días antes y después de hoy
+
+// Ocupación de dos semanas atrás a dos semanas adelante en una línea, con hoy al centro (lo que viene, en un tono más
+// claro) y, debajo de hoy y los días que vienen, las llegadas del día.
 function Occupancy() {
   const { data, today } = useAdmin();
   const tip = useTip();
-  const days = Array.from({ length: 14 }, (_, i) => {
-    const day = addDays(today, i);
+  const days = Array.from({ length: SPAN * 2 + 1 }, (_, i) => {
+    const day = addDays(today, i - SPAN);
     return {
       day,
       ...occupancy(data, day),
       arrivals: data.reservations.filter((r) => r.checkIn === day && ARRIVING.concat(["checked_in"]).includes(r.status)).length,
     };
   });
-  const week = days.slice(0, 7);
-  const avg7 = Math.round(week.reduce((s, d) => s + d.pc, 0) / week.length);
-  const free7 = week.reduce((n, d) => n + Math.max(0, d.total - d.busy), 0);
-  const peak = days.reduce((a, b) => (b.pc > a.pc ? b : a), days[0]);
-  const heights = useTweened(
+  const tonight = days[SPAN];
+  const ahead = days.slice(SPAN);
+  const avg7 = Math.round(ahead.slice(0, 7).reduce((s, d) => s + d.pc, 0) / 7);
+  const peak = ahead.reduce((a, b) => (b.pc > a.pc ? b : a), ahead[0]);
+  // La línea sale de la base y sube hasta la ocupación de cada día; si cambian los datos, se mueve suave a la nueva forma.
+  const pcs = useTweened(
     days.map((d) => d.pc),
-    { delay: DELAY + 200, duration: 900, stagger: 30 },
+    { delay: DELAY + 200, duration: 1100, stagger: 12 },
   );
+  const x = (i: number) => (i / (days.length - 1)) * 100;
+  const y = (pc: number) => 100 - pc;
+  const pts = pcs.map((pc, i) => [x(i), y(pc)] as [number, number]);
+  const ticks = [0, SPAN / 2, SPAN, SPAN + SPAN / 2, SPAN * 2];
 
   return (
-    <Panel id="d-occ" title="Ocupación de las próximas dos semanas" action={<MoreLink href={paths.calendario()}>Calendario</MoreLink>}>
+    <Panel id="d-occ" title="Ocupación" subtitle="Dos semanas atrás y dos semanas adelante" action={<MoreLink href={paths.calendario()}>Calendario</MoreLink>}>
       <div className="grid grid-cols-3 gap-4 sm:max-w-[460px]">
-        <Figure label="Promedio 7 días" value={<Count value={avg7} format={(n) => `${n} %`} delay={DELAY} />} />
-        <Figure label="Noches libres (7 días)" value={<Count value={free7} delay={DELAY} />} />
-        <Figure label="Noche más llena" value={`${peak.pc} %`} hint={peak.day === today ? "hoy" : fmtDate(peak.day)} />
+        <Figure
+          label="Esta noche"
+          value={<Count value={tonight.pc} format={(n) => `${n} %`} delay={DELAY} />}
+          hint={`${tonight.busy} de ${tonight.total} cabañas`}
+        />
+        <Figure label="Promedio 7 días" value={<Count value={avg7} format={(n) => `${n} %`} delay={DELAY} />} hint="desde hoy" />
+        <Figure label="Máximo 15 días" value={`${peak.pc} %`} hint={peak.day === today ? "hoy" : fmtDate(peak.day)} />
       </div>
-      <figure aria-label="Ocupación por noche en los próximos 14 días" className="mt-auto">
-        <div className="relative">
+      <figure aria-label={`Ocupación diaria: hoy ${tonight.pc} %, promedio de los próximos 7 días ${avg7} %`} className="mt-auto">
+        <div className="relative mr-9 h-[150px] border-b border-line-strong">
           {/* Líneas guía al 50 y 100 %. */}
-          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-[150px]">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0">
             {[0, 50].map((t) => (
               <span key={t} className="absolute inset-x-0 border-t border-line" style={{ top: `${t}%` }}>
-                <span className="absolute -top-2 right-0 bg-paper pl-1 text-[10.5px] text-ink-subtle tabular-nums">{`${100 - t} %`}</span>
+                <span className="absolute -top-2 -right-9 w-8 text-right text-[10.5px] whitespace-nowrap text-ink-subtle tabular-nums">{`${100 - t} %`}</span>
               </span>
             ))}
           </div>
-          <ol className="relative flex h-[150px] items-end gap-1.5 border-b border-line-strong pr-9">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" className="absolute inset-0 size-full overflow-visible">
+            <path d={`${smooth(pts)} L100,100 L0,100 Z`} style={{ fill: "color-mix(in srgb, var(--color-chart-a) 10%, transparent)" }} />
+            <path d={smooth(pts.slice(0, SPAN + 1))} fill="none" strokeWidth={2} vectorEffect="non-scaling-stroke" style={{ stroke: "var(--color-chart-a)" }} />
+            <path
+              d={smooth(pts.slice(SPAN))}
+              fill="none"
+              strokeWidth={2}
+              strokeDasharray="5 4"
+              vectorEffect="non-scaling-stroke"
+              style={{ stroke: "color-mix(in srgb, var(--color-chart-a) 55%, var(--color-paper))" }}
+            />
+          </svg>
+          {/* Marca de hoy: línea punteada hasta el eje y el punto sobre la curva. */}
+          <span
+            aria-hidden="true"
+            className="absolute bottom-0 w-0 border-l-[1.5px] border-dashed border-ink/40"
+            style={{ left: "50%", top: `${y(pcs[SPAN])}%` }}
+          />
+          <span
+            aria-hidden="true"
+            className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full ring-[3px] ring-paper"
+            style={{ left: "50%", top: `${y(pcs[SPAN])}%`, background: "var(--color-chart-a)" }}
+          />
+          {/* Zonas invisibles por día para el detalle al pasar el mouse. */}
+          <ol className="absolute inset-0 flex">
             {days.map((d, i) => (
               <li
                 key={d.day}
-                aria-label={`${fmtDate(d.day)}: ${d.pc} %, ${plural(d.arrivals, "llegada", "llegadas")}`}
+                aria-label={`${fmtDate(d.day)}: ${d.pc} %${i >= SPAN ? `, ${plural(d.arrivals, "llegada", "llegadas")}` : ""}`}
+                className="relative h-full flex-1"
                 {...tip(
                   () => (
                     <span>
-                      <strong>{i === 0 ? "Hoy" : fmtDate(d.day)}</strong> · {d.pc} % · {d.busy} de {d.total} cabañas ·{" "}
-                      {plural(d.arrivals, "llegada", "llegadas")}
+                      <strong>{i === SPAN ? "Hoy" : fmtDate(d.day)}</strong> · {d.pc} % · {d.busy} de {d.total} cabañas
+                      {i >= SPAN ? ` · ${plural(d.arrivals, "llegada", "llegadas")}` : ""}
                     </span>
                   ),
                   { anchor: (el) => el.firstElementChild as HTMLElement | null },
                 )}
-                className="flex h-full flex-1 items-end justify-center"
               >
-                <span
-                  aria-hidden="true"
-                  className="block w-full max-w-[24px] rounded-t-[4px] transition-opacity hover:opacity-80"
-                  style={{
-                    height: `${Math.max(d.pc ? 3 : 1.5, heights[i])}%`,
-                    background: i === 0 ? "var(--color-chart-a)" : "color-mix(in srgb, var(--color-chart-a) 45%, var(--color-paper))",
-                  }}
-                />
+                {/* Un poco arriba del punto de ese día en la curva: el tooltip sale de aquí. */}
+                <span className="absolute left-1/2 size-0" style={{ top: `calc(${y(pcs[i])}% - 10px)` }} />
               </li>
             ))}
           </ol>
         </div>
-        <div aria-hidden="true" className="mt-2 flex gap-1.5 pr-9">
-          {days.map((d, i) => {
-            const date = parseISO(d.day);
-            return (
-              <span key={d.day} className="flex flex-1 flex-col items-center gap-1">
-                <span className={`text-[11px] tabular-nums ${i === 0 ? "font-semibold text-ink" : "text-ink-muted"}`}>
-                  {i === 0 ? "Hoy" : date.getUTCDate()}
+        {/* Llegadas de hoy y los días que vienen, debajo de su día. */}
+        <div aria-hidden="true" className="mt-1.5 mr-9 flex">
+          {days.map((d, i) => (
+            <span key={d.day} className="flex flex-1 justify-center">
+              {i >= SPAN && d.arrivals > 0 && (
+                <span className="grid aspect-square w-full max-w-4 place-items-center rounded-full bg-ink text-[9.5px] font-semibold text-paper tabular-nums">
+                  {d.arrivals}
                 </span>
-                <span
-                  className={`grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-semibold tabular-nums ${d.arrivals ? "bg-ink text-paper" : "text-transparent"}`}
-                >
-                  {d.arrivals || 0}
-                </span>
-              </span>
-            );
-          })}
+              )}
+            </span>
+          ))}
+        </div>
+        <div aria-hidden="true" className="relative mt-1.5 mr-9 h-4 text-[11px] tabular-nums">
+          {ticks.map((t, n) => (
+            <span
+              key={t}
+              className={`absolute top-0 whitespace-nowrap ${t === SPAN ? "font-semibold text-ink" : "text-ink-muted"} ${n === 0 ? "" : n === ticks.length - 1 ? "-translate-x-full" : "-translate-x-1/2"} ${n % 2 ? "hidden sm:block" : ""}`}
+              style={{ left: `${x(t)}%` }}
+            >
+              {t === SPAN ? "Hoy" : fmtDate(days[t].day)}
+            </span>
+          ))}
         </div>
         <figcaption className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-ink-subtle">
           <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden="true" className="h-2.5 w-2.5 rounded-[3px]" style={{ background: "var(--color-chart-a)" }} />
-            Ocupación por noche (hoy en el tono fuerte)
+            <span aria-hidden="true" className="h-0.5 w-3.5 rounded-full" style={{ background: "var(--color-chart-a)" }} />
+            Ocupación por noche (lo que viene, punteado)
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span aria-hidden="true" className="size-2.5 rounded-full bg-ink" />

@@ -179,7 +179,7 @@ const cabinCombo = <Combo icon={<HomeIcon size={14} className="text-ink-muted" /
 /* ───────────── Dashboard ───────────── */
 
 const MONTH_BARS = [22, 30, 18, 26, 34, 28, 40, 36, 48, 62, 74, 52];
-const OCC_BARS = [70, 52, 38, 44, 66, 84, 78, 40, 34, 30, 46, 72, 88, 60];
+const OCC_LINE = [40, 46, 52, 48, 60, 72, 66, 50, 44, 52, 64, 78, 70, 58, 52];
 
 export function DashboardSkeleton() {
   return (
@@ -287,42 +287,42 @@ export function DashboardSkeleton() {
           </ul>
         </Box>
 
-        {/* Ocupación de las próximas dos semanas */}
-        <Box title="Ocupación de las próximas dos semanas" action={<More>Calendario</More>} className="xl:col-span-8">
+        {/* Ocupación: dos semanas atrás y dos adelante */}
+        <Box title="Ocupación" subtitle="Dos semanas atrás y dos semanas adelante" action={<More>Calendario</More>} className="xl:col-span-8">
           <div className="grid grid-cols-3 gap-4 sm:max-w-[460px]">
-            <Fig label="Promedio 7 días" />
-            <Fig label="Noches libres (7 días)" />
-            <Fig label="Noche más llena" hint />
+            <Fig label="Esta noche" hint />
+            <Fig label="Promedio 7 días" hint />
+            <Fig label="Máximo 15 días" hint />
           </div>
           <div className="mt-auto">
-            <div className="relative">
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-[150px]">
+            <div className="relative mr-9 h-[150px] border-b border-line-strong">
+              <div className="pointer-events-none absolute inset-0">
                 {[0, 50].map((t) => (
                   <span key={t} className="absolute inset-x-0 border-t border-line" style={{ top: `${t}%` }}>
-                    <span className="absolute -top-2 right-0 bg-paper pl-1 text-[10.5px] text-ink-subtle tabular-nums">{`${100 - t} %`}</span>
+                    <span className="absolute -top-2 -right-9 w-8 text-right text-[10.5px] whitespace-nowrap text-ink-subtle tabular-nums">{`${100 - t} %`}</span>
                   </span>
                 ))}
               </div>
-              <div className="relative flex h-[150px] items-end gap-1.5 border-b border-line-strong pr-9">
-                {OCC_BARS.map((h, i) => (
-                  <span key={i} className="flex h-full flex-1 items-end justify-center">
-                    <span className={`block w-full max-w-[24px] rounded-t-[4px] ${i === 0 ? "bg-ink/14" : "bg-ink/7"} ${PULSE}`} style={{ height: `${h}%` }} />
-                  </span>
-                ))}
-              </div>
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" className={`absolute inset-0 size-full overflow-visible ${PULSE}`}>
+                <polyline
+                  points={OCC_LINE.map((v, i) => `${(i / (OCC_LINE.length - 1)) * 100},${100 - v}`).join(" ")}
+                  fill="none"
+                  strokeWidth={2}
+                  vectorEffect="non-scaling-stroke"
+                  className="stroke-ink/15"
+                />
+              </svg>
             </div>
-            <div className="mt-2 flex gap-1.5 pr-9">
-              {OCC_BARS.map((_, i) => (
-                <span key={i} className="flex flex-1 flex-col items-center gap-1">
-                  <Line w="2ch" className="text-[11px]" />
-                  <span className="h-4" />
-                </span>
+            <div className="mt-1.5 mr-9 h-4" />
+            <div className="mt-1.5 mr-9 flex justify-between">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <Line key={i} w="5ch" className={`text-[11px] ${i % 2 ? "hidden sm:block" : ""}`} />
               ))}
             </div>
             <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-ink-subtle">
               <span className="inline-flex items-center gap-1.5">
-                <span className="size-2.5 rounded-[3px] bg-ink/15" />
-                Ocupación por noche (hoy en el tono fuerte)
+                <span className="h-0.5 w-3.5 rounded-full bg-ink/15" />
+                Ocupación por noche (lo que viene, punteado)
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="size-2.5 rounded-full bg-ink" />

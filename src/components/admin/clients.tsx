@@ -8,14 +8,11 @@ import {
   CheckIcon,
   ChevronRightIcon,
   CloseIcon,
-  IdCardIcon,
   ListIcon,
   LockIcon,
   MailIcon,
   MoonIcon,
   NoteIcon,
-  ShieldIcon,
-  TagIcon,
   TrashIcon,
   TrendIcon,
   UsersIcon,
@@ -33,7 +30,7 @@ import { useLabelTip } from "@/components/ui/floating";
 import { useAdmin, useParam } from "@/components/admin/context";
 import { Paginator, usePaged } from "@/components/admin/paginator";
 import { ListSearch } from "@/components/admin/list-table";
-import { Panel } from "@/components/admin/board";
+import { Panel, SummaryStrip } from "@/components/admin/board";
 import { EmailComposer, hasEmail } from "@/components/admin/email-composer";
 import { Facts } from "@/components/admin/reservation-detail";
 import { MODULES, clientKeyOf, paths } from "@/components/admin/routes";
@@ -44,8 +41,6 @@ import {
   Button,
   Callout,
   Card,
-  CardHeader,
-  Deco,
   EmptyState,
   Field,
   IconButton,
@@ -53,7 +48,6 @@ import {
   PageHeader,
   SaveBar,
   Segmented,
-  StatCard,
   Stars,
   buttonClass,
   enter,
@@ -550,46 +544,33 @@ function ClientFile({ c }: { c: ClientSummary }) {
         </Callout>
       )}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          accent="pink"
-          label="Reservas"
-          value={c.reservations.length}
-          hint={plural(c.stays, "concretada", "concretadas")}
-          icon={<ListIcon size={15} />}
-        />
-        <StatCard
-          accent="green"
-          label="Noches"
-          value={c.nights}
-          hint={c.stays ? `${(c.nights / c.stays).toFixed(1)} por estadía` : "—"}
-          icon={<MoonIcon size={15} />}
-        />
-        {money ? (
-          <StatCard
-            accent="yellow"
-            label="Valor generado"
-            value={cop(c.value)}
-            hint={c.stays ? `${cop(Math.round(c.value / Math.max(1, c.stays)))} por estadía` : "—"}
-            icon={<TrendIcon size={15} />}
-          />
-        ) : (
-          <StatCard accent="yellow" label="Estadías" value={c.stays} hint={c.isRecurring ? "cliente recurrente" : "—"} icon={<TrendIcon size={15} />} />
-        )}
-        <StatCard
-          accent="blue"
-          label={upcoming ? "Próxima llegada" : "Última estadía"}
-          value={upcoming ? fmtDate(upcoming.checkIn) : c.lastStay ? fmtDate(c.lastStay) : "—"}
-          hint={
-            upcoming
-              ? upcoming.checkIn === today
-                ? "llega hoy"
-                : `en ${plural(nightsBetween(today, upcoming.checkIn), "día", "días")}`
-              : firstStay
-                ? `Primera: ${fmtDate(firstStay.checkIn, true)}`
-                : undefined
-          }
-          icon={<CalendarIcon size={15} />}
+      <div className="@container">
+        <SummaryStrip
+          label="Resumen del cliente"
+          cells={[
+            { label: "Reservas", value: c.reservations.length, hint: plural(c.stays, "concretada", "concretadas"), icon: <ListIcon size={16} /> },
+            { label: "Noches", value: c.nights, hint: c.stays ? `${(c.nights / c.stays).toFixed(1)} por estadía` : "—", icon: <MoonIcon size={16} /> },
+            money
+              ? {
+                  label: "Valor generado",
+                  value: cop(c.value),
+                  hint: c.stays ? `${cop(Math.round(c.value / Math.max(1, c.stays)))} por estadía` : "—",
+                  icon: <TrendIcon size={16} />,
+                }
+              : { label: "Estadías", value: c.stays, hint: c.isRecurring ? "cliente recurrente" : "—", icon: <TrendIcon size={16} /> },
+            {
+              label: upcoming ? "Próxima llegada" : "Última estadía",
+              value: upcoming ? fmtDate(upcoming.checkIn) : c.lastStay ? fmtDate(c.lastStay) : "—",
+              hint: upcoming
+                ? upcoming.checkIn === today
+                  ? "llega hoy"
+                  : `en ${plural(nightsBetween(today, upcoming.checkIn), "día", "días")}`
+                : firstStay
+                  ? `Primera: ${fmtDate(firstStay.checkIn, true)}`
+                  : "",
+              icon: <CalendarIcon size={16} />,
+            },
+          ]}
         />
       </div>
 
@@ -597,29 +578,24 @@ function ClientFile({ c }: { c: ClientSummary }) {
         <div className="flex min-w-0 flex-col gap-4">
           {upcoming && <NextStay r={upcoming} money={money} />}
           <ClientData c={c} money={money} />
-          <Card aria-labelledby="cl-hist" className="flex flex-col gap-3 p-4 sm:p-5">
-            <CardHeader
-              id="cl-hist"
-              icon={<ListIcon size={17} />}
-              title="Historial de reservas"
-              subtitle={`${plural(c.reservations.length, "reserva", "reservas")} · de la más reciente a la más antigua`}
-            />
+          <Panel
+            id="cl-hist"
+            title="Historial de reservas"
+            subtitle={`${plural(c.reservations.length, "reserva", "reservas")} · de la más reciente a la más antigua`}
+          >
             <ClientHistory list={c.reservations} />
-          </Card>
+          </Panel>
           <ClientLog c={c} />
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">
-          <Card aria-labelledby="cl-int" className="flex flex-col gap-4 p-4 sm:p-5">
-            <CardHeader
-              id="cl-int"
-              icon={<ShieldIcon size={17} />}
-              accent="blue"
-              title="Valoración interna"
-              subtitle={p ? `Actualizada ${fmtDate(dateOf(p.updatedAt))}` : "Sin valoración todavía"}
-              actions={<Badge icon={<LockIcon size={11} />}>Privado</Badge>}
-            />
-            <p className="rounded-[16px] bg-canvas/70 px-4 py-2.5 text-[12.5px] text-ink-muted">
+          <Panel
+            id="cl-int"
+            title="Valoración interna"
+            subtitle={p ? `Actualizada ${fmtDate(dateOf(p.updatedAt))}` : "Sin valoración todavía"}
+            action={<Badge icon={<LockIcon size={11} />}>Privado</Badge>}
+          >
+            <p className="rounded-[16px] bg-panel px-4 py-2.5 text-[12.5px] text-ink-muted">
               Solo la ve el equipo en este panel. <strong className="text-ink">Nunca se muestra al cliente</strong> ni aparece en el sitio, en sus correos o en
               «Consultar mi reserva».
             </p>
@@ -658,14 +634,16 @@ function ClientFile({ c }: { c: ClientSummary }) {
                 })}
               </div>
             </div>
-          </Card>
+          </Panel>
 
-          <Card aria-labelledby="cl-tags" className="flex flex-col gap-3 p-4 sm:p-5">
-            <CardHeader id="cl-tags" icon={<TagIcon size={17} />} accent="yellow" title="Etiquetas" subtitle="Para reconocer al cliente de un vistazo." />
+          <Panel id="cl-tags" title="Etiquetas" subtitle="Para reconocer al cliente de un vistazo.">
             {v.tags.length > 0 && (
               <ul className="flex flex-wrap gap-1.5">
                 {v.tags.map((t) => (
-                  <li key={t} className="inline-flex items-center gap-1 rounded-full bg-paper py-0.5 pr-0.5 pl-2.5 text-[12.5px] font-semibold text-ink">
+                  <li
+                    key={t}
+                    className="inline-flex items-center gap-1 rounded-full bg-panel py-0.5 pr-0.5 pl-2.5 text-[12.5px] font-semibold text-ink ring-1 ring-line ring-inset"
+                  >
                     {t}
                     <button
                       type="button"
@@ -706,10 +684,9 @@ function ClientFile({ c }: { c: ClientSummary }) {
               placeholder="Otra etiqueta y Enter"
               className={adminInput}
             />
-          </Card>
+          </Panel>
 
-          <Card aria-labelledby="cl-notes" className="flex flex-col gap-3 p-4 sm:p-5">
-            <CardHeader id="cl-notes" icon={<NoteIcon size={17} />} accent="green" title="Preferencias y observaciones" />
+          <Panel id="cl-notes" title="Preferencias y observaciones">
             <Field label="Preferencias" hint="Útil para su próxima visita: cabaña favorita, horarios, alergias, ocasiones especiales.">
               {(fp) => (
                 <textarea
@@ -734,7 +711,7 @@ function ClientFile({ c }: { c: ClientSummary }) {
                 />
               )}
             </Field>
-          </Card>
+          </Panel>
         </div>
       </div>
 
@@ -760,17 +737,16 @@ function NextStay({ r, money }: { r: Reservation; money: boolean }) {
   const { cabinLabel } = useAdmin();
   const pending = pendingOf(r).total;
   return (
-    <section aria-labelledby="cl-next" className="relative isolate flex flex-col gap-3 overflow-hidden rounded-[22px] bg-pink p-4 sm:p-5">
-      <Deco accent="pink" shape="calendar" className="-top-6 -right-6 size-[120px] rotate-12" />
+    <section aria-labelledby="cl-next" className="flex flex-col gap-3 rounded-[22px] bg-paper p-5 ring-1 ring-line ring-inset">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 id="cl-next" className="text-[13.5px] font-semibold text-ink">
+          <h2 id="cl-next" className="text-[14px] font-semibold text-ink">
             Próxima estadía
           </h2>
-          <p className="mt-1 text-[clamp(1.2rem,1.8vw,1.5rem)] leading-tight font-bold tracking-[-0.02em] text-ink">
+          <p className="mt-1 text-[clamp(1.2rem,1.8vw,1.5rem)] leading-tight font-semibold tracking-[-0.02em] text-ink">
             {fmtDate(r.checkIn, true)} → {fmtDate(r.checkOut)}
           </p>
-          <p className="mt-1 text-[13px] text-ink/75">
+          <p className="mt-1 text-[13px] text-ink-muted">
             {cabinLabel(r.cabinTypeId, r.unit)} · {plural(nightsBetween(r.checkIn, r.checkOut), "noche", "noches")} ·{" "}
             {plural(r.adults + r.children, "huésped", "huéspedes")} · {r.code}
           </p>
@@ -782,7 +758,7 @@ function NextStay({ r, money }: { r: Reservation; money: boolean }) {
       <div className="flex flex-wrap items-center gap-1.5">
         <StatusPill status={r.status} size="sm" />
         {money && pending > 0 && (
-          <span className="rounded-full bg-paper/70 px-2.5 py-0.5 text-[12px] font-semibold text-ink">{`Por cobrar ${cop(pending)}`}</span>
+          <span className="rounded-full bg-panel px-2.5 py-0.5 text-[12px] font-semibold text-ink ring-1 ring-line ring-inset">{`Por cobrar ${cop(pending)}`}</span>
         )}
       </div>
     </section>
@@ -805,9 +781,8 @@ function ClientData({ c, money }: { c: ClientSummary; money: boolean }) {
   const first = [...c.reservations].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))[0];
   const dropped = c.reservations.length - kept.length;
   return (
-    <Card aria-labelledby="cl-data" className="flex flex-col gap-2 p-4 sm:p-5">
-      <CardHeader id="cl-data" icon={<IdCardIcon size={17} />} title="Datos del cliente" subtitle="Tomados de su reserva más reciente." />
-      <div className="grid grid-cols-1 gap-x-8 2xl:grid-cols-2">
+    <Panel id="cl-data" title="Datos del cliente" subtitle="Tomados de su reserva más reciente.">
+      <div className="-mt-2 grid grid-cols-1 gap-x-8 2xl:grid-cols-2">
         <Facts
           rows={[
             { k: "Documento", v: docLabel(c), copy: c.docType === "SD" ? "" : c.docNumber },
@@ -849,7 +824,7 @@ function ClientData({ c, money }: { c: ClientSummary; money: boolean }) {
           ]}
         />
       </div>
-    </Card>
+    </Panel>
   );
 }
 
@@ -903,15 +878,13 @@ function ClientLog({ c }: { c: ClientSummary }) {
     });
 
   return (
-    <Card aria-labelledby="cl-log" className="flex flex-col gap-3 p-4 sm:p-5">
-      <CardHeader
-        id="cl-log"
-        icon={<NoteIcon size={17} />}
-        title="Registro interno"
-        subtitle="Notas e incidencias del equipo. Se guardan al agregarlas."
-        actions={<Badge icon={<LockIcon size={11} />}>Privado</Badge>}
-      />
-      <div className="flex flex-col gap-2.5 rounded-[18px] bg-canvas/60 p-3.5">
+    <Panel
+      id="cl-log"
+      title="Registro interno"
+      subtitle="Notas e incidencias del equipo. Se guardan al agregarlas."
+      action={<Badge icon={<LockIcon size={11} />}>Privado</Badge>}
+    >
+      <div className="flex flex-col gap-2.5 rounded-[16px] bg-panel p-3.5">
         <div className="flex flex-wrap gap-2">
           <Segmented
             size="sm"
@@ -962,7 +935,7 @@ function ClientLog({ c }: { c: ClientSummary }) {
       {entries.length ? (
         <ol className="flex flex-col gap-2">
           {entries.map((e) => (
-            <li key={e.id} className={`flex gap-3 rounded-[16px] px-4 py-2.5 ${e.kind === "incident" ? "bg-error-soft" : "bg-canvas/70"}`}>
+            <li key={e.id} className={`flex gap-3 rounded-[16px] px-4 py-2.5 ${e.kind === "incident" ? "bg-error-soft" : "bg-panel"}`}>
               <span aria-hidden="true" className="mt-0.5 flex-none text-ink-muted">
                 {e.kind === "incident" ? <AlertIcon size={15} className="text-error" /> : <NoteIcon size={15} />}
               </span>
@@ -985,7 +958,7 @@ function ClientLog({ c }: { c: ClientSummary }) {
       ) : (
         <p className="text-[13px] text-ink-muted">Sin notas ni incidencias registradas.</p>
       )}
-    </Card>
+    </Panel>
   );
 }
 
@@ -1000,14 +973,14 @@ function ClientHistory({ list }: { list: Reservation[] }) {
           <li key={r.code} className="relative pl-8">
             <span
               aria-hidden="true"
-              className="absolute top-4 left-1.5 size-3 rounded-full border-2 border-panel ring-1 ring-line-strong"
+              className="absolute top-4 left-1.5 size-3 rounded-full border-2 border-paper ring-1 ring-line-strong"
               style={{
                 background: `var(--color-status-${r.status === "pending_deposit" ? "pending" : r.status === "checked_in" ? "checked-in" : r.status})`,
               }}
             />
             <Link
               href={paths.reserva(r.code)}
-              className="group flex w-full flex-wrap items-center gap-x-4 gap-y-1 rounded-[16px] bg-canvas/60 px-4 py-3 text-left transition-colors hover:bg-canvas"
+              className="group flex w-full flex-wrap items-center gap-x-4 gap-y-1 rounded-[16px] bg-panel px-4 py-3 text-left transition-colors hover:bg-canvas"
             >
               <span className="min-w-[180px] flex-1">
                 <span className="block text-[14px] font-semibold text-ink">

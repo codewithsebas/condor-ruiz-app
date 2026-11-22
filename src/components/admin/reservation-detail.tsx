@@ -50,7 +50,7 @@ import { MoveCabinDialog } from "@/components/admin/move-cabin";
 import { AddonsCard } from "@/components/admin/addons";
 import { AdjustReservationDialog } from "@/components/admin/adjust-reservation";
 import { ACTION_ICON, ActionMenu, inMenu, type Action, type ActionKind } from "@/components/admin/action-menu";
-import { MoreLink, Panel } from "@/components/admin/board";
+import { MoreLink, Panel, SummaryStrip, type SummaryCell } from "@/components/admin/board";
 import { ProofCard } from "@/components/admin/proofs";
 import { paths } from "@/components/admin/routes";
 import { SyncMark } from "@/components/admin/sync";
@@ -401,48 +401,9 @@ export function Facts({ rows, className = "" }: { rows: { k: string; v: ReactNod
   );
 }
 
-// Lo esencial de la reserva en una franja separada por divisores, como la de «Hoy» del Dashboard: icono, cifra, detalle
-// y, si se puede, el enlace para cambiarla. Las columnas dependen del ancho disponible (modal o página).
-type SummaryCell = { label: string; value: ReactNode; hint: string; icon: ReactNode; action?: ReactNode; meter?: number };
-function Summary({ cells }: { cells: SummaryCell[] }) {
-  return (
-    <section aria-label="Resumen de la reserva" className="overflow-hidden rounded-[22px] bg-panel ring-1 ring-line ring-inset">
-      {/* Cada cifra lleva su divisor a la derecha y abajo; los del borde quedan fuera (margen negativo y overflow). */}
-      {/* Angosto: dos columnas, con la primera (las fechas) a lo ancho. */}
-      <div className="-mr-px -mb-px grid grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-5">
-        {cells.map((c) => (
-          <div key={c.label} className="flex min-w-0 items-start gap-3 border-r border-b border-line px-4 py-4 first:col-span-2 @md:px-5 @3xl:first:col-span-1">
-            <span aria-hidden="true" className="hidden size-9 flex-none place-items-center rounded-full bg-paper text-ink ring-1 ring-line @md:grid">
-              {c.icon}
-            </span>
-            <div className="flex min-w-0 flex-1 flex-col">
-              <p className="truncate text-[12px] font-medium text-ink-muted">{c.label}</p>
-              <p className="mt-1 text-[17px] leading-tight font-semibold tracking-[-0.02em] break-words text-ink tabular-nums">{c.value}</p>
-              {c.meter !== undefined && (
-                <span
-                  role="meter"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={c.meter}
-                  aria-label={`${c.label}: ${c.meter} % del total`}
-                  className="mt-2 block h-1.5 overflow-hidden rounded-full"
-                  style={{ background: "color-mix(in srgb, var(--color-chart-a) 18%, transparent)" }}
-                >
-                  <span
-                    className="block h-full rounded-full transition-[width] duration-500"
-                    style={{ width: `${c.meter}%`, background: "var(--color-chart-a)" }}
-                  />
-                </span>
-              )}
-              {c.hint && <p className="mt-1 text-[11.5px] text-ink-subtle">{c.hint}</p>}
-              {c.action}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
+// Lo esencial de la reserva en una franja con divisores (board.tsx): cinco cifras, la primera (las fechas) a lo ancho
+// en pantallas angostas.
+const Summary = ({ cells }: { cells: SummaryCell[] }) => <SummaryStrip label="Resumen de la reserva" cells={cells} wideFirst />;
 
 /* ───────────── Estadía ───────────── */
 

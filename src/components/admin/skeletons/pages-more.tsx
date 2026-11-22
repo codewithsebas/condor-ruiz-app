@@ -2,7 +2,6 @@
 
 // Esqueletos del resto de páginas del panel (alojamiento, negocio, equipo y fichas de detalle). Mismo criterio que
 // pages.tsx: la estructura y los textos fijos de cada vista, con los datos en gris.
-import type { ReactNode } from "react";
 import {
   ArrowLeftIcon,
   BanIcon,
@@ -28,7 +27,7 @@ import {
   WalletIcon,
 } from "@/components/ui/icons";
 import { CONTENT_GROUPS, CONTENT_SECTIONS, MODULES, type ContentSectionId } from "@/components/admin/routes";
-import { ACCENT, Deco, type Accent } from "@/components/admin/ui";
+import { Deco } from "@/components/admin/ui";
 import {
   Block,
   Box,
@@ -56,21 +55,6 @@ import {
 
 const GRID = "grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3";
 const cabinCombo = <Combo icon={<HomeIcon size={14} className="text-ink-muted" />} w="13ch" />;
-
-// Indicador de color (ui.tsx, StatCard con acento) con su figura decorativa y el rótulo fijo.
-function AccentStat({ accent, label, icon, w = "5ch" }: { accent: Accent; label: string; icon: ReactNode; w?: string }) {
-  return (
-    <div className={`relative isolate flex min-w-0 flex-col gap-1.5 overflow-hidden rounded-[22px] p-4 sm:p-5 ${ACCENT[accent].bg}`}>
-      <Deco accent={accent} className="-top-5 -right-5 size-[104px] rotate-12" />
-      <div className="flex items-center justify-between gap-2">
-        <p className="truncate text-[13.5px] font-semibold text-ink">{label}</p>
-        <span className="grid size-8 flex-none place-items-center rounded-full bg-paper/70 text-ink">{icon}</span>
-      </div>
-      <Line w={w} tone="soft" className="text-[clamp(1.45rem,2.1vw,1.85rem)] leading-tight font-bold" />
-      <Line w="12ch" tone="soft" className="text-[12.5px] leading-[22px]" />
-    </div>
-  );
-}
 
 // Fila de datos con rótulo y valor (Facts del detalle).
 function Facts({ rows }: { rows: string[] }) {
@@ -1190,37 +1174,55 @@ export function ClientDetailSkeleton() {
           <Block className="h-9 w-[96px] rounded-full" />
         </div>
       </header>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <AccentStat accent="pink" label="Reservas" icon={<ListIcon size={15} />} w="2ch" />
-        <AccentStat accent="green" label="Noches" icon={<MoonIcon size={15} />} w="2ch" />
-        <AccentStat accent="yellow" label="Valor generado" icon={<TrendIcon size={15} />} w="6ch" />
-        <AccentStat accent="blue" label="Próxima llegada" icon={<CalendarIcon size={15} />} w="7ch" />
+      {/* Franja de resumen con divisores (como en la ficha de la reserva). */}
+      <div className="@container">
+        <div className="overflow-hidden rounded-[22px] bg-panel ring-1 ring-line ring-inset">
+          <div className="-mr-px -mb-px grid grid-cols-2 @3xl:grid-cols-4">
+            {(
+              [
+                ["Reservas", <ListIcon key="i" size={16} />, "2ch"],
+                ["Noches", <MoonIcon key="i" size={16} />, "2ch"],
+                ["Valor generado", <TrendIcon key="i" size={16} />, "7ch"],
+                ["Próxima llegada", <CalendarIcon key="i" size={16} />, "8ch"],
+              ] as const
+            ).map(([label, icon, w]) => (
+              <div key={label} className="flex min-w-0 items-start gap-3 border-r border-b border-line px-4 py-4 @md:px-5">
+                <span className="hidden size-9 flex-none place-items-center rounded-full bg-paper text-ink ring-1 ring-line @md:grid">{icon}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12px] font-medium text-ink-muted">{label}</p>
+                  <Line w={w} className="mt-1 text-[17px] leading-tight font-semibold" />
+                  <Line w="9ch" className="mt-1 text-[11.5px]" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex min-w-0 flex-col gap-4">
-          <CardSk title="Datos del cliente" subtitle={null} icon={<UserIcon size={17} />}>
+          <Box title="Datos del cliente" subtitle={null}>
             <Facts rows={["Documento", "Celular", "Correo", "Ciudad", "Cliente desde"]} />
-          </CardSk>
-          <CardSk title="Historial de reservas" subtitle={null} icon={<ListIcon size={17} />} className="flex flex-col gap-3 p-4 sm:p-5">
+          </Box>
+          <Box title="Historial de reservas" subtitle={null}>
             <ul className="-mx-2 flex flex-col">
               {[0, 1, 2].map((i) => (
                 <ListRow key={i} lead={<Dot size="size-8" />} w={["40%", "34%", "46%"][i]} className="py-2.5" />
               ))}
             </ul>
-          </CardSk>
+          </Box>
         </div>
         <div className="flex min-w-0 flex-col gap-4">
-          <CardSk title="Valoración interna" subtitle={null} icon={<ShieldIcon size={17} />} actions={<Pill w="72px" />}>
+          <Box title="Valoración interna" subtitle={null} action={<Pill w="72px" />}>
             <Block className="h-[48px] rounded-[16px]" />
             <Block className="h-[120px] rounded-[16px]" />
-          </CardSk>
-          <CardSk title="Etiquetas" subtitle="Para reconocer al cliente de un vistazo." icon={<TagIcon size={17} />} accent="bg-yellow">
+          </Box>
+          <Box title="Etiquetas" subtitle="Para reconocer al cliente de un vistazo.">
             <span className="flex flex-wrap gap-1.5">
               {[80, 64, 96].map((w, i) => (
                 <Pill key={i} w={`${w}px`} />
               ))}
             </span>
-          </CardSk>
+          </Box>
         </div>
       </div>
     </>

@@ -7,7 +7,8 @@ import { api } from "@/lib/client/api";
 import { cop } from "@/lib/format";
 import type { Reservation, ReservationAddon } from "@/lib/types";
 import { useAdmin } from "@/components/admin/context";
-import { Button, Callout, Card, CardHeader, FieldError, Modal, ModalPresence } from "@/components/admin/ui";
+import { Panel } from "@/components/admin/board";
+import { Button, Callout, FieldError, Modal, ModalPresence } from "@/components/admin/ui";
 
 // Elegir decoraciones con costo para una reserva (Nueva reserva y la ficha). `options`: las del catálogo que se pueden
 // elegir más las que la reserva ya tiene (aunque estén ocultas o con otro precio: se conservan con el acordado).
@@ -82,23 +83,21 @@ export function AddonsCard({ r }: { r: Reservation }) {
   const editable = TRANSITIONS.addons.from.includes(r.status) && (!r.groupCode || r.groupCode === r.code);
   if (!addons.length && (!editable || !catalog.length)) return null;
   return (
-    <Card aria-labelledby="dt-addons" className="flex flex-col gap-3 p-5 sm:p-6">
-      <CardHeader
-        id="dt-addons"
-        icon={<GiftIcon size={18} />}
-        title="Decoraciones"
-        subtitle={addons.length ? `${cop(addonsTotal(addons))} incluidos en el total · se pagan con el saldo` : "Extras con costo para la ocasión."}
-        actions={
-          editable && (
-            <Button size="sm" icon={addons.length ? <PencilIcon size={14} /> : <PlusIcon size={14} />} onClick={() => setOpen(true)}>
-              {addons.length ? "Cambiar" : "Agregar"}
-            </Button>
-          )
-        }
-      />
+    <Panel
+      id="dt-addons"
+      title="Decoraciones"
+      subtitle={addons.length ? `${cop(addonsTotal(addons))} incluidos en el total · se pagan con el saldo` : "Extras con costo para la ocasión."}
+      action={
+        editable && (
+          <Button size="sm" icon={addons.length ? <PencilIcon size={14} /> : <PlusIcon size={14} />} onClick={() => setOpen(true)} className="flex-none">
+            {addons.length ? "Cambiar" : "Agregar"}
+          </Button>
+        )
+      }
+    >
       {addons.length > 0 ? <AddonList addons={addons} /> : <p className="text-[13.5px] text-ink-muted">Sin decoraciones.</p>}
       <ModalPresence>{open && <AddonsDialog r={r} onClose={() => setOpen(false)} />}</ModalPresence>
-    </Card>
+    </Panel>
   );
 }
 

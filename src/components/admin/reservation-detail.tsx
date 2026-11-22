@@ -1,8 +1,9 @@
 "use client";
 
-// Una reserva: la página (/admin/reservas/[codigo]) y el modal que abre el calendario muestran lo mismo. Arriba, el estado,
-// las acciones y cinco tarjetas (estadía, cabaña, pago, huéspedes y el siguiente paso); debajo, el huésped (editable, con su
-// historial de cliente) y la estadía como línea de tiempo, y después el pago, los correos, los comprobantes y las notas.
+// Una reserva: la página (/admin/reservas/[codigo]) y el modal que abre el calendario muestran lo mismo, con el estilo del
+// Dashboard. Arriba, el estado, las acciones y una franja con lo esencial (estadía, cabaña, pago, huéspedes y el siguiente
+// paso); debajo, a la izquierda, la estadía como línea de tiempo, el pago, las decoraciones y los correos; a la derecha, el
+// huésped (editable, con su historial de cliente), las notas y los comprobantes.
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import {
@@ -19,9 +20,7 @@ import {
   LockIcon,
   LoginIcon,
   LogoutIcon,
-  MailIcon,
   MoonIcon,
-  NoteIcon,
   PencilIcon,
   RefreshIcon,
   UserIcon,
@@ -51,13 +50,13 @@ import { MoveCabinDialog } from "@/components/admin/move-cabin";
 import { AddonsCard } from "@/components/admin/addons";
 import { AdjustReservationDialog } from "@/components/admin/adjust-reservation";
 import { ACTION_ICON, ActionMenu, inMenu, type Action, type ActionKind } from "@/components/admin/action-menu";
+import { MoreLink, Panel } from "@/components/admin/board";
 import { ProofCard } from "@/components/admin/proofs";
 import { paths } from "@/components/admin/routes";
 import { SyncMark } from "@/components/admin/sync";
 import { useRouteParam } from "@/components/admin/route-param";
 import { EMAIL_KIND, TRUST, type ConfirmCfg, adminInput } from "@/components/admin/shared";
 import {
-  ACCENT,
   Badge,
   Button,
   CopyButton,
@@ -70,7 +69,6 @@ import {
   Modal,
   ModalPresence,
   PageHeader,
-  StatCard,
   Stars,
   buttonClass,
 } from "@/components/admin/ui";
@@ -271,16 +269,17 @@ function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean
       <ActionMenu actions={actions.filter(inMenu)} />
     </>
   );
-  // Editar desde la tarjeta que muestra el dato.
+  // Editar desde la cifra que muestra el dato.
   const cardAction = (id: ActionKind, label: string) => {
     const a = actions.find((x) => x.id === id);
     return a ? (
       <button
         type="button"
         onClick={a.run}
-        className="mt-1 self-start rounded-full bg-paper/70 px-3 py-1 text-[12.5px] font-semibold text-ink transition-colors hover:bg-paper"
+        className="mt-1 inline-flex items-center gap-1 self-start text-[12.5px] font-medium text-ink-muted transition-colors hover:text-ink"
       >
         {label}
+        <ArrowRightIcon size={12} />
       </button>
     ) : null;
   };
@@ -308,86 +307,75 @@ function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean
 
       {/* Columnas según el ancho disponible (modal o página, con o sin barra lateral), no el de la pantalla. */}
       <div className="@container flex flex-col gap-4">
-        <div className="grid grid-cols-1 gap-3 @lg:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-5">
-          <StatCard
-            accent="yellow"
-            label="Estadía"
-            value={`${fmtDate(r.checkIn)} → ${fmtDate(r.checkOut)}`}
-            hint={plural(nights, "noche", "noches")}
-            icon={<CalendarIcon size={15} />}
-            action={cardAction("reschedule", "Cambiar fechas")}
-          />
-          <StatCard
-            accent="pink"
-            label="Cabaña"
-            value={unitName(cabinType, r.unit) || unitLabel(cabinType, r.unit)}
-            hint={cabinType?.nombre}
-            icon={<HomeIcon size={15} />}
-            action={cardAction("move", "Cambiar")}
-          />
-          <StatCard
-            accent="green"
-            label="Pagado"
-            value={cop(m.paid)}
-            hint={
-              <span className="flex w-full flex-col gap-1.5">
-                <span>{`${owed > 0 ? `de ${cop(m.quote.total)} · faltan ${cop(owed)}` : `de ${cop(m.quote.total)} · pagada`}${inGroup ? " · del grupo" : ""}`}</span>
-                <span aria-hidden="true" className="h-1.5 w-full overflow-hidden rounded-full bg-paper/60">
-                  <span className="block h-full rounded-full bg-ink transition-[width] duration-500" style={{ width: `${pct}%` }} />
-                </span>
-              </span>
-            }
-            icon={<WalletIcon size={15} />}
-          />
-          <StatCard
-            accent="blue"
-            label="Huéspedes"
-            value={r.adults + r.children}
-            hint={`${plural(r.adults, "adulto", "adultos")}${r.children ? ` · ${plural(r.children, "niño", "niños")}` : ""}${r.pet?.hasPet ? " · mascota" : ""}`}
-            icon={<UsersIcon size={15} />}
-            action={cardAction("adjust", "Editar")}
-          />
-          <StatCard accent="yellow" label="Siguiente paso" value={next.value} hint={next.hint} icon={<ClockIcon size={15} />} />
-        </div>
+        <Summary
+          cells={[
+            {
+              label: "Estadía",
+              value: `${fmtDate(r.checkIn)} → ${fmtDate(r.checkOut)}`,
+              hint: plural(nights, "noche", "noches"),
+              icon: <CalendarIcon size={16} />,
+              action: cardAction("reschedule", "Cambiar fechas"),
+            },
+            {
+              label: "Cabaña",
+              value: unitName(cabinType, r.unit) || unitLabel(cabinType, r.unit),
+              hint: cabinType?.nombre ?? "",
+              icon: <HomeIcon size={16} />,
+              action: cardAction("move", "Cambiar"),
+            },
+            {
+              label: inGroup ? "Pagado (grupo)" : "Pagado",
+              value: cop(m.paid),
+              hint: owed > 0 ? `de ${cop(m.quote.total)} · faltan ${cop(owed)}` : `de ${cop(m.quote.total)} · pagada`,
+              icon: <WalletIcon size={16} />,
+              meter: pct,
+            },
+            {
+              label: "Huéspedes",
+              value: r.adults + r.children,
+              hint: `${plural(r.adults, "adulto", "adultos")}${r.children ? ` · ${plural(r.children, "niño", "niños")}` : ""}${r.pet?.hasPet ? " · mascota" : ""}`,
+              icon: <UsersIcon size={16} />,
+              action: cardAction("adjust", "Editar"),
+            },
+            { label: "Siguiente paso", value: next.value, hint: next.hint, icon: <ClockIcon size={16} /> },
+          ]}
+        />
 
         {ACTIVE_STATUSES.includes(r.status) && <BathroomWarning cabinTypeId={r.cabinTypeId} unit={r.unit} from={r.checkIn} to={addDays(r.checkOut, -1)} />}
-        {inGroup && <GroupCard r={r} group={group} />}
         {(r.status === "pending_deposit" || r.status === "expired") && <HoldCard r={r} />}
 
-        {/* Quién viene y cuándo, a la vista; debajo, el pago y las notas. */}
-        <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-2">
-          <GuestCard r={r} client={client} onEdit={() => setEditing(true)} />
-          <StayCard r={r} cabin={cabin} />
-        </div>
-
-        <div className="grid grid-cols-1 items-start gap-4 @3xl:grid-cols-2">
+        {/* A la izquierda, la estadía y el dinero; a la derecha, quién viene y lo que anota el equipo. */}
+        <div className="grid grid-cols-1 items-start gap-4 @4xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <div className="flex min-w-0 flex-col gap-4">
+            {inGroup && <GroupCard r={r} group={group} />}
+            <StayCard r={r} cabin={cabin} />
             <PaymentSummary r={m} payments={payments} />
             <AddonsCard r={r} />
             <EmailsCard emails={emails} />
+          </div>
+          <div className="flex min-w-0 flex-col gap-4">
+            <GuestCard r={r} client={client} onEdit={() => setEditing(true)} />
+            <Notes r={r} />
             {proofs.length > 0 && (
-              <Card aria-labelledby="dt-proofs" className="flex flex-col gap-3 p-5 sm:p-6">
-                <CardHeader
-                  id="dt-proofs"
-                  icon={<FileTextIcon size={18} />}
-                  title="Comprobantes de pago"
-                  subtitle="Transferencias que envió el huésped desde «Mi reserva»."
-                  actions={
-                    <span className="flex items-center gap-1 text-[12px] text-ink-subtle">
-                      <LockIcon size={12} />
-                      Privados
-                    </span>
-                  }
-                />
+              <Panel
+                id="dt-proofs"
+                title="Comprobantes de pago"
+                subtitle="Transferencias que envió el huésped desde «Mi reserva»."
+                action={
+                  <span className="flex flex-none items-center gap-1 text-[12px] text-ink-subtle">
+                    <LockIcon size={12} />
+                    Privados
+                  </span>
+                }
+              >
                 <ul className="flex flex-col gap-2">
                   {proofs.map((p) => (
                     <ProofCard key={p.id} p={p} r={r} />
                   ))}
                 </ul>
-              </Card>
+              </Panel>
             )}
           </div>
-          <Notes r={r} />
         </div>
       </div>
 
@@ -410,6 +398,49 @@ export function Facts({ rows, className = "" }: { rows: { k: string; v: ReactNod
         </div>
       ))}
     </dl>
+  );
+}
+
+// Lo esencial de la reserva en una franja separada por divisores, como la de «Hoy» del Dashboard: icono, cifra, detalle
+// y, si se puede, el enlace para cambiarla. Las columnas dependen del ancho disponible (modal o página).
+type SummaryCell = { label: string; value: ReactNode; hint: string; icon: ReactNode; action?: ReactNode; meter?: number };
+function Summary({ cells }: { cells: SummaryCell[] }) {
+  return (
+    <section aria-label="Resumen de la reserva" className="overflow-hidden rounded-[22px] bg-panel ring-1 ring-line ring-inset">
+      {/* Cada cifra lleva su divisor a la derecha y abajo; los del borde quedan fuera (margen negativo y overflow). */}
+      {/* Angosto: dos columnas, con la primera (las fechas) a lo ancho. */}
+      <div className="-mr-px -mb-px grid grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-5">
+        {cells.map((c) => (
+          <div key={c.label} className="flex min-w-0 items-start gap-3 border-r border-b border-line px-4 py-4 first:col-span-2 @md:px-5 @3xl:first:col-span-1">
+            <span aria-hidden="true" className="hidden size-9 flex-none place-items-center rounded-full bg-paper text-ink ring-1 ring-line @md:grid">
+              {c.icon}
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <p className="truncate text-[12px] font-medium text-ink-muted">{c.label}</p>
+              <p className="mt-1 text-[17px] leading-tight font-semibold tracking-[-0.02em] break-words text-ink tabular-nums">{c.value}</p>
+              {c.meter !== undefined && (
+                <span
+                  role="meter"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={c.meter}
+                  aria-label={`${c.label}: ${c.meter} % del total`}
+                  className="mt-2 block h-1.5 overflow-hidden rounded-full"
+                  style={{ background: "color-mix(in srgb, var(--color-chart-a) 18%, transparent)" }}
+                >
+                  <span
+                    className="block h-full rounded-full transition-[width] duration-500"
+                    style={{ width: `${c.meter}%`, background: "var(--color-chart-a)" }}
+                  />
+                </span>
+              )}
+              {c.hint && <p className="mt-1 text-[11.5px] text-ink-subtle">{c.hint}</p>}
+              {c.action}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -441,18 +472,14 @@ function StayCard({ r, cabin }: { r: Reservation; cabin: string }) {
   const left = r.status === "completed";
   const live = ACTIVE_STATUSES.includes(r.status) && !left;
   return (
-    <Card aria-labelledby="dt-stay" className="flex flex-col gap-4 p-5 sm:p-6">
-      <CardHeader
-        id="dt-stay"
-        icon={<CalendarIcon size={18} />}
-        accent="yellow"
-        title="Estadía"
-        subtitle={`${cabin}${type ? ` (${type})` : ""} · ${plural(nights, "noche", "noches")}`}
-        actions={live && !arrived ? <Chip>{fromToday(today, r.checkIn)}</Chip> : undefined}
-      />
+    <Panel
+      id="dt-stay"
+      title="Estadía"
+      subtitle={`${cabin}${type ? ` (${type})` : ""} · ${plural(nights, "noche", "noches")}`}
+      action={live && !arrived ? <Chip>{fromToday(today, r.checkIn)}</Chip> : undefined}
+    >
       <ol className="flex flex-col">
         <Stop
-          accent="yellow"
           icon={arrived ? <CheckIcon size={16} /> : <LoginIcon size={16} />}
           label="Llegada"
           day={fmtDate(r.checkIn, true)}
@@ -462,13 +489,12 @@ function StayCard({ r, cabin }: { r: Reservation; cabin: string }) {
         />
         <li
           aria-hidden="true"
-          className="ml-[33px] flex items-center gap-3 border-l-2 border-dashed border-line-strong py-2.5 pl-5 text-[12.5px] font-semibold text-ink-muted"
+          className="ml-[29px] flex items-center gap-3 border-l-2 border-dashed border-line-strong py-2.5 pl-5 text-[12.5px] font-medium text-ink-muted"
         >
           <MoonIcon size={13} />
           {plural(nights, "noche", "noches")}
         </li>
         <Stop
-          accent="green"
           icon={left ? <CheckIcon size={16} /> : <LogoutIcon size={16} />}
           label="Salida"
           day={fmtDate(r.checkOut, true)}
@@ -491,39 +517,23 @@ function StayCard({ r, cabin }: { r: Reservation; cabin: string }) {
           { k: "Creada", v: fmtDateTime(r.createdAt) },
         ]}
       />
-    </Card>
+    </Panel>
   );
 }
 
-// Parada de la línea de tiempo: círculo de color, qué es y qué día, y la hora en una píldora (como la agenda del diseño).
-function Stop({
-  accent,
-  icon,
-  label,
-  day,
-  text,
-  time,
-  timeLabel,
-}: {
-  accent: "yellow" | "green";
-  icon: ReactNode;
-  label: string;
-  day: string;
-  text: string;
-  time: string;
-  timeLabel: string;
-}) {
+// Parada de la línea de tiempo: icono en un círculo, qué es y qué día, y la hora en una píldora.
+function Stop({ icon, label, day, text, time, timeLabel }: { icon: ReactNode; label: string; day: string; text: string; time: string; timeLabel: string }) {
   return (
-    <li className="flex items-center gap-3 rounded-[18px] bg-paper/70 p-3 pr-3.5">
-      <span aria-hidden="true" className={`grid size-10 flex-none place-items-center rounded-full text-ink ${ACCENT[accent].bg}`}>
+    <li className="flex items-center gap-3 rounded-[16px] bg-panel p-3 pr-3.5">
+      <span aria-hidden="true" className="grid size-9 flex-none place-items-center rounded-full bg-paper text-ink ring-1 ring-line">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[12.5px] font-semibold text-ink-muted">{label}</span>
-        <span className="block text-[16px] leading-tight font-bold tracking-[-0.01em] text-ink">{day}</span>
-        <span className="mt-0.5 block text-[12.5px] text-ink-muted">{text}</span>
+        <span className="block text-[12px] font-medium text-ink-muted">{label}</span>
+        <span className="block text-[15.5px] leading-tight font-semibold tracking-[-0.01em] text-ink">{day}</span>
+        <span className="mt-0.5 block text-[12px] text-ink-subtle">{text}</span>
       </span>
-      <span className={`flex-none rounded-full px-3 py-1 text-[12.5px] font-bold whitespace-nowrap text-ink tabular-nums ${ACCENT[accent].bg}`}>
+      <span className="flex-none rounded-full bg-paper px-3 py-1 text-[12.5px] font-semibold whitespace-nowrap text-ink tabular-nums ring-1 ring-line">
         <span className="sr-only">{`${timeLabel}: `}</span>
         {time}
       </span>
@@ -532,7 +542,9 @@ function Stop({
 }
 
 const Chip = ({ children, className = "" }: { children: ReactNode; className?: string }) => (
-  <span className={`inline-flex items-center gap-1 rounded-full bg-paper px-3 py-1 text-[12.5px] font-bold whitespace-nowrap text-ink ${className}`}>
+  <span
+    className={`inline-flex flex-none items-center gap-1 rounded-full bg-panel px-3 py-1 text-[12.5px] font-semibold whitespace-nowrap text-ink ${className}`}
+  >
     {children}
   </span>
 );
@@ -565,31 +577,29 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
   ];
   const whatsapp = waTo(g.phone, `Hola ${g.fullName.split(" ")[0]}, te escribimos de ${config.name} por tu reserva ${r.code}.`);
   return (
-    <section aria-labelledby="dt-guest" className="@container flex min-w-0 flex-col gap-4 rounded-[22px] bg-pink p-5 sm:p-6">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3.5">
-          <span
-            aria-hidden="true"
-            className="grid size-13 flex-none place-items-center rounded-full bg-paper text-[17px] font-bold tracking-[-0.02em] text-ink"
-          >
-            {initialsOf(g.fullName)}
-          </span>
-          <div className="min-w-0">
-            <p className="text-[12.5px] font-semibold text-ink/70">Huésped</p>
-            <h2 id="dt-guest" className="text-[clamp(1.15rem,1.9vw,1.4rem)] leading-tight font-bold tracking-[-0.02em] break-words text-ink">
-              {client ? (
-                <Link href={paths.cliente(client.key)} className="underline decoration-ink/35 decoration-2 underline-offset-4 hover:decoration-ink">
-                  {g.fullName}
-                </Link>
-              ) : (
-                g.fullName
-              )}
-            </h2>
-          </div>
-        </div>
-        <Button size="sm" icon={<PencilIcon size={13} />} onClick={onEdit} className="flex-none bg-paper! ring-0!">
+    <section aria-labelledby="dt-guest" className="@container flex min-w-0 flex-col gap-4 rounded-[22px] bg-paper p-5 ring-1 ring-line ring-inset">
+      <div className="flex min-h-8 items-start justify-between gap-3">
+        <p className="text-[14px] font-semibold text-ink">Huésped</p>
+        <Button size="sm" icon={<PencilIcon size={13} />} onClick={onEdit} className="flex-none">
           Editar
         </Button>
+      </div>
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="grid size-11 flex-none place-items-center rounded-full bg-panel text-[15px] font-semibold tracking-[-0.02em] text-ink ring-1 ring-line"
+        >
+          {initialsOf(g.fullName)}
+        </span>
+        <h2 id="dt-guest" className="min-w-0 text-[18px] leading-tight font-semibold tracking-[-0.02em] break-words text-ink">
+          {client ? (
+            <Link href={paths.cliente(client.key)} className="underline decoration-ink/25 decoration-1 underline-offset-4 hover:decoration-ink">
+              {g.fullName}
+            </Link>
+          ) : (
+            g.fullName
+          )}
+        </h2>
       </div>
 
       {tags.length > 0 && (
@@ -597,7 +607,7 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
           {tags.map((t) => (
             <li
               key={t.label}
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] leading-none font-semibold ${t.alert ? "bg-error-soft text-error" : "bg-pink-deep text-ink"}`}
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] leading-none font-medium ${t.alert ? "bg-error-soft text-error" : "bg-panel text-ink ring-1 ring-line ring-inset"}`}
             >
               {t.alert && <AlertIcon size={12} />}
               {t.label}
@@ -606,9 +616,9 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
         </ul>
       )}
 
-      {/* Su historial en cifras, como los indicadores de las tarjetas del diseño. */}
+      {/* Su historial en cifras, como las filas de indicadores del Dashboard. */}
       {client && (
-        <dl className={`grid gap-2 rounded-[18px] bg-paper/45 px-4 py-3 ${can(data.me.role, "finance") ? "grid-cols-2 @md:grid-cols-4" : "grid-cols-3"}`}>
+        <dl className={`grid gap-3 rounded-[16px] bg-panel px-4 py-3 ${can(data.me.role, "finance") ? "grid-cols-2" : "grid-cols-3"}`}>
           {[
             { k: "Reservas", v: client.reservations.length },
             { k: "Estadías", v: client.stays },
@@ -616,8 +626,8 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
             ...(can(data.me.role, "finance") ? [{ k: "Ha generado", v: cop(client.value) }] : []),
           ].map((x) => (
             <div key={x.k} className="min-w-0">
-              <dt className="text-[11px] font-semibold tracking-[.06em] text-ink/60 uppercase">{x.k}</dt>
-              <dd className="truncate text-[17px] font-bold tracking-[-0.01em] text-ink tabular-nums">{x.v}</dd>
+              <dt className="truncate text-[12px] font-medium text-ink-muted">{x.k}</dt>
+              <dd className="mt-0.5 truncate text-[17px] font-semibold tracking-[-0.02em] text-ink tabular-nums">{x.v}</dd>
             </div>
           ))}
         </dl>
@@ -638,7 +648,7 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
                   href={whatsapp}
                   target="_blank"
                   rel="noopener"
-                  className="inline-flex items-center gap-1 rounded-full bg-paper px-2.5 py-0.5 text-[12px] font-semibold text-ink transition-colors hover:bg-paper/70"
+                  className="inline-flex items-center gap-1 rounded-full bg-panel px-2.5 py-0.5 text-[12px] font-medium text-ink ring-1 ring-line transition-colors ring-inset hover:bg-canvas"
                 >
                   <WhatsAppIcon size={12} />
                   Escribir
@@ -681,16 +691,19 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
       {/* Los demás huéspedes: nombre y documento siempre; el contacto, si lo dieron. */}
       {(r.companions?.length ?? 0) > 0 && (
         <div className="flex flex-col gap-2">
-          <h3 className="text-[12px] font-bold tracking-[.06em] text-ink/60 uppercase">{`Acompañantes · ${r.companions!.length}`}</h3>
+          <h3 className="text-[12px] font-medium text-ink-muted">{`Acompañantes · ${r.companions!.length}`}</h3>
           <ul className="flex flex-col gap-1.5">
             {r.companions!.map((c, i) => (
-              <li key={i} className="flex items-center gap-3 rounded-[14px] bg-paper/45 px-3 py-2">
-                <span aria-hidden="true" className="grid size-8 flex-none place-items-center rounded-full bg-paper text-[12px] font-bold text-ink">
+              <li key={i} className="flex items-center gap-3 rounded-[14px] bg-panel px-3 py-2">
+                <span
+                  aria-hidden="true"
+                  className="grid size-8 flex-none place-items-center rounded-full bg-paper text-[12px] font-semibold text-ink ring-1 ring-line"
+                >
                   {initialsOf(c.fullName)}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[14px] font-semibold text-ink">{c.fullName}</span>
-                  <span className="block truncate text-[12.5px] text-ink/70">
+                  <span className="block truncate text-[12.5px] text-ink-muted">
                     {[`${c.docType} ${c.docNumber}`, c.phone, c.email, c.city].filter(Boolean).join(" · ")}
                   </span>
                 </span>
@@ -700,12 +713,7 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
         </div>
       )}
 
-      {client && (
-        <Link href={paths.cliente(client.key)} className={buttonClass("secondary", "sm", "mt-auto self-start bg-paper/60! ring-0!")}>
-          Ver ficha del cliente
-          <ArrowRightIcon size={14} />
-        </Link>
-      )}
+      {client && <MoreLink href={paths.cliente(client.key)}>Ver ficha del cliente</MoreLink>}
     </section>
   );
 }
@@ -863,13 +871,11 @@ function GuestEditor({ r, onClose }: { r: Reservation; onClose: () => void }) {
 function GroupCard({ r, group }: { r: Reservation; group: Reservation[] }) {
   const { cabinLabel } = useAdmin();
   return (
-    <Card aria-labelledby="dt-group" className="flex flex-col gap-3 p-4 sm:p-5">
-      <CardHeader
-        id="dt-group"
-        icon={<UsersIcon size={18} />}
-        title={`Reserva de ${plural(group.length, "cabaña", "cabañas")}`}
-        subtitle={`Código del huésped: ${r.groupCode}. El pago, el plazo y los correos son de todo el grupo.`}
-      />
+    <Panel
+      id="dt-group"
+      title={`Reserva de ${plural(group.length, "cabaña", "cabañas")}`}
+      subtitle={`Código del huésped: ${r.groupCode}. El pago, el plazo y los correos son de todo el grupo.`}
+    >
       <ul className="flex flex-col gap-1.5">
         {group.map((x) => {
           const body = (
@@ -883,13 +889,13 @@ function GroupCard({ r, group }: { r: Reservation; group: Reservation[] }) {
           return (
             <li key={x.code}>
               {x.code === r.code ? (
-                <div aria-current="true" className="flex items-center gap-3 rounded-[14px] bg-yellow-soft px-3 py-2 text-[13.5px]">
+                <div aria-current="true" className="flex items-center gap-3 rounded-[14px] bg-panel px-3 py-2 text-[13.5px] ring-1 ring-line-strong ring-inset">
                   {body}
                 </div>
               ) : (
                 <Link
                   href={paths.reserva(x.code)}
-                  className="flex items-center gap-3 rounded-[14px] bg-panel px-3 py-2 text-[13.5px] transition-colors hover:bg-canvas"
+                  className="flex items-center gap-3 rounded-[14px] px-3 py-2 text-[13.5px] ring-1 ring-line transition-colors ring-inset hover:bg-panel"
                 >
                   {body}
                 </Link>
@@ -898,7 +904,7 @@ function GroupCard({ r, group }: { r: Reservation; group: Reservation[] }) {
           );
         })}
       </ul>
-    </Card>
+    </Panel>
   );
 }
 
@@ -940,7 +946,7 @@ function HoldCard({ r }: { r: Reservation }) {
   }
 
   return (
-    <Card aria-labelledby="dt-hold" className="flex flex-col gap-3 p-4 sm:p-5">
+    <Card aria-labelledby="dt-hold" className="flex flex-col gap-3 bg-warning-soft! p-4 ring-0! sm:p-5">
       <CardHeader
         id="dt-hold"
         icon={<ClockIcon size={18} />}
@@ -1256,22 +1262,24 @@ function PaymentSummary({ r, payments }: { r: Reservation; payments: PaymentReco
   const pct = q.total ? Math.min(100, Math.round((r.paid / q.total) * 100)) : 0;
   const due = balanceDue(r);
   const fullPayment = payments.some((p) => p.kind === "full" && p.status === "approved");
-  // Cada parte del pago como una fila de la lista del diseño: círculo de color con el estado y el valor en una píldora.
-  const line = (label: string, amount: number, state: ReactNode, tone: "ok" | "wait" | "bad" | "muted") => (
-    <li className="flex items-center gap-3 rounded-[18px] bg-paper/70 p-3 pr-3.5">
+  // Cada parte del pago en una fila: su color de serie (abono morado, saldo verde, como en Pagos y Finanzas), el estado
+  // con su icono y el valor.
+  const line = (label: string, color: string, amount: number, state: ReactNode, tone: "ok" | "wait" | "bad" | "muted") => (
+    <li className="flex items-center gap-3 rounded-[16px] bg-panel p-3 pr-4">
       <span
         aria-hidden="true"
-        className={`grid size-10 flex-none place-items-center rounded-full ${tone === "ok" ? "bg-green text-ink" : tone === "wait" ? "bg-yellow text-ink" : tone === "bad" ? "bg-error-soft text-error" : "bg-panel text-ink-subtle"}`}
+        className={`grid size-9 flex-none place-items-center rounded-full bg-paper ring-1 ring-line ${tone === "ok" ? "text-success" : tone === "wait" ? "text-warning" : tone === "bad" ? "text-error" : "text-ink-subtle"}`}
       >
         {tone === "ok" ? <CheckIcon size={16} /> : tone === "wait" ? <ClockIcon size={16} /> : <span className="size-1.5 rounded-full bg-current" />}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[14.5px] font-semibold text-ink">{label}</span>
-        <span className={`block text-[12.5px] ${tone === "bad" ? "font-semibold text-error" : "text-ink-muted"}`}>{state}</span>
+        <span className="flex items-center gap-1.5 text-[14px] font-semibold text-ink">
+          <span aria-hidden="true" className="size-2.5 flex-none rounded-[3px]" style={{ background: color }} />
+          {label}
+        </span>
+        <span className={`block text-[12px] ${tone === "bad" ? "font-semibold text-error" : "text-ink-muted"}`}>{state}</span>
       </span>
-      <span className={`flex-none rounded-full px-3 py-1 text-[13px] font-bold text-ink tabular-nums ${tone === "ok" ? "bg-green" : "bg-panel"}`}>
-        {cop(amount)}
-      </span>
+      <span className="flex-none text-[14px] font-semibold text-ink tabular-nums">{cop(amount)}</span>
     </li>
   );
   // El abono es el primer pago (puede ser un valor distinto al 30 %); lo demás es saldo, que puede pagarse por partes.
@@ -1281,27 +1289,29 @@ function PaymentSummary({ r, payments }: { r: Reservation; payments: PaymentReco
   const depositAmount = firsts.length ? firsts.reduce((s, p) => s + p.amount, 0) : r.depositPaidAt ? Math.min(q.deposit, r.paid || q.deposit) : q.deposit;
   const balanceAmount = Math.max(0, q.total - depositAmount);
   const balanceReceived = r.depositPaidAt ? Math.max(0, Math.min(balanceAmount, r.paid - depositAmount)) : 0;
+  // Lo cobrado en una barra: el abono recibido y lo recibido del saldo, cada uno en su color.
+  const width = (n: number) => (q.total ? `${Math.min(100, (n / q.total) * 100)}%` : "0%");
+  const depositReceived = r.depositPaidAt ? Math.min(depositAmount, r.paid) : 0;
   return (
-    <Card aria-labelledby="dt-pay" className="p-5 sm:p-6">
-      <CardHeader
-        id="dt-pay"
-        icon={<WalletIcon size={18} />}
-        accent="green"
-        title="Pago"
-        subtitle={pct >= 100 ? "Pagada por completo" : `${cop(r.paid)} cobrado · ${pct} %`}
-        actions={
-          <p className="text-[12.5px] leading-tight font-semibold text-ink-muted sm:text-right">
-            Total
-            <strong className="block text-[22px] font-bold tracking-[-0.02em] text-ink tabular-nums">{cop(q.total)}</strong>
-          </p>
-        }
-      />
-      <span aria-hidden="true" className="mt-4 block h-2.5 overflow-hidden rounded-full bg-ink/8">
-        <span className="block h-full rounded-full bg-ink transition-[width] duration-500" style={{ width: `${pct}%` }} />
+    <Panel
+      id="dt-pay"
+      title="Pago"
+      subtitle={pct >= 100 ? "Pagada por completo" : `${cop(r.paid)} cobrado · ${pct} %`}
+      action={
+        <p className="flex-none text-right text-[12px] leading-tight font-medium text-ink-muted">
+          Total
+          <strong className="mt-0.5 block text-[22px] font-semibold tracking-[-0.02em] text-ink tabular-nums">{cop(q.total)}</strong>
+        </p>
+      }
+    >
+      <span aria-hidden="true" className="flex h-2.5 overflow-hidden rounded-full bg-ink/8">
+        <span className="block h-full transition-[width] duration-500" style={{ width: width(depositReceived), background: "var(--color-chart-a)" }} />
+        <span className="block h-full transition-[width] duration-500" style={{ width: width(balanceReceived), background: "var(--color-chart-b)" }} />
       </span>
-      <ul className="mt-4 flex flex-col gap-2">
+      <ul className="flex flex-col gap-2">
         {line(
           depositAmount === q.deposit ? `Abono (${depositPctOf(q)} %)` : "Abono",
+          "var(--color-chart-a)",
           depositAmount,
           r.depositPaidAt
             ? `Recibido el ${fmtDate(dateOf(r.depositPaidAt))}${fullPayment ? " · pago total" : ""}`
@@ -1314,6 +1324,7 @@ function PaymentSummary({ r, payments }: { r: Reservation; payments: PaymentReco
         )}
         {line(
           "Saldo",
+          "var(--color-chart-b)",
           balanceAmount,
           r.balancePaidAt
             ? `Pagado el ${fmtDate(dateOf(r.balancePaidAt))}${fullPayment ? " · pago total" : r.checkedInAt && r.balancePaidAt < r.checkedInAt ? " · antes de llegar" : ""}`
@@ -1330,10 +1341,10 @@ function PaymentSummary({ r, payments }: { r: Reservation; payments: PaymentReco
         )}
       </ul>
       {q.seasonNights ? (
-        <p className="mt-2 text-[12px] text-ink-muted">{`Incluye ${plural(q.seasonNights, "noche", "noches")} con tarifa de temporada.`}</p>
+        <p className="-mt-2 text-[12px] text-ink-muted">{`Incluye ${plural(q.seasonNights, "noche", "noches")} con tarifa de temporada.`}</p>
       ) : null}
       <PaymentHistory payments={payments} />
-    </Card>
+    </Panel>
   );
 }
 
@@ -1341,24 +1352,23 @@ function PaymentSummary({ r, payments }: { r: Reservation; payments: PaymentReco
 function PaymentHistory({ payments }: { payments: PaymentRecord[] }) {
   const { now } = useAdmin();
   const [all, setAll] = useState(false);
-  if (!payments.length) return <p className="mt-4 border-t border-line pt-4 text-[13px] text-ink-muted">Aún no hay pagos registrados.</p>;
+  if (!payments.length) return <p className="border-t border-line pt-4 text-[13px] text-ink-muted">Aún no hay pagos registrados.</p>;
   const list = all ? payments : payments.slice(0, 4);
   return (
-    <div className="mt-4 border-t border-line pt-4">
-      <h3 className="mb-2 text-[13px] font-bold text-ink">Pagos registrados</h3>
-      <ul className="flex flex-col gap-1.5">
+    <div className="border-t border-line pt-4">
+      <h3 className="mb-2 text-[13px] font-semibold text-ink">Pagos registrados</h3>
+      <ul className="flex flex-col divide-y divide-line">
         {list.map((p) => {
           const st = PAYMENT_STATUS[p.status];
           return (
-            <li key={p.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-[16px] bg-paper/50 px-3.5 py-2.5">
+            <li key={p.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2.5 first:pt-0">
               <span className="min-w-0">
                 <span className="flex flex-wrap items-center gap-1.5 text-[13.5px] font-semibold text-ink">
                   {kindLabel(p.kind)} · {cop(p.amount)}
                   <Badge tone={st.tone}>{st.label}</Badge>
                 </span>
                 <span className="block text-[12px] text-ink-muted">
-                  {p.provider === "manual" ? "Registrado por el equipo" : "Pago en línea (anterior)"} · {timeAgo(p.approvedAt ?? p.createdAt, now)} ·{" "}
-                  {p.reference}
+                  {p.provider === "manual" ? "Registrado por el equipo" : "Pago en línea"} · {timeAgo(p.approvedAt ?? p.createdAt, now)} · {p.reference}
                 </span>
                 {p.detail && !(p.provider === "manual" && p.detail === "Registrado por el equipo") && (
                   <span className={`block text-[12px] ${p.status === "declined" || p.status === "error" ? "text-error" : "text-ink-muted"}`}>{p.detail}</span>
@@ -1405,20 +1415,18 @@ function EmailsCard({ emails }: { emails: EmailRecord[] }) {
     }
   };
   return (
-    <Card aria-labelledby="dt-mail" className="flex flex-col gap-3 p-4 sm:p-5">
-      <CardHeader
-        id="dt-mail"
-        icon={<MailIcon size={18} />}
-        title="Correos"
-        subtitle="Los de la reserva salen solos: al crearla, al confirmarla, si se cancela o vence y dos días antes de la llegada."
-      />
+    <Panel
+      id="dt-mail"
+      title="Correos"
+      subtitle="Los de la reserva salen solos: al crearla, al confirmarla, si se cancela o vence y dos días antes de la llegada."
+    >
       <ul className="flex flex-col gap-2">
         {emails.map((e) => {
           const st = EMAIL_STATUS[e.status];
           return (
             <li
               key={e.id}
-              className={`flex flex-wrap items-center justify-between gap-3 rounded-[16px] px-4 py-2.5 ${e.status === "failed" ? "bg-error-soft" : "bg-canvas/60"}`}
+              className={`flex flex-wrap items-center justify-between gap-3 rounded-[16px] px-4 py-2.5 ${e.status === "failed" ? "bg-error-soft" : "bg-panel"}`}
             >
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-1.5 text-[13.5px] font-semibold text-ink">
@@ -1439,7 +1447,7 @@ function EmailsCard({ emails }: { emails: EmailRecord[] }) {
           );
         })}
       </ul>
-    </Card>
+    </Panel>
   );
 }
 
@@ -1462,18 +1470,15 @@ function Notes({ r }: { r: Reservation }) {
     });
   };
   return (
-    <Card aria-labelledby="dt-notes" className="flex flex-col gap-4 p-5 sm:p-6">
-      <CardHeader
-        id="dt-notes"
-        icon={<NoteIcon size={18} />}
-        accent="blue"
-        title="Notas internas"
-        subtitle={r.notes.length ? `${plural(r.notes.length, "nota", "notas")} · solo las ve el equipo` : "Solo las ve el equipo."}
-      />
+    <Panel
+      id="dt-notes"
+      title="Notas internas"
+      subtitle={r.notes.length ? `${plural(r.notes.length, "nota", "notas")} · solo las ve el equipo` : "Solo las ve el equipo."}
+    >
       {r.notes.length ? (
         <ol className="flex flex-col gap-2">
           {r.notes.map((n) => (
-            <li key={n.at} className="rounded-[18px] bg-paper/70 px-4 py-3">
+            <li key={n.at} className="rounded-[16px] bg-panel px-4 py-3">
               <p className="text-[12px] font-semibold text-ink-muted">{fmtDateTime(n.at)}</p>
               <p className="mt-1 text-[14px] leading-relaxed whitespace-pre-wrap text-ink">{n.text}</p>
             </li>
@@ -1497,6 +1502,6 @@ function Notes({ r }: { r: Reservation }) {
       <Button variant="primary" size="sm" disabled={!note.trim()} onClick={addNote} className="self-start">
         Agregar nota
       </Button>
-    </Card>
+    </Panel>
   );
 }

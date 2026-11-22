@@ -16,6 +16,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import type { EmailRecord, Quote } from "@/lib/types";
 import { type Db, toEmail } from "@/lib/server/db";
 import { EMAIL_LOGO_CID, EMAIL_LOGO_PNG_BASE64 } from "@/lib/server/email-logo";
+import { EMAIL_MAP_CID, loadEmailMap } from "@/lib/server/email-map";
 import { loadSiteContent } from "@/lib/server/site";
 import { env } from "@/lib/server/env";
 import { activeProvider, payLinkUrl } from "@/lib/server/online-payments";
@@ -25,7 +26,7 @@ import { activeProvider, payLinkUrl } from "@/lib/server/online-payments";
 // la reserva sigue confirmada, el error queda registrado (y avisa al panel) y el correo se reintenta con espera creciente.
 
 type Row = Tables<"email_outbox">;
-// content_id: imagen en línea, la que el HTML usa como src="cid:…" (el logo).
+// content_id: imagen en línea, la que el HTML usa como src="cid:…" (el logo y el mapa).
 type Attachment = { filename: string; content: string; content_id?: string };
 const LOGO: Attachment = { filename: "el-condor-del-ruiz.png", content: EMAIL_LOGO_PNG_BASE64, content_id: EMAIL_LOGO_CID };
 
@@ -141,6 +142,13 @@ async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: str
   const miReservaUrl = site ? `${ctx.base}/mi-reserva?code=${encodeURIComponent(r.code)}` : "";
   const whatsappUrl = wa(c.whatsapp, `Hola, tengo una pregunta sobre mi reserva ${r.code}.`);
   const guest = (email: RenderedEmail): Rendered => ({ email, to: row.to_email });
+  // Mapa de la dirección (en los correos con «Cómo llegar»): imagen en línea, como el logo. Sin ella, el correo sale igual.
+  const withMap = async () => {
+    const png = await loadEmailMap();
+    return png
+      ? { mapaUrl: `cid:${EMAIL_MAP_CID}`, map: [{ filename: "como-llegar.png", content: png.toString("base64"), content_id: EMAIL_MAP_CID }] }
+      : { mapaUrl: undefined, map: [] };
+  };
 
   switch (row.kind) {
     case "reservation_confirmed": {
@@ -157,6 +165,7 @@ async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: str
         .throwOnError();
       // El primer pago de cada cabaña (en un grupo, el abono se reparte entre ellas).
       const firstPaid = group.reduce((sum, m) => sum + (deposits.find((d) => d.reservation_code === m.code)?.amount ?? 0), 0);
+      const { mapaUrl, map } = await withMap();
       const email = reservationConfirmedEmail(c, {
         ...stay,
         mascota,
@@ -165,10 +174,11 @@ async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: str
         pagado: firstPaid || q.deposit,
         miReservaUrl,
         comoLlegarUrl: dirHref(),
+        mapaUrl,
         whatsappUrl,
       });
       const calendar = ics({ code: r.code, checkIn: r.check_in, checkOut: r.check_out, cabinTypeId: r.cabin_type_id }, c, cabana);
-      return { ...guest(email), attachments: [{ filename: `reserva-${r.code}.ics`, content: Buffer.from(calendar).toString("base64") }] };
+      return { ...guest(email), attachments: [...map, { filename: `reserva-${r.code}.ics`, content: Buffer.from(calendar).toString("base64") }] };
     }
     case "reservation_received":
       return guest(
@@ -195,18 +205,22 @@ async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: str
           whatsappUrl,
         }),
       );
-    case "balance_paid":
-      return guest(
-        balancePaidEmail(c, {
-          ...stay,
-          total: q.total,
-          pagado: r.paid_amount,
-          enEstadia: r.status === "checked_in",
-          comoLlegarUrl: dirHref(),
-          miReservaUrl,
-          whatsappUrl,
-        }),
-      );
+    case "balance_paid": {
+      // Ya hospedado no lleva las indicaciones de llegada: tampoco el mapa.
+      const enEstadia = r.status === "checked_in";
+      const { mapaUrl, map } = enEstadia ? { mapaUrl: undefined, map: [] } : await withMap();
+      const email = balancePaidEmail(c, {
+        ...stay,
+        total: q.total,
+        pagado: r.paid_amount,
+        enEstadia,
+        comoLlegarUrl: dirHref(),
+        mapaUrl,
+        miReservaUrl,
+        whatsappUrl,
+      });
+      return { ...guest(email), attachments: map };
+    }
     case "reservation_rescheduled":
     case "reservation_moved": {
       // Las fechas de este cambio quedan en la fila: si se reprograma otra vez, cada correo cuenta el suyo.
@@ -230,8 +244,18 @@ async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: str
       const calendar = ics({ code: r.code, checkIn: d.checkIn, checkOut: d.checkOut, cabinTypeId: r.cabin_type_id }, c, cabana);
       return { ...guest(email), attachments: [{ filename: `reserva-${r.code}.ics`, content: Buffer.from(calendar).toString("base64") }] };
     }
-    case "arrival_reminder":
-      return guest(arrivalReminderEmail(c, { ...stay, saldo: Math.max(0, q.total - r.paid_amount), comoLlegarUrl: dirHref(), miReservaUrl, whatsappUrl }));
+    case "arrival_reminder": {
+      const { mapaUrl, map } = await withMap();
+      const email = arrivalReminderEmail(c, {
+        ...stay,
+        saldo: Math.max(0, q.total - r.paid_amount),
+        comoLlegarUrl: dirHref(),
+        mapaUrl,
+        miReservaUrl,
+        whatsappUrl,
+      });
+      return { ...guest(email), attachments: map };
+    }
     default:
       throw new Error(`Tipo de correo desconocido: ${row.kind}`);
   }

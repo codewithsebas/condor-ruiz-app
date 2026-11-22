@@ -21,6 +21,23 @@ const stay = {
   logoUrl: "https://x/logo.png",
 };
 
+describe("mapa de la dirección", () => {
+  const reminder = { ...stay, saldo: 0, comoLlegarUrl: "https://maps/dir", miReservaUrl: "", whatsappUrl: "https://wa.me/1" };
+
+  it("con imagen, el mapa enlaza a «Cómo llegar»; sin imagen, no hay mapa", () => {
+    const withMap = arrivalReminderEmail(c, { ...reminder, mapaUrl: "cid:mapa" });
+    expect(withMap.html).toMatch(/<a href="https:\/\/maps\/dir"[^>]*><img src="cid:mapa"/);
+    expect(withMap.html).toContain("Mapa de ");
+    expect(arrivalReminderEmail(c, reminder).html).not.toContain("cid:mapa");
+  });
+
+  it("saldo pagado ya en estadía: sin indicaciones de llegada ni mapa", () => {
+    const base = { ...stay, total: 1, pagado: 1, comoLlegarUrl: "https://maps/dir", mapaUrl: "cid:mapa", miReservaUrl: "", whatsappUrl: "" };
+    expect(balancePaidEmail(c, { ...base, enEstadia: false }).html).toContain("cid:mapa");
+    expect(balancePaidEmail(c, { ...base, enEstadia: true }).html).not.toContain("cid:mapa");
+  });
+});
+
 describe("correos automáticos de la reserva", () => {
   it("reserva recibida: código, abono y plazo", () => {
     const e = reservationReceivedEmail(c, {

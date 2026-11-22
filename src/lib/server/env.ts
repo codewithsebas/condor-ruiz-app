@@ -66,6 +66,10 @@ export const env = {
   get wompiEventsSecret() {
     return read("WOMPI_EVENTS_SECRET");
   },
+  // Mapa de la dirección en los correos (Static Maps API de Geoapify).
+  get geoapifyApiKey() {
+    return read("GEOAPIFY_API_KEY");
+  },
   // Pagos simulados (sin Wompi): siempre en desarrollo; en un servidor, solo con ALLOW_PAYMENT_SIMULATOR=1 (nunca con
   // huéspedes reales: confirmaría reservas sin cobrar).
   get paymentSimulator() {
@@ -91,6 +95,7 @@ const OPTIONAL: Record<string, string[]> = {
   "avisos push": ["NEXT_PUBLIC_VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY"],
   "reservas de Booking por correo": ["BOOKING_IMAP_USER", "BOOKING_IMAP_PASSWORD"],
   "pagos en línea (Wompi)": ["WOMPI_PUBLIC_KEY", "WOMPI_PRIVATE_KEY", "WOMPI_INTEGRITY_SECRET", "WOMPI_EVENTS_SECRET"],
+  "mapa en los correos (Geoapify)": ["GEOAPIFY_API_KEY"],
 };
 
 // Proyecto de Supabase de cada entorno. APP_ENV dice dónde corre la app (qa | pdn); en desarrollo local es QA siempre.

@@ -82,6 +82,12 @@ const btns = (items: [string, string, string, string][]) =>
     .filter((b) => b[1])
     .map((b) => `<td class="em-col" style="padding:0 10px 0 0">${btn(...b)}</td>`)
     .join("")}</tr></table>`;
+// Mapa de la dirección (imagen de Geoapify, con mapas de OpenStreetMap, incrustada en el correo): al tocarlo abre la ruta
+// en Google Maps. La atribución que piden Geoapify y OpenStreetMap ya viene dentro de la imagen. Sin imagen, nada.
+const mapBlock = (c: Cfg, src: string | undefined, href: string) =>
+  src
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 2px"><tr><td class="em-box" style="background:${X.box};border-radius:18px;padding:0;overflow:hidden"><a href="${href}" target="_blank" style="display:block;text-decoration:none"><img src="${src}" width="536" alt="Mapa de ${esc(c.address)}: toca para ver cómo llegar" style="display:block;width:100%;max-width:536px;height:auto;border:0;border-radius:18px"></a></td></tr></table>`
+    : "";
 // Línea del texto plano solo si hay enlace.
 const linkLine = (label: string, url: string) => (url ? `${label}: ${url}\n` : "");
 // Código de reserva en una tarjeta pastel, como las del dashboard: el pastel dice en qué va la reserva.
@@ -153,6 +159,7 @@ type ConfirmedEmailData = {
   decoraciones?: { name: string; price: number }[];
   miReservaUrl: string; // vacío: sin el sitio público
   comoLlegarUrl: string;
+  mapaUrl?: string; // imagen del mapa (cid:…); sin ella, el correo no lleva mapa
   whatsappUrl: string;
   logoUrl: string;
 };
@@ -199,6 +206,7 @@ export function reservationConfirmedEmail(c: Cfg, d: ConfirmedEmailData): Render
     ]) +
     h2("Para tu llegada") +
     list(arrival) +
+    mapBlock(c, d.mapaUrl, d.comoLlegarUrl) +
     btns([
       ["Ver mi reserva", d.miReservaUrl, X.hl, X.ink],
       ["Cómo llegar", d.comoLlegarUrl, X.brand, X.cream],
@@ -382,6 +390,7 @@ type BalancePaidEmailData = StayData & {
   pagado: number;
   enEstadia: boolean; // pagó ya hospedado: las indicaciones de llegada sobran
   comoLlegarUrl: string;
+  mapaUrl?: string; // imagen del mapa (cid:…); sin ella, el correo no lleva mapa
   miReservaUrl: string; // vacío: sin el sitio público
   whatsappUrl: string;
 };
@@ -416,6 +425,7 @@ export function balancePaidEmail(c: Cfg, d: BalancePaidEmailData): RenderedEmail
           `El check-in es de ${fmtTime(c.checkInStart)} a ${fmtTime(c.checkInEnd)}.`,
           "Trae ropa abrigada: las noches en Murillo son frías.",
         ]) +
+        mapBlock(c, d.mapaUrl, d.comoLlegarUrl) +
         btns([
           ["Cómo llegar", d.comoLlegarUrl, X.brand, X.cream],
           ["Ver mi reserva", d.miReservaUrl, X.hl, X.ink],
@@ -514,7 +524,7 @@ export function reservationRescheduledEmail(c: Cfg, d: RescheduledEmailData): Re
 
 /* ───────────── Recordatorio de llegada (automático, 2 días antes) ───────────── */
 
-type ReminderEmailData = StayData & { saldo: number; comoLlegarUrl: string; miReservaUrl: string; whatsappUrl: string };
+type ReminderEmailData = StayData & { saldo: number; comoLlegarUrl: string; mapaUrl?: string; miReservaUrl: string; whatsappUrl: string };
 
 export function arrivalReminderEmail(c: Cfg, d: ReminderEmailData): RenderedEmail {
   const first = firstName(d.nombre);
@@ -537,6 +547,7 @@ export function arrivalReminderEmail(c: Cfg, d: ReminderEmailData): RenderedEmai
       `Dirección: ${esc(c.address)}.`,
       "Si vas a llegar fuera del horario de check-in, avísanos por WhatsApp.",
     ]) +
+    mapBlock(c, d.mapaUrl, d.comoLlegarUrl) +
     btns([
       ["Cómo llegar", d.comoLlegarUrl, X.brand, X.cream],
       ["Ver mi reserva", d.miReservaUrl, X.hl, X.ink],
@@ -561,6 +572,8 @@ export function arrivalReminderEmail(c: Cfg, d: ReminderEmailData): RenderedEmai
 type EmailTemplate = { name: string; to: string; subject: string; preheader: string; vars: string; html: string; text: string; sent: "auto" | "panel" };
 
 const SAMPLE = { checkIn: "2026-10-03", checkOut: "2026-10-04" };
+// El mapa de las vistas previas: el mismo de los correos, servido por el servidor (sin la clave de Geoapify a la vista).
+const MAP_PREVIEW = "/correo/mapa.png";
 
 export function emailTemplates(c: Cfg): EmailTemplate[] {
   const preview = (logo: string) => {
@@ -576,6 +589,7 @@ export function emailTemplates(c: Cfg): EmailTemplate[] {
       pagado: 141000,
       miReservaUrl: "#",
       comoLlegarUrl: "#",
+      mapaUrl: MAP_PREVIEW,
       whatsappUrl: "#",
       logoUrl: logo,
     });
@@ -606,6 +620,7 @@ export function emailTemplates(c: Cfg): EmailTemplate[] {
       pagado: 470000,
       enEstadia: false,
       comoLlegarUrl: "#",
+      mapaUrl: MAP_PREVIEW,
       miReservaUrl: "#",
       whatsappUrl: "#",
     });
@@ -624,7 +639,7 @@ export function emailTemplates(c: Cfg): EmailTemplate[] {
     const movedFull = reservationRescheduledEmail(c, { ...moved, pagado: 470000 });
     const movedPending = reservationRescheduledEmail(c, { ...moved, pagado: 0 });
     const bumped = reservationRescheduledEmail(c, { ...moved, pagado: 0, movida: true });
-    const reminder = arrivalReminderEmail(c, { ...stay, saldo: 329000, comoLlegarUrl: "#", miReservaUrl: "#", whatsappUrl: "#" });
+    const reminder = arrivalReminderEmail(c, { ...stay, saldo: 329000, comoLlegarUrl: "#", mapaUrl: MAP_PREVIEW, miReservaUrl: "#", whatsappUrl: "#" });
     return { confirmed, team, received, cancelled, expired, reminder, balancePaid, movedDeposit, movedFull, movedPending, bumped };
   };
   const { confirmed, team, received, cancelled, expired, reminder, balancePaid, movedDeposit, movedFull, movedPending, bumped } = preview("{{logoUrl}}");

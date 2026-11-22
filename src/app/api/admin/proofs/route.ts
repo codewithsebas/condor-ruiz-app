@@ -46,6 +46,7 @@ export const POST = syncRoute(async (req: NextRequest) => {
         p_code: proof.reservation_code,
         p_kind: "deposit",
         p_note: "Comprobante de pago aprobado",
+        p_method: "transfer",
         ...(opIdOf(req) && { p_op_id: opIdOf(req)! }),
         ...(occurredAtOf(req) && { p_occurred_at: occurredAtOf(req)! }),
       });

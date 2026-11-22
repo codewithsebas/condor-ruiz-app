@@ -33,7 +33,7 @@ import {
 import { addDays, dateOf, isISO, nightsBetween, todayISO } from "@/lib/format";
 import { uuid } from "@/lib/offline/config";
 import { sorted, unitsOf } from "@/lib/offline/data";
-import { manualPaymentNote, unpaidUntil } from "@/lib/payments";
+import { manualPaymentNote, paymentParts, unpaidUntil } from "@/lib/payments";
 import { can, type Permission } from "@/lib/permissions";
 import type { Decoration, SiteContent, SiteService } from "@/lib/site";
 import type {
@@ -52,6 +52,7 @@ import type {
   Guest,
   ImportRow,
   ManualReservationInput,
+  PayMethod,
   PaymentKind,
   PaymentRecord,
   PaymentTerms,
@@ -181,26 +182,34 @@ function paymentOutcome(r: Reservation, kind: PaymentKind, amount: number | null
   return { amt, pending, covered: amt >= owed, kind: (r.depositPaidAt ? "balance" : amt >= owed ? "full" : "deposit") as PaymentKind };
 }
 
-function applyPayment(d: AdminData, code: string, kind: PaymentKind, amount: number | null, note: string, op: Pick<Op, "opId" | "occurredAt">): AdminData {
+// Un pago dividido entre efectivo y transferencia queda en una fila por medio (como en el servidor).
+function applyPayment(
+  d: AdminData,
+  code: string,
+  kind: PaymentKind,
+  amount: number | null,
+  pay: { method?: PayMethod; cash?: number; note?: string },
+  op: Pick<Op, "opId" | "occurredAt">,
+): AdminData {
   const r = d.reservations.find((x) => x.code === code);
   if (!r) return d;
   const o = paymentOutcome(r, kind, amount);
   if (isErr(o)) return d;
   const at = nowIso(op);
-  const record: PaymentRecord = {
-    id: op.opId,
+  const records: PaymentRecord[] = paymentParts(pay.method, pay.cash, o.amt).map((part, i) => ({
+    id: i ? `${op.opId}-${i + 1}` : op.opId,
     reservationCode: code,
-    reference: `${code}-LOCAL`,
+    reference: `${code}-LOCAL${i ? `-${i + 1}` : ""}`,
     kind: o.kind,
     status: "approved",
-    amount: o.amt,
+    amount: part.amount,
     provider: "manual",
-    method: "",
-    detail: note || "Registrado por el equipo",
+    method: part.method,
+    detail: manualPaymentNote(part.method, pay.note),
     createdAt: at,
     expiresAt: null,
     approvedAt: at,
-  };
+  }));
   return {
     ...updateReservation(d, code, (x) => ({
       ...x,
@@ -211,7 +220,7 @@ function applyPayment(d: AdminData, code: string, kind: PaymentKind, amount: num
       depositPaidAt: x.depositPaidAt ?? at,
       balancePaidAt: o.covered ? at : x.balancePaidAt,
     })),
-    payments: sorted("payments", [record, ...d.payments.filter((p) => p.id !== op.opId)]),
+    payments: sorted("payments", [...records, ...d.payments.filter((p) => !records.some((x) => x.id === p.id))]),
   };
 }
 
@@ -381,6 +390,7 @@ const reservationOps = {
         if (amount !== null && (!Number.isInteger(amount) || amount <= 0)) return err(400, "INVALID_AMOUNT");
         const o = paymentOutcome(r, p.full ? "full" : p.action === "balance" ? "balance" : "deposit", amount);
         if (isErr(o)) return o;
+        if (p.method === "both" ? !Number.isInteger(p.cash) || p.cash! <= 0 || p.cash! >= o.amt : p.cash !== undefined) return err(422, "INVALID_SPLIT");
         if (o.pending && !freeUnitFor(d, r)) return err(409, "NO_AVAILABILITY");
         // Lo pagado que se veía: si en el servidor es otro, entró otro pago mientras tanto (¿el mismo dinero?).
         return { ...p, basePaid: r.paid };
@@ -417,7 +427,7 @@ const reservationOps = {
       if (!r) return d;
       if (p.action === "confirm" || p.action === "balance") {
         const kind = p.full ? "full" : p.action === "balance" ? "balance" : "deposit";
-        return applyPayment(d, p.code, kind, p.full || p.amount === undefined ? null : Number(p.amount), manualPaymentNote(p.method, p.note), op);
+        return applyPayment(d, p.code, kind, p.full || p.amount === undefined ? null : Number(p.amount), p, op);
       }
       if (p.action === "note")
         return updateReservation(d, p.code, (x) => ({ ...x, notes: [...x.notes, { at: op.occurredAt, text: String(p.text).trim().slice(0, 2000) }] }));
@@ -509,7 +519,7 @@ const reservationOps = {
       };
       const r = reservationOf(d, proof.reservationCode);
       return approve && p.confirmReservation && r && (r.status === "pending_deposit" || r.status === "expired") && !r.depositPaidAt
-        ? applyPayment(next, r.code, "deposit", null, "Comprobante de pago aprobado", op)
+        ? applyPayment(next, r.code, "deposit", null, { method: "transfer", note: "Comprobante de pago aprobado" }, op)
         : next;
     },
     result: (d, p) => d.proofs.find((x) => x.id === p.id) ?? null,
@@ -1382,6 +1392,7 @@ export const CONFLICT_TEXT: Record<string, string> = {
   INVALID_TRANSITION: "La reserva cambió de estado y esta acción ya no aplica.",
   ALREADY_PAID: "Esta reserva ya está pagada por completo.",
   INVALID_AMOUNT: "El valor es mayor a lo que falta por pagar.",
+  INVALID_SPLIT: "La parte en efectivo debe ser menor al valor recibido.",
   NOT_APPLICABLE: "En su estado actual, esta reserva no admite pagos.",
   BALANCE_PENDING: "Falta pagar el saldo: no se puede hacer el check-out.",
   HAS_RESERVATIONS: "Esta cabaña ya tiene reservas: no se puede eliminar.",

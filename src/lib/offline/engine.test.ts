@@ -615,4 +615,21 @@ describe("nueva reserva con pago", () => {
     expect(srv.calls.map((c) => c.req.path)).toEqual(["/admin/reservations", "/admin/action"]);
     expect((srv.calls[1].req.body as { code: string }).code).toBe(code);
   });
+
+  it("sin conexión: un pago dividido queda en una fila por medio y se rechaza si el efectivo no es menor al valor", async () => {
+    const srv = fakeServer();
+    const { engine } = await start(srv, false);
+    const created = await engine.mutate<{ reservation: { code: string } }>("reservation.create", input);
+    const { code } = created.data!.reservation;
+    const wrong = await engine.mutate("reservation.action", { code, action: "confirm", method: "both", cash: 300, note: "", amount: 300 });
+    expect(wrong.status).toBe(422);
+    const paid = await engine.mutate("reservation.action", { code, action: "confirm", method: "both", cash: 100, note: "ref. 45", amount: 300 });
+    expect(paid.status).toBe(200);
+    const rows = engine.data.payments.filter((p) => p.reservationCode === code);
+    expect(rows.map((p) => [p.method, p.amount, p.detail]).sort()).toEqual([
+      ["cash", 100, "Efectivo · ref. 45"],
+      ["transfer", 200, "Transferencia · ref. 45"],
+    ]);
+    expect(engine.data.reservations.find((x) => x.code === code)!.paid).toBe(300);
+  });
 });

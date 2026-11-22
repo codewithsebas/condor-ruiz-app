@@ -7,13 +7,47 @@ import type { PayMethod, PaymentKind, PaymentStatus, PublicReservation, Quote } 
 export const PAY_METHODS: { value: PayMethod; label: string }[] = [
   { value: "cash", label: "Efectivo" },
   { value: "transfer", label: "Transferencia" },
+  { value: "both", label: "Efectivo y transferencia" },
 ];
 
+// Medio de una fila de pago: un pago dividido queda en una fila por medio.
+export type PaymentPart = { method: Exclude<PayMethod, "both"> | ""; amount: number };
+
+// Partes de un pago por medio, como apply_payment: dividido, primero el efectivo y el resto por transferencia.
+export function paymentParts(method: PayMethod | undefined, cash: number | undefined, amount: number): PaymentPart[] {
+  if (method === "both")
+    return [
+      { method: "cash", amount: cash ?? 0 },
+      { method: "transfer", amount: amount - (cash ?? 0) },
+    ];
+  return [{ method: method ?? "", amount }];
+}
+
+// La parte de cada cabaña se toma de las partes por medio, en orden: una lista de filas (medio y valor) por cabaña.
+export function splitByMethod(shares: number[], parts: PaymentPart[]): PaymentPart[][] {
+  const left = parts.map((p) => p.amount);
+  let j = 0;
+  return shares.map((share) => {
+    const rows: PaymentPart[] = [];
+    for (let rest = share; rest > 0 && j < parts.length;) {
+      if (left[j] <= 0) {
+        j++;
+        continue;
+      }
+      const piece = Math.min(rest, left[j]);
+      rows.push({ method: parts[j].method, amount: piece });
+      left[j] -= piece;
+      rest -= piece;
+    }
+    return rows;
+  });
+}
+
 // Detalle que queda en el pago: el medio y, si hay, la nota ("Transferencia · Bancolombia, ref. 4521").
-export function manualPaymentNote(method: PayMethod | undefined, note: string | undefined) {
+export function manualPaymentNote(method: PayMethod | "" | undefined, note: string | undefined) {
   const label = PAY_METHODS.find((m) => m.value === method)?.label ?? "";
   const text = String(note ?? "").trim();
-  return [label, text].filter(Boolean).join(" · ").slice(0, 300);
+  return [label, text].filter(Boolean).join(" · ").slice(0, 300) || "Registrado por el equipo";
 }
 
 /* ───────────── Sin plazo para el abono ───────────── */
@@ -83,7 +117,7 @@ export const PAYMENT_STATUS: Record<PaymentStatus, { label: string; tone: "info"
   expired: { label: "Sin completar", tone: "neutral" },
 };
 
-const METHOD: Record<string, string> = { MANUAL: "Registrado por el equipo" };
+const METHOD: Record<string, string> = { MANUAL: "Registrado por el equipo", cash: "Efectivo", transfer: "Transferencia" };
 export const methodLabel = (m: string) => METHOD[m] ?? m;
 
 export const kindLabel = (k: PaymentKind) => (k === "deposit" ? "Abono" : k === "full" ? "Pago total" : "Saldo");

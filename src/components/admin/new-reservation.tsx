@@ -34,7 +34,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { typeMarks, unitMarks } from "@/lib/admin-metrics";
 import { useAdmin } from "@/components/admin/context";
 import { DateRangePicker } from "@/components/admin/date-picker";
-import { PaymentFields, type PayChoice, type PayOption } from "@/components/admin/payment-fields";
+import { PaymentFields, cashSplitError, type PayChoice, type PayOption } from "@/components/admin/payment-fields";
 import { paths } from "@/components/admin/routes";
 import { adminInput } from "@/components/admin/shared";
 import { Button, Callout, Field, FieldError, IconButton, Modal, MoneyInput, Segmented, Stepper, Switch } from "@/components/admin/ui";
@@ -64,6 +64,7 @@ type Form = {
   payNow: boolean;
   payChoice: PayChoice;
   payCustom: number;
+  payCash: number; // parte en efectivo de un pago dividido
   payMethod: PayMethod | null;
   payNote: string;
 };
@@ -119,6 +120,7 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
     payNow: false,
     payChoice: "deposit",
     payCustom: 0,
+    payCash: 0,
     payMethod: null,
     payNote: "",
   });
@@ -211,7 +213,9 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
   Object.assign(errs, validateCompanions(f.companions, people));
   if (f.special && (!f.total || f.total < 10_000)) errs.total = "Escribe el precio acordado.";
   if (f.payNow && payAmountError) errs.payAmount = payAmountError;
-  if (f.payNow && !f.payMethod) errs.payMethod = "Elige si pagó en efectivo o por transferencia.";
+  if (f.payNow && !f.payMethod) errs.payMethod = "Elige si pagó en efectivo, por transferencia o con las dos.";
+  const payCashError = cashSplitError(f.payMethod, f.payCash, payAmount);
+  if (f.payNow && payCashError) errs.payCash = payCashError;
   const err = (k: string) => (tried ? (errs[k] ?? server[k]) : server[k]);
   const blocked = Object.keys(errs).length > 0;
 
@@ -222,6 +226,7 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
         code,
         action: "confirm",
         method: f.payMethod!,
+        ...(f.payMethod === "both" && { cash: f.payCash }),
         note: f.payNote.trim(),
         ...(payChoice === "full" ? { full: true } : { amount: payAmount }),
         ...(extra.length > 0 && { group: true }),
@@ -617,6 +622,9 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
                 amountError={payAmountError}
                 method={f.payMethod}
                 onMethod={(m) => set({ payMethod: m })}
+                amount={payAmount}
+                cash={f.payCash}
+                onCash={(n) => set({ payCash: n })}
                 note={f.payNote}
                 onNote={(s) => set({ payNote: s })}
                 tried={tried}

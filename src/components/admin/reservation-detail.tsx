@@ -38,7 +38,7 @@ import { config } from "@/lib/config";
 import { can } from "@/lib/permissions";
 import { groupMoney, groupOf } from "@/lib/groups";
 import { addDays, cop, dateOf, fmtClock, fmtDate, fmtDateTime, nightsBetween, plural, timeAgo, waTo } from "@/lib/format";
-import { PaymentFields, type PayChoice, type PayOption } from "@/components/admin/payment-fields";
+import { PaymentFields, cashSplitError, type PayChoice, type PayOption } from "@/components/admin/payment-fields";
 import { PAYMENT_STATUS, depositPctOf, kindLabel, unpaidUntil } from "@/lib/payments";
 import { fmtTime } from "@/lib/site";
 import type { Companion, DocType, EmailRecord, Guest, PayMethod, PaymentRecord, Reservation } from "@/lib/types";
@@ -968,6 +968,7 @@ function HoldCard({ r }: { r: Reservation }) {
 const PAY_ERRORS: Record<string, string> = {
   ALREADY_PAID: "La reserva ya está pagada por completo.",
   INVALID_AMOUNT: "El valor no puede ser mayor a lo que falta por pagar.",
+  INVALID_SPLIT: "La parte en efectivo debe ser menor al valor recibido.",
   NO_AVAILABILITY: "Esas fechas ya no están libres: la reserva no se puede reactivar.",
   DATES_UNAVAILABLE: "Esas fechas ya no están libres: la reserva no se puede reactivar.",
   NOT_APPLICABLE: "En su estado actual la reserva no admite pagos.",
@@ -1122,6 +1123,7 @@ function PaymentDialog({ r, title, group = false, onClose }: { r: Reservation; t
   const [choice, setChoice] = useState<PayChoice>(pending && offerDeposit ? "deposit" : "full");
   const [custom, setCustom] = useState(0);
   const [method, setMethod] = useState<PayMethod | null>(null);
+  const [cash, setCash] = useState(0);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [tried, setTried] = useState(false);
@@ -1130,6 +1132,7 @@ function PaymentDialog({ r, title, group = false, onClose }: { r: Reservation; t
   const amountError =
     choice !== "custom" ? "" : custom <= 0 ? "Escribe el valor que recibiste." : custom > owed ? `No puede ser más de lo que falta (${cop(owed)}).` : "";
   const left = Math.max(0, owed - amount);
+  const cashError = cashSplitError(method, cash, amount);
 
   const options: PayOption[] = [
     { value: "full", label: r.paid > 0 ? "Todo lo que falta" : "Pago completo", hint: cop(owed) },
@@ -1139,7 +1142,7 @@ function PaymentDialog({ r, title, group = false, onClose }: { r: Reservation; t
 
   async function save() {
     setTried(true);
-    if (busy || amountError || !method) return;
+    if (busy || amountError || !method || cashError) return;
     setBusy(true);
     setError("");
     try {
@@ -1147,6 +1150,7 @@ function PaymentDialog({ r, title, group = false, onClose }: { r: Reservation; t
         code: r.code,
         action: pending ? "confirm" : "balance",
         method,
+        ...(method === "both" && { cash }),
         note: note.trim(),
         ...(choice === "full" ? { full: true } : { amount }),
         ...(group && { group: true }),
@@ -1219,6 +1223,9 @@ function PaymentDialog({ r, title, group = false, onClose }: { r: Reservation; t
             amountError={amountError}
             method={method}
             onMethod={setMethod}
+            amount={amount}
+            cash={cash}
+            onCash={setCash}
             note={note}
             onNote={setNote}
             tried={tried}
@@ -1268,10 +1275,9 @@ function PaymentSummary({ r, payments }: { r: Reservation; payments: PaymentReco
     </li>
   );
   // El abono es el primer pago (puede ser un valor distinto al 30 %); lo demás es saldo, que puede pagarse por partes.
-  // En un grupo cada cabaña tiene su parte del abono: se suma el primer pago de cada una.
-  const firsts = [...new Set(payments.map((p) => p.reservationCode))]
-    .map((code) => payments.filter((p) => p.reservationCode === code && p.status === "approved" && p.kind === "deposit").at(-1))
-    .filter((p): p is PaymentRecord => !!p);
+  // Solo el primer pago de cada cabaña es de tipo abono (después todo es saldo); un abono dividido entre efectivo y
+  // transferencia son dos filas, y en un grupo cada cabaña tiene su parte: se suman todas.
+  const firsts = payments.filter((p) => p.status === "approved" && p.kind === "deposit");
   const depositAmount = firsts.length ? firsts.reduce((s, p) => s + p.amount, 0) : r.depositPaidAt ? Math.min(q.deposit, r.paid || q.deposit) : q.deposit;
   const balanceAmount = Math.max(0, q.total - depositAmount);
   const balanceReceived = r.depositPaidAt ? Math.max(0, Math.min(balanceAmount, r.paid - depositAmount)) : 0;

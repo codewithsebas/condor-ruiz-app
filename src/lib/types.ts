@@ -499,8 +499,8 @@ export type CabinInput = {
 
 export type SeasonInput = Omit<RateSeason, "id" | "version"> & { id?: string };
 
-// Cómo pagó el huésped un pago que registra el equipo.
-export type PayMethod = "cash" | "transfer";
+// Cómo pagó el huésped un pago que registra el equipo. both: dividido entre efectivo y transferencia.
+export type PayMethod = "cash" | "transfer" | "both";
 
 export type AdminAction =
   | { code: string; action: "checkin" | "checkout" }
@@ -508,7 +508,7 @@ export type AdminAction =
   | { code: string; action: "cancel"; group?: boolean }
   // Pago recibido en persona: "confirm" = de una reserva pendiente (la confirma), "balance" = de una ya confirmada.
   // Valor: `full` = todo lo que falta, `amount` = un valor a elección; sin ninguno, el abono (o el saldo). `method` y
-  // `note` quedan como detalle del pago.
+  // `note` quedan como detalle del pago; con `method: "both"`, `cash` es la parte en efectivo y el resto fue transferencia.
   // `basePaid`: lo pagado que veía quien registró el pago sin conexión; si cambió, el servidor lo advierte (a menos que venga `force`).
   // `group` (en confirm, balance y extend_hold): la reserva es de varias cabañas; el panel la envía con conexión.
   | {
@@ -518,6 +518,7 @@ export type AdminAction =
       full?: boolean;
       amount?: number;
       method?: PayMethod;
+      cash?: number;
       basePaid?: number;
       force?: boolean;
       group?: boolean;

@@ -1428,8 +1428,10 @@ export type Database = {
       register_manual_payment: {
         Args: {
           p_amount?: number
+          p_cash?: number
           p_code: string
           p_kind: Database["public"]["Enums"]["payment_kind"]
+          p_method?: string
           p_note?: string
           p_occurred_at?: string
           p_op_id?: string

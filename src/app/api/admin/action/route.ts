@@ -18,7 +18,7 @@ import { baseVersionOf, businessError, fail, json, occurredAtOf, opIdOf, operati
 import { processOutbox } from "@/lib/server/mailer";
 import { dispatchPush } from "@/lib/server/push";
 import { originOf, siteUrl } from "@/lib/server/site";
-import { PAY_METHODS, manualPaymentNote, unpaidUntil } from "@/lib/payments";
+import { PAY_METHODS, unpaidUntil } from "@/lib/payments";
 import { can } from "@/lib/permissions";
 import type { AdminAction, Quote, ReservationAddon } from "@/lib/types";
 
@@ -119,6 +119,10 @@ export const POST = syncRoute(async (req: NextRequest) => {
       const amount = b.full || b.amount === undefined ? null : Number(b.amount);
       if (amount !== null && (!Number.isInteger(amount) || amount <= 0)) return fail(400, "INVALID_AMOUNT");
       if (b.method !== undefined && !PAY_METHODS.some((m) => m.value === b.method)) return fail(400, "INVALID_BODY");
+      // Dividido: la parte en efectivo (el resto fue transferencia). La base de datos exige que sea menor al valor recibido.
+      const cash = b.method === "both" ? Number(b.cash) : null;
+      if (cash !== null && (!Number.isInteger(cash) || cash <= 0)) return fail(422, "INVALID_SPLIT");
+      if (cash === null && b.cash !== undefined) return fail(400, "INVALID_BODY");
       const kind = b.full ? "full" : b.action === "balance" ? "balance" : "deposit";
       // Registrado sin conexión: si mientras tanto entró otro pago, podría ser el mismo dinero. Lo decide quien lo registró.
       if (b.basePaid !== undefined && !b.force && b.basePaid !== groupPaid) return fail(409, "PAID_CHANGED", { paid: groupPaid });
@@ -127,7 +131,12 @@ export const POST = syncRoute(async (req: NextRequest) => {
         .rpc("register_manual_payment", {
           p_code: current.code,
           p_kind: kind,
-          p_note: manualPaymentNote(b.method, b.note),
+          // La base de datos antepone el medio a la nota de cada fila.
+          p_note: String(b.note ?? "")
+            .trim()
+            .slice(0, 200),
+          p_method: b.method ?? "",
+          ...(cash !== null && { p_cash: cash }),
           ...(amount !== null && { p_amount: amount }),
           ...(opId && { p_op_id: opId }),
           ...(occurredAt && { p_occurred_at: occurredAt }),

@@ -37,7 +37,7 @@ import { can, canManageRole, isAdminRole, type Permission } from "@/lib/permissi
 import { MOCK_DB_KEY } from "@/lib/mock/keys";
 import { groupMoney, groupOf } from "@/lib/groups";
 import { addDays, sleep, todayISO } from "@/lib/format";
-import { manualPaymentNote, unpaidUntil } from "@/lib/payments";
+import { manualPaymentNote, paymentParts, splitByMethod, unpaidUntil, type PaymentPart } from "@/lib/payments";
 import { defaultContent, defaultTexts, mergeTexts, type Decoration, type SiteContent, type SiteService } from "@/lib/site";
 import { mergeTheme } from "@/lib/theme";
 import type {
@@ -299,7 +299,8 @@ function registerPayment(
   db: Db,
   r: Reservation,
   amount: number,
-  detail: string,
+  // Medios del pago (una fila por medio), la nota y lo que se agrega a cada detalle (el grupo).
+  pay: { parts?: PaymentPart[]; note?: string; suffix?: string },
   quiet = false, // otra cabaña del grupo: avisa y escribe la principal
 ): "ALREADY_PAID" | "NOT_APPLICABLE" | "INVALID_AMOUNT" | null {
   const owed = r.quote.total - r.paid;
@@ -309,7 +310,13 @@ function registerPayment(
   if (!Number.isInteger(amount) || amount <= 0 || amount > owed) return "INVALID_AMOUNT";
   const covered = amount >= owed;
   const now = new Date().toISOString();
-  db.payments.push({ ...mockPayment(r, r.depositPaidAt ? "balance" : covered ? "full" : "deposit", "approved", now, amount), detail });
+  const kind = r.depositPaidAt ? "balance" : covered ? "full" : "deposit";
+  for (const part of pay.parts ?? [{ method: "", amount }])
+    db.payments.push({
+      ...mockPayment(r, kind, "approved", now, part.amount),
+      method: part.method || "MANUAL",
+      detail: manualPaymentNote(part.method, pay.note) + (pay.suffix ?? ""),
+    });
   Object.assign(r, {
     status: pending ? "confirmed" : r.status,
     depositPaidAt: r.depositPaidAt ?? now,
@@ -348,13 +355,20 @@ function registerPayment(
 
 // Pago de una reserva con varias cabañas: mismo reparto que register_manual_payment (abono de cada una, lo que debe cada
 // una o en proporción). La principal se registra al final: su aviso habla por el grupo.
-function registerGroupPayment(db: Db, rows: Reservation[], amount: number | null, kind: "deposit" | "full" | "balance", detail: string) {
+function registerGroupPayment(
+  db: Db,
+  rows: Reservation[],
+  amount: number | null,
+  kind: "deposit" | "full" | "balance",
+  pay: { method?: PayMethod; cash?: number; note?: string },
+) {
   const owed = rows.map((x) => Math.max(0, x.quote.total - x.paid));
   const dep = rows.map((x, i) => Math.min(x.quote.deposit, owed[i]));
   const totalOwed = owed.reduce((s, x) => s + x, 0);
   if (totalOwed <= 0) return "ALREADY_PAID";
   const amt = amount ?? (kind === "deposit" ? dep.reduce((s, x) => s + x, 0) : totalOwed);
   if (!Number.isInteger(amt) || amt <= 0 || amt > totalOwed) return "INVALID_AMOUNT";
+  if (pay.method === "both" && (!Number.isInteger(pay.cash) || pay.cash! <= 0 || pay.cash! >= amt)) return "INVALID_SPLIT";
   let share: number[];
   if (amt >= totalOwed) share = owed;
   else if (amount === null && kind === "deposit") share = dep;
@@ -368,13 +382,14 @@ function registerGroupPayment(db: Db, rows: Reservation[], amount: number | null
           left--;
         }
   }
+  const parts = splitByMethod(share, paymentParts(pay.method, pay.cash, amt));
   for (let i = rows.length - 1; i >= 0; i--) {
     if (share[i] <= 0) {
       // Sin parte del pago (ya estaba pagada) pero el grupo se confirma junto.
       if (rows[i].status === "pending_deposit" || rows[i].status === "expired") rows[i].status = "confirmed";
       continue;
     }
-    const refused = registerPayment(db, rows[i], share[i], `${detail} (pago del grupo ${rows[0].code})`, i > 0);
+    const refused = registerPayment(db, rows[i], share[i], { parts: parts[i], note: pay.note, suffix: ` (pago del grupo ${rows[0].code})` }, i > 0);
     if (refused) return refused;
   }
   if (amt >= totalOwed) rows.forEach((x) => (x.balancePaidAt ??= new Date().toISOString()));
@@ -1027,10 +1042,10 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
       return ok(r);
     }
     if ((body.action === "confirm" || body.action === "balance") && group.length > 1) {
-      const b = opts.body as { full?: boolean; amount?: number; method?: PayMethod; note?: string };
+      const b = opts.body as { full?: boolean; amount?: number; method?: PayMethod; cash?: number; note?: string };
       const kind = b.full ? "full" : body.action === "balance" ? "balance" : "deposit";
       const amount = b.full || b.amount === undefined ? null : Number(b.amount);
-      const refused = registerGroupPayment(db, group, amount, kind, manualPaymentNote(b.method, b.note) || "Registrado por el equipo");
+      const refused = registerGroupPayment(db, group, amount, kind, b);
       if (refused) return { status: refused === "ALREADY_PAID" ? 409 : 422, data: { error: refused } };
       save(db);
       return ok(r);
@@ -1045,10 +1060,11 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
       return ok(r);
     }
     if (body.action === "confirm" || body.action === "balance") {
-      const b = opts.body as { full?: boolean; amount?: number; method?: PayMethod; note?: string };
+      const b = opts.body as { full?: boolean; amount?: number; method?: PayMethod; cash?: number; note?: string };
       const owed = r.quote.total - r.paid;
       const amount = b.full ? owed : b.amount !== undefined ? Number(b.amount) : body.action === "confirm" ? Math.min(r.quote.deposit, owed) : owed;
-      const refused = registerPayment(db, r, amount, manualPaymentNote(b.method, b.note) || "Registrado por el equipo");
+      if (b.method === "both" && (!Number.isInteger(b.cash) || b.cash! <= 0 || b.cash! >= amount)) return { status: 422, data: { error: "INVALID_SPLIT" } };
+      const refused = registerPayment(db, r, amount, { parts: paymentParts(b.method, b.cash, amount), note: b.note });
       if (refused) return { status: refused === "ALREADY_PAID" ? 409 : 422, data: { error: refused } };
       save(db);
       return ok(r);

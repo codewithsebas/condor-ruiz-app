@@ -288,6 +288,7 @@ export type NotificationKind =
   | "proof_approved"
   | "proof_rejected"
   | "balance_paid"
+  | "payment_refund" // pago en línea aprobado que no se pudo aplicar a la reserva: hay que resolverlo a mano
   | "checkout_pending"
   | "email_failed"
   | "booking_pending"
@@ -523,6 +524,31 @@ export type AdminAction =
   | { code: string; action: "note"; text: string }
   // Corregir o completar los datos del huésped (p. ej. el documento de una reserva importada).
   | { code: string; action: "guest"; guest: Guest; companions?: Companion[] };
+
+// Pagos en línea (Wompi). Lo que el huésped puede pagar ahora y el resumen que ve antes de pagar.
+export type OnlinePayOption = { kind: PaymentKind; amount: number };
+export type OnlinePayInfo = {
+  code: string;
+  guestFirstName: string;
+  status: ReservationStatus;
+  checkIn: string;
+  checkOut: string;
+  cabins: CabinTypeId[];
+  total: number;
+  paid: number;
+  options: OnlinePayOption[]; // vacío: no hay nada que pagar en línea
+  provider: "wompi" | "simulado" | null; // null: los pagos en línea no están activos
+  sandbox: boolean; // llaves de pruebas de Wompi
+  // Formulario de tarjeta (Wompi): llave pública para tokenizar en Wompi y los términos que el huésped acepta al pagar.
+  card: { publicKey: string; tokensUrl: string; termsUrl: string; privacyUrl: string } | null;
+};
+export type OnlinePayStatus = {
+  code: string;
+  status: "initiated" | "pending" | "approved" | "declined" | "error" | "unapplied";
+  amount: number;
+  kind: PaymentKind;
+  detail: string;
+};
 
 export type ProofReview = { id: string; decision: "approve" | "reject"; note: string; confirmReservation: boolean };
 

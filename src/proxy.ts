@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // Modo «solo panel» (SOLO_PANEL=1): mientras el sitio público no esté contratado, solo se publica el panel.
 // Las páginas del sitio redirigen a /admin y su API responde 404. Siguen abiertas las rutas del panel, los despachadores de
 // avisos push y de correos, la lectura del buzón y de los calendarios de Booking (los llama la base de datos) y el
-// calendario de cada cabaña que importa Booking (/api/ical).
+// calendario de cada cabaña que importa Booking (/api/ical) y los pagos en línea (/pagar y /api/payments).
 const ABIERTAS = [
   "/admin",
   "/login",
@@ -14,6 +14,9 @@ const ABIERTAS = [
   "/api/booking",
   "/api/channels",
   "/api/ical",
+  // Pagos en línea: el enlace de pago y el correo llevan aquí aunque el sitio no esté publicado; Wompi envía sus eventos.
+  "/pagar",
+  "/api/payments",
   "/icon",
   "/apple-icon",
   "/icons",

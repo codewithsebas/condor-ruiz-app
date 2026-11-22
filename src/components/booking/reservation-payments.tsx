@@ -9,6 +9,7 @@ import { PAYMENT_STATUS, depositPctOf, kindLabel, moneyOf, stageOf, type Stage }
 import type { PublicPayment, PublicReservation } from "@/lib/types";
 import { CheckIcon, CopyIcon, WhatsAppIcon } from "@/components/ui/icons";
 import { useSite } from "@/components/site/site-provider";
+import { OnlinePayButtons } from "@/components/booking/online-pay";
 
 /* ───────────── Hora del servidor ───────────── */
 
@@ -123,7 +124,8 @@ function HowToPay({ transfer, payKey, qr }: { transfer: string; payKey: string; 
 /* ───────────── Tarjeta por etapa ───────────── */
 
 // Lo que el huésped debe saber y hacer ahora. `onRefresh`: volver a consultar la API al vencer el plazo del abono.
-export function PaymentStage({ r, onRefresh }: { r: PublicReservation; onRefresh: () => void }) {
+// `access`: el código y el correo con que se consultó la reserva (para pagar en línea); sin él, solo los datos de transferencia.
+export function PaymentStage({ r, onRefresh, access }: { r: PublicReservation; onRefresh: () => void; access?: { code: string; email: string } }) {
   const { c } = useSite();
   const stage0 = stageOf(r);
   const live = stage0 === "awaiting_deposit";
@@ -165,6 +167,7 @@ export function PaymentStage({ r, onRefresh }: { r: PublicReservation; onRefresh
               { k: `Abono para confirmar (${depositPctOf(r.quote)} %)`, v: m.deposit, strong: true },
             ]}
           />
+          {access && <OnlinePayButtons access={access} />}
           {howToPay}
           <p className="text-[.92rem] font-semibold">
             {canTransfer
@@ -212,6 +215,7 @@ export function PaymentStage({ r, onRefresh }: { r: PublicReservation; onRefresh
               { k: "Saldo pendiente", v: m.due, strong: true, note: "Puedes pagarlo por transferencia antes de llegar o en recepción." },
             ]}
           />
+          {access && <OnlinePayButtons access={access} />}
           {howToPay}
           <p className="text-[.9rem] font-semibold">Check-in de {c.checkIn.replace(/\.$/, "")}. Presenta tu documento de identidad físico al llegar.</p>
         </Panel>
@@ -229,6 +233,7 @@ export function PaymentStage({ r, onRefresh }: { r: PublicReservation; onRefresh
               { k: "Saldo restante", v: m.due, strong: true },
             ]}
           />
+          {access && <OnlinePayButtons access={access} />}
           {howToPay}
         </Panel>
       );

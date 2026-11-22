@@ -271,6 +271,7 @@ type ReceivedEmailData = StayData & {
   abono: number;
   plazo: string; // ISO: fin del día de llegada (si no llega el abono, ahí vence)
   miReservaUrl: string; // vacío: sin el sitio público
+  pagarUrl?: string; // enlace de pago en línea (Wompi); vacío o sin él: no se ofrece
   whatsappUrl: string;
 };
 
@@ -311,6 +312,7 @@ export function reservationReceivedEmail(c: Cfg, d: ReceivedEmailData): Rendered
       ["Abono para confirmar", cop(d.abono), "Asegura tus fechas"],
     ]) +
     h2("Cómo pagar el abono") +
+    (d.pagarUrl ? p("Paga en línea con tarjeta, PSE o Nequi, o por transferencia:") + btns([["Pagar en línea", d.pagarUrl, X.hl, X.ink]]) : "") +
     payHtml +
     btns([
       ["Ver mi reserva", d.miReservaUrl, X.hl, X.ink],
@@ -322,7 +324,7 @@ export function reservationReceivedEmail(c: Cfg, d: ReceivedEmailData): Rendered
     `Código: ${d.codigo} (pendiente de abono)\nCabaña: ${d.cabana}\nFechas: ${stayOf(d)} · ${nights}\nHuéspedes: ${guestsOf(d)}${d.mascota ? " · con mascota" : ""}\n\n` +
     `PARA CONFIRMAR\nValor total: ${cop(d.total)}\nAbono: ${cop(d.abono)} (asegura tus fechas)\nSaldo al llegar: ${cop(Math.max(0, d.total - d.abono))}\n\n` +
     `CÓMO PAGAR EL ABONO\n${[datos, llave && `Llave Bre-B: ${llave}`].filter(Boolean).join("\n") || "Escríbenos por WhatsApp y te enviamos los datos para transferir."}\n\n` +
-    `${linkLine("Ver mi reserva", d.miReservaUrl)}WhatsApp: ${d.whatsappUrl}\n\nTus fechas se aseguran cuando recibamos el abono. Si alguien las paga antes, te movemos a las próximas libres con el mismo valor.` +
+    `${linkLine("Pagar en línea", d.pagarUrl ?? "")}${linkLine("Ver mi reserva", d.miReservaUrl)}WhatsApp: ${d.whatsappUrl}\n\nTus fechas se aseguran cuando recibamos el abono. Si alguien las paga antes, te movemos a las próximas libres con el mismo valor.` +
     footText(c);
   return finish(c, d.logoUrl, {
     subject: `Recibimos tu reserva ${d.codigo} · paga el abono para confirmarla`,

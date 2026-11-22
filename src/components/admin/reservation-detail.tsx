@@ -28,6 +28,7 @@ import {
   UsersIcon,
   WalletIcon,
   WhatsAppIcon,
+  LinkIcon,
 } from "@/components/ui/icons";
 import { StatusPill } from "@/components/ui/status-pill";
 import { balanceDue, buildClients, pendingOf, typeMarks, type ClientSummary } from "@/lib/admin-metrics";
@@ -147,6 +148,34 @@ export function ReservationModal({ code, onClose }: { code: string; onClose: () 
   );
 }
 
+/* ───────────── Enlace de pago ───────────── */
+
+// Copia el enlace de pago en línea (Wompi) para mandarlo al huésped. El enlace cobra siempre lo que falte en ese momento.
+function PayLinkButton({ code }: { code: string }) {
+  const { toast, onAuthError } = useAdmin();
+  const [busy, setBusy] = useState(false);
+  async function copy() {
+    setBusy(true);
+    try {
+      const r = await api.admin.payLink(code);
+      if (r.status === 401 || r.status === 403) return onAuthError();
+      if (r.status === 503) return toast("Los pagos en línea no están activos (faltan las llaves de Wompi).", "error");
+      if (r.status !== 200 || !r.data) return toast("No se pudo crear el enlace. Revisa la conexión.", "error");
+      await navigator.clipboard.writeText(r.data.url);
+      toast("Enlace de pago copiado: pégalo en el chat del huésped");
+    } catch {
+      toast("No se pudo copiar el enlace. Inténtalo de nuevo.", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Button variant="secondary" loading={busy} icon={<LinkIcon size={16} />} onClick={copy}>
+      Enlace de pago
+    </Button>
+  );
+}
+
 /* ───────────── Vista ───────────── */
 
 function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean }) {
@@ -235,6 +264,9 @@ function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean
         <WhatsAppIcon size={16} />
         WhatsApp
       </a>
+      {owed > 0 && !isFromBooking(r) && ["pending_deposit", "expired", "confirmed", "rescheduled", "checked_in"].includes(r.status) && (
+        <PayLinkButton code={r.groupCode ?? r.code} />
+      )}
       <ActionMenu actions={actions.filter(inMenu)} />
     </>
   );

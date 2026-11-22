@@ -706,6 +706,59 @@ export type Database = {
           },
         ]
       }
+      online_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          detail: string
+          expires_at: string | null
+          kind: Database["public"]["Enums"]["payment_kind"]
+          method: string
+          provider: string
+          reference: string
+          reservation_code: string
+          settled_at: string | null
+          status: string
+          tx_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          detail?: string
+          expires_at?: string | null
+          kind: Database["public"]["Enums"]["payment_kind"]
+          method?: string
+          provider: string
+          reference: string
+          reservation_code: string
+          settled_at?: string | null
+          status?: string
+          tx_id?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          detail?: string
+          expires_at?: string | null
+          kind?: Database["public"]["Enums"]["payment_kind"]
+          method?: string
+          provider?: string
+          reference?: string
+          reservation_code?: string
+          settled_at?: string | null
+          status?: string
+          tx_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "online_payments_reservation_code_fkey"
+            columns: ["reservation_code"]
+            isOneToOne: false
+            referencedRelation: "reservations"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       payment_proofs: {
         Row: {
           created_at: string
@@ -1341,6 +1394,16 @@ export type Database = {
           p_note?: string
           p_occurred_at?: string
           p_op_id?: string
+        }
+        Returns: Json
+      }
+      settle_online_payment: {
+        Args: {
+          p_detail?: string
+          p_method?: string
+          p_reference: string
+          p_status: string
+          p_tx_id: string
         }
         Returns: Json
       }

@@ -18,6 +18,7 @@ import { type Db, toEmail } from "@/lib/server/db";
 import { EMAIL_LOGO_CID, EMAIL_LOGO_PNG_BASE64 } from "@/lib/server/email-logo";
 import { loadSiteContent } from "@/lib/server/site";
 import { env } from "@/lib/server/env";
+import { activeProvider, payLinkUrl } from "@/lib/server/online-payments";
 
 // Bandeja de salida (tabla email_outbox): quien necesita un correo lo encola (los de la reserva los encola la base de datos:
 // al crearse, al aprobarse el abono, al completarse el pago, al reprogramarse, al cancelarse o vencerse y dos días antes de llegar) y este módulo lo envía con Resend. El envío va aparte de la respuesta al huésped: si Resend falla,
@@ -168,7 +169,19 @@ async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: str
       return { ...guest(email), attachments: [{ filename: `reserva-${r.code}.ics`, content: Buffer.from(calendar).toString("base64") }] };
     }
     case "reservation_received":
-      return guest(reservationReceivedEmail(c, { ...stay, mascota, total: q.total, abono: q.deposit, plazo: r.deposit_due_at, miReservaUrl, whatsappUrl }));
+      return guest(
+        reservationReceivedEmail(c, {
+          ...stay,
+          mascota,
+          total: q.total,
+          abono: q.deposit,
+          plazo: r.deposit_due_at,
+          miReservaUrl,
+          whatsappUrl,
+          // Pagar en línea: el enlace firmado, también sin el sitio público (/pagar queda abierto en el modo solo panel).
+          pagarUrl: activeProvider() ? payLinkUrl(ctx.base, r.code) : "",
+        }),
+      );
     case "reservation_cancelled":
     case "reservation_expired":
       return guest(

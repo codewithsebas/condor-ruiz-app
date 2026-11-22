@@ -53,6 +53,28 @@ export const env = {
   get bookingImapPassword() {
     return read("BOOKING_IMAP_PASSWORD");
   },
+  // Wompi (pagos en línea). Las llaves de pruebas empiezan por pub_test_ / prv_test_; las de producción, por pub_prod_.
+  get wompiPublicKey() {
+    return read("WOMPI_PUBLIC_KEY");
+  },
+  get wompiPrivateKey() {
+    return read("WOMPI_PRIVATE_KEY");
+  },
+  get wompiIntegritySecret() {
+    return read("WOMPI_INTEGRITY_SECRET");
+  },
+  get wompiEventsSecret() {
+    return read("WOMPI_EVENTS_SECRET");
+  },
+  // Pagos simulados (sin Wompi): siempre en desarrollo; en un servidor, solo con ALLOW_PAYMENT_SIMULATOR=1 (nunca con
+  // huéspedes reales: confirmaría reservas sin cobrar).
+  get paymentSimulator() {
+    return process.env.NODE_ENV !== "production" || read("ALLOW_PAYMENT_SIMULATOR") === "1";
+  },
+  // Firma de los enlaces de pago que comparte el equipo. Sin definir, se usa la clave secreta de Supabase.
+  get payLinkSecret() {
+    return read("PAY_LINK_SECRET") ?? read("SUPABASE_SECRET_KEY");
+  },
   // qa | pdn (sin definir en desarrollo local, que es QA).
   get appEnv() {
     return read("APP_ENV") ?? "qa";
@@ -68,6 +90,7 @@ const OPTIONAL: Record<string, string[]> = {
   "correos (Resend)": ["RESEND_API_KEY"],
   "avisos push": ["NEXT_PUBLIC_VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY"],
   "reservas de Booking por correo": ["BOOKING_IMAP_USER", "BOOKING_IMAP_PASSWORD"],
+  "pagos en línea (Wompi)": ["WOMPI_PUBLIC_KEY", "WOMPI_PRIVATE_KEY", "WOMPI_INTEGRITY_SECRET", "WOMPI_EVENTS_SECRET"],
 };
 
 // Proyecto de Supabase de cada entorno. APP_ENV dice dónde corre la app (qa | pdn); en desarrollo local es QA siempre.
@@ -79,6 +102,8 @@ function assertEnvironment() {
   if (!appEnv) return console.warn("[env] APP_ENV no está definido (qa | pdn): no se puede comprobar que la base sea la del entorno.");
   if (appEnv !== "qa" && appEnv !== "pdn") throw new Error(`[env] APP_ENV="${appEnv}" no es válido: usa qa o pdn.`);
   const url = read("NEXT_PUBLIC_SUPABASE_URL") ?? "";
+  // La base local de Supabase (supabase start) en desarrollo: no es de ningún entorno, así que no puede cruzarlos.
+  if (process.env.NODE_ENV !== "production" && /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/.test(url)) return;
   const other = appEnv === "qa" ? "pdn" : "qa";
   if (url.includes(SUPABASE_PROJECTS[other]) || !url.includes(SUPABASE_PROJECTS[appEnv]))
     throw new Error(`[env] Entorno ${appEnv.toUpperCase()} apuntando a una base que no es la suya. Revisa NEXT_PUBLIC_SUPABASE_URL.`);

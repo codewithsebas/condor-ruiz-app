@@ -329,7 +329,7 @@ export function LookupForm() {
           </section>
 
           <div className="flex flex-col gap-5 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1">
-            <PaymentStage r={r} onRefresh={refresh} />
+            <PaymentStage r={r} onRefresh={refresh} access={found.code ? found : undefined} />
             <PaymentHistory payments={r.payments} />
           </div>
 

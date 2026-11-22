@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, type ComponentType, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PaymentStage } from "@/components/booking/reservation-payments";
@@ -21,9 +21,12 @@ const r = {
   checkedInAt: null,
 } as PublicReservation;
 
+// SiteProvider con children opcional, para pasarlos como argumento de createElement.
+const Provider = SiteProvider as ComponentType<{ content: SiteContent; cabins: never[]; children?: ReactNode }>;
+
 const render = (payment: { instructions: string; key: string }, photos: Record<string, string> = {}) => {
   const content: SiteContent = { ...defaultContent, texts: { ...defaultContent.texts, payment }, photos };
-  return renderToStaticMarkup(createElement(SiteProvider, { content, cabins: [] }, createElement(PaymentStage, { r, onRefresh: () => {} })));
+  return renderToStaticMarkup(createElement(Provider, { content, cabins: [] }, createElement(PaymentStage, { r, onRefresh: () => {} })));
 };
 
 describe("Mi reserva · cómo pagar", () => {

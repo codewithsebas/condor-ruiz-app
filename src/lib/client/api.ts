@@ -6,6 +6,9 @@ import { cachedFile, cachedGet, mutate, onlineOnly } from "@/lib/offline/runtime
 import type {
   ActivityPage,
   AdminAction,
+  OnlinePayInfo,
+  OnlinePayStatus,
+  PaymentKind,
   AdminData,
   AdminNotification,
   Bathroom,
@@ -76,11 +79,21 @@ export const api = {
   createReservation: (body: ReservationInput) =>
     request<PublicReservation | ValidationError>("POST", "/reservations", { body, headers: { "Idempotency-Key": idemKey() } }),
   lookup: (q: { code: string; email: string }) => request<PublicReservation>("GET", "/reservations/lookup", { query: q }),
+  // Pagos en línea (Wompi): con el correo de la reserva (Mi reserva) o con la firma del enlace de pago (k).
+  payments: {
+    info: (q: { code: string; email?: string; k?: string }) => request<OnlinePayInfo>("GET", "/payments", { query: q }),
+    start: (b: { code: string; email?: string; k?: string; kind: PaymentKind; card?: { token: string; installments: number }; accepted?: boolean }) =>
+      request<{ url: string; reference: string }>("POST", "/payments", { body: b }),
+    status: (q: { ref: string; id?: string }) => request<OnlinePayStatus>("GET", "/payments/status", { query: q }),
+    simulate: (b: { ref: string; result: "approved" | "declined" }) => request<{ ok: true }>("POST", "/payments/simulate", { body: b }),
+  },
   admin: {
     login: (b: { email: string; password: string }) => request<object>("POST", "/admin/login", { body: b }),
     logout: () => request<object>("POST", "/admin/logout"),
     ping: () => request<object>("GET", "/admin/sync/ping", { noRetry: true }),
     data: () => request<AdminData>("GET", "/admin/data"),
+    // Enlace de pago en línea de una reserva (solo con conexión: la firma la hace el servidor).
+    payLink: (code: string) => request<{ url: string }>("GET", "/admin/pay-link", { query: { code } }),
     action: (b: AdminAction) => {
       const direct = () => request<Reservation>("POST", "/admin/action", { body: b });
       // Pagos, plazo y cancelación de un grupo: con conexión (el reparto lo hace el servidor).

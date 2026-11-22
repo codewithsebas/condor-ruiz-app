@@ -883,6 +883,8 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
     save(db);
     return ok(site.services);
   }
+  // Pagos en línea: la firma del enlace la hace el servidor real.
+  if (path === "/admin/pay-link" || path.startsWith("/payments")) return { status: 503, data: { error: "PAYMENTS_DISABLED" } };
   if (path === "/admin/photos" || path === "/admin/cabins/photos" || path === "/admin/profile/photo" || path === "/admin/proofs" || path === "/admin/push")
     return { status: 501, data: { error: "NOT_AVAILABLE_IN_MOCK" } };
 

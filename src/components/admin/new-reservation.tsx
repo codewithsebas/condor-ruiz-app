@@ -347,13 +347,13 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
   };
 
   return (
-    // Es un formulario largo: un clic afuera por error no debe borrar lo escrito. Se cierra con la X o con Cancelar.
+    // Se cierra con la X, con Cancelar o con un clic afuera.
     <Modal
       onClose={onClose}
       labelledBy="nr-title"
-      dismissOnBackdrop={false}
+      dismissOnBackdrop
       initialFocus="[data-autofocus] button, [data-autofocus] input"
-      className="m-auto w-[calc(100%-32px)] max-w-[1240px] rounded-[26px] p-0"
+      className="m-auto w-[calc(100%-32px)] max-w-[1400px] rounded-[26px] p-0"
     >
       <div className="flex flex-col gap-5 p-4 pb-0 sm:p-5 sm:pb-0">
         <div className="flex items-start gap-3.5">
@@ -376,219 +376,224 @@ export function NewReservationDialog({ draft, onClose }: { draft: NewReservation
         {/* Tres columnas en pantallas anchas: estadía, huésped y pago (con el resumen). En el celular, una debajo de otra. */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-0">
           {/* Estadía */}
+          {/* En pantallas anchas, la estadía y el huésped quedan fijos mientras se baja por el pago (la columna más larga). */}
           <section aria-labelledby="nr-stay" className="flex min-w-0 flex-col gap-3 pb-4 lg:pr-6">
-            <h3 id="nr-stay" className="flex items-center gap-2 text-[12px] font-bold tracking-[.06em] text-ink-muted uppercase">
-              <HomeIcon size={14} />
-              Estadía
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Cabaña" className="col-span-2" error={err("cabinTypeId")} hint={minNote(f.type, guests)}>
-                {(p) => (
-                  <div data-autofocus className="contents">
-                    <Combobox
-                      id={p.id}
-                      describedBy={p["aria-describedby"]}
-                      value={picked(f.type, f.unit)}
-                      onChange={(v) => set(pick(v))}
-                      options={cabinOptions}
-                      searchPlaceholder="Número o tipo de cabaña…"
-                    />
-                  </div>
-                )}
-              </Field>
-              <Field label="Llegada y salida" className="col-span-2" error={err("checkIn")}>
-                {(p) => (
-                  <div data-dates className="contents">
-                    <DateRangePicker
-                      id={p.id}
-                      describedBy={p["aria-describedby"]}
-                      invalid={!!p["aria-invalid"]}
-                      mode="nights"
-                      from={f.checkIn}
-                      to={f.checkOut}
-                      min={today}
-                      marks={marks}
-                      legend
-                      onChange={(checkIn, checkOut) => set({ checkIn, checkOut })}
-                      placeholder="Elegir fechas"
-                    />
-                  </div>
-                )}
-              </Field>
-              <div className="col-span-2 grid grid-cols-2 gap-3">
-                <Field label="Adultos" error={err("adults")}>
-                  {(p) => <Stepper id={p.id} value={f.adults} onChange={(v) => set({ adults: v })} min={1} max={type?.maxPersonas ?? 20} />}
-                </Field>
-                <Field label="Niños">
+            <div className="flex flex-col gap-3 lg:sticky lg:top-5">
+              <h3 id="nr-stay" className="flex items-center gap-2 text-[12px] font-bold tracking-[.06em] text-ink-muted uppercase">
+                <HomeIcon size={14} />
+                Estadía
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Cabaña" className="col-span-2" error={err("cabinTypeId")} hint={minNote(f.type, guests)}>
                   {(p) => (
-                    <Stepper id={p.id} value={f.children} onChange={(v) => set({ children: v })} min={0} max={Math.max(0, (type?.maxPersonas ?? 20) - 1)} />
+                    <div data-autofocus className="contents">
+                      <Combobox
+                        id={p.id}
+                        describedBy={p["aria-describedby"]}
+                        value={picked(f.type, f.unit)}
+                        onChange={(v) => set(pick(v))}
+                        options={cabinOptions}
+                        searchPlaceholder="Número o tipo de cabaña…"
+                      />
+                    </div>
                   )}
                 </Field>
-              </div>
-              {extra.map((c, i) => {
-                const t = typeOf(c.type);
-                return (
-                  <fieldset key={i} className="col-span-2 grid grid-cols-2 gap-3 rounded-[18px] border border-line p-3">
-                    <legend className="flex w-full items-center justify-between gap-2 px-1 text-[13px] font-semibold text-ink">{`Cabaña ${i + 2}`}</legend>
-                    <div className="col-span-2 -mt-2 flex items-start justify-end">
-                      <Button size="sm" variant="ghost" icon={<CloseIcon size={14} />} onClick={() => setExtra((xs) => xs.filter((_, j) => j !== i))}>
-                        Quitar
-                      </Button>
+                <Field label="Llegada y salida" className="col-span-2" error={err("checkIn")}>
+                  {(p) => (
+                    <div data-dates className="contents">
+                      <DateRangePicker
+                        id={p.id}
+                        describedBy={p["aria-describedby"]}
+                        invalid={!!p["aria-invalid"]}
+                        mode="nights"
+                        from={f.checkIn}
+                        to={f.checkOut}
+                        min={today}
+                        marks={marks}
+                        legend
+                        onChange={(checkIn, checkOut) => set({ checkIn, checkOut })}
+                        placeholder="Elegir fechas"
+                      />
                     </div>
-                    <Field label="Cabaña" className="col-span-2" error={err(`more.${i}`)} hint={minNote(c.type, c.adults + c.children)}>
-                      {(p) => (
-                        <Combobox
-                          id={p.id}
-                          describedBy={p["aria-describedby"]}
-                          value={picked(c.type, c.unit)}
-                          onChange={(v) => setX(i, pick(v))}
-                          options={cabinOptions}
-                          searchPlaceholder="Número o tipo de cabaña…"
-                        />
-                      )}
-                    </Field>
-                    <Field label="Adultos">
-                      {(p) => <Stepper id={p.id} value={c.adults} onChange={(v) => setX(i, { adults: v })} min={1} max={t?.maxPersonas ?? 20} />}
-                    </Field>
-                    <Field label="Niños">
-                      {(p) => (
-                        <Stepper
-                          id={p.id}
-                          value={c.children}
-                          onChange={(v) => setX(i, { children: v })}
-                          min={0}
-                          max={Math.max(0, (t?.maxPersonas ?? 20) - 1)}
-                        />
-                      )}
-                    </Field>
-                  </fieldset>
-                );
-              })}
-              {all.length < MAX_GROUP_CABINS && (
-                <div className="col-span-2">
-                  <Button
-                    variant="secondary"
-                    icon={<PlusIcon size={14} />}
-                    onClick={() => setExtra((xs) => [...xs, { type: f.type, unit: "", adults: 2, children: 0 }])}
-                  >
-                    Agregar otra cabaña
-                  </Button>
-                  {extra.length > 0 && (
-                    <p className="mt-1.5 text-[12.5px] text-ink-muted">Mismas fechas y huésped. Se crea con un solo código, un solo pago y un solo correo.</p>
                   )}
+                </Field>
+                <div className="col-span-2 grid grid-cols-2 gap-3">
+                  <Field label="Adultos" error={err("adults")}>
+                    {(p) => <Stepper id={p.id} value={f.adults} onChange={(v) => set({ adults: v })} min={1} max={type?.maxPersonas ?? 20} />}
+                  </Field>
+                  <Field label="Niños">
+                    {(p) => (
+                      <Stepper id={p.id} value={f.children} onChange={(v) => set({ children: v })} min={0} max={Math.max(0, (type?.maxPersonas ?? 20) - 1)} />
+                    )}
+                  </Field>
                 </div>
-              )}
-              <div className="col-span-2">
-                <Switch checked={f.pet} onChange={(v) => set({ pet: v })} label="Viene con mascota" description="Sin costo adicional, según las políticas." />
+                {extra.map((c, i) => {
+                  const t = typeOf(c.type);
+                  return (
+                    <fieldset key={i} className="col-span-2 grid grid-cols-2 gap-3 rounded-[18px] border border-line p-3">
+                      <legend className="flex w-full items-center justify-between gap-2 px-1 text-[13px] font-semibold text-ink">{`Cabaña ${i + 2}`}</legend>
+                      <div className="col-span-2 -mt-2 flex items-start justify-end">
+                        <Button size="sm" variant="ghost" icon={<CloseIcon size={14} />} onClick={() => setExtra((xs) => xs.filter((_, j) => j !== i))}>
+                          Quitar
+                        </Button>
+                      </div>
+                      <Field label="Cabaña" className="col-span-2" error={err(`more.${i}`)} hint={minNote(c.type, c.adults + c.children)}>
+                        {(p) => (
+                          <Combobox
+                            id={p.id}
+                            describedBy={p["aria-describedby"]}
+                            value={picked(c.type, c.unit)}
+                            onChange={(v) => setX(i, pick(v))}
+                            options={cabinOptions}
+                            searchPlaceholder="Número o tipo de cabaña…"
+                          />
+                        )}
+                      </Field>
+                      <Field label="Adultos">
+                        {(p) => <Stepper id={p.id} value={c.adults} onChange={(v) => setX(i, { adults: v })} min={1} max={t?.maxPersonas ?? 20} />}
+                      </Field>
+                      <Field label="Niños">
+                        {(p) => (
+                          <Stepper
+                            id={p.id}
+                            value={c.children}
+                            onChange={(v) => setX(i, { children: v })}
+                            min={0}
+                            max={Math.max(0, (t?.maxPersonas ?? 20) - 1)}
+                          />
+                        )}
+                      </Field>
+                    </fieldset>
+                  );
+                })}
+                {all.length < MAX_GROUP_CABINS && (
+                  <div className="col-span-2">
+                    <Button
+                      variant="secondary"
+                      icon={<PlusIcon size={14} />}
+                      onClick={() => setExtra((xs) => [...xs, { type: f.type, unit: "", adults: 2, children: 0 }])}
+                    >
+                      Agregar otra cabaña
+                    </Button>
+                    {extra.length > 0 && (
+                      <p className="mt-1.5 text-[12.5px] text-ink-muted">Mismas fechas y huésped. Se crea con un solo código, un solo pago y un solo correo.</p>
+                    )}
+                  </div>
+                )}
+                <div className="col-span-2">
+                  <Switch checked={f.pet} onChange={(v) => set({ pet: v })} label="Viene con mascota" description="Sin costo adicional, según las políticas." />
+                </div>
               </div>
             </div>
           </section>
 
           {/* Huésped */}
           <section aria-labelledby="nr-guest" className="flex min-w-0 flex-col gap-3 border-t border-line pt-4 pb-3 lg:border-t-0 lg:border-l lg:px-6 lg:pt-0">
-            <h3 id="nr-guest" className="flex items-center gap-2 text-[12px] font-bold tracking-[.06em] text-ink-muted uppercase">
-              <UsersIcon size={14} />
-              Huéspedes
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Nombre completo del titular" className="col-span-2" error={err("guest.fullName")}>
-                {(p) => (
-                  <input
-                    {...p}
-                    type="text"
-                    autoComplete="off"
-                    maxLength={120}
-                    value={f.fullName}
-                    onChange={(e) => set({ fullName: e.target.value })}
-                    className={adminInput}
-                  />
-                )}
-              </Field>
-              <Field label="Celular (WhatsApp)" error={err("guest.phone")}>
-                {(p) => (
-                  <input
-                    {...p}
-                    type="tel"
-                    inputMode="tel"
-                    autoComplete="off"
-                    maxLength={24}
-                    value={f.phone}
-                    onChange={(e) => set({ phone: e.target.value })}
-                    placeholder="300 123 4567"
-                    className={adminInput}
-                  />
-                )}
-              </Field>
-              <Field label="Ciudad (opcional)" error={err("guest.city")}>
-                {(p) => (
-                  <input
-                    {...p}
-                    type="text"
-                    autoComplete="off"
-                    maxLength={80}
-                    value={f.city}
-                    onChange={(e) => set({ city: e.target.value })}
-                    className={adminInput}
-                  />
-                )}
-              </Field>
-              <Field
-                label="Correo"
-                className="col-span-2"
-                error={err("guest.email")}
-                hint={data.me.email && f.email.trim() === data.me.email ? "Los correos de la reserva te llegarán a ti." : undefined}
-              >
-                {(p) => (
-                  <div className="flex gap-2">
+            <div className="flex flex-col gap-3 lg:sticky lg:top-5">
+              <h3 id="nr-guest" className="flex items-center gap-2 text-[12px] font-bold tracking-[.06em] text-ink-muted uppercase">
+                <UsersIcon size={14} />
+                Huéspedes
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Nombre completo del titular" className="col-span-2" error={err("guest.fullName")}>
+                  {(p) => (
                     <input
                       {...p}
-                      type="email"
-                      inputMode="email"
+                      type="text"
                       autoComplete="off"
-                      maxLength={160}
-                      value={f.email}
-                      onChange={(e) => set({ email: e.target.value })}
-                      className={`${adminInput} min-w-0 flex-1`}
+                      maxLength={120}
+                      value={f.fullName}
+                      onChange={(e) => set({ fullName: e.target.value })}
+                      className={adminInput}
                     />
-                    {/* El huésped sin correo: se usa el de quien registra la reserva (el de su sesión). */}
-                    {data.me.email && (
-                      <Button variant="secondary" title={data.me.email} onClick={() => set({ email: data.me.email })} className="flex-none">
-                        Usar mi correo
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </Field>
-              <fieldset className="col-span-2 flex min-w-0 flex-col gap-1.5">
-                <legend className="mb-1.5 text-[13px] font-semibold text-ink">Tipo de documento</legend>
-                <Segmented label="Tipo de documento" size="sm" value={f.docType} onChange={(v) => set({ docType: v })} options={DOCS} />
-              </fieldset>
-              <Field label="Número de documento" className="col-span-2" error={err("guest.docNumber")}>
-                {(p) => (
-                  <input
-                    {...p}
-                    type="text"
-                    autoComplete="off"
-                    maxLength={15}
-                    value={f.docNumber}
-                    onChange={(e) => set({ docNumber: e.target.value.replace(/[^A-Za-z0-9]/g, "") })}
-                    className={adminInput}
-                  />
-                )}
-              </Field>
-              <CompanionFields list={f.companions} onChange={(companions) => set({ companions })} people={people} err={err} />
-              <Field label="Notas (opcional)" className="col-span-2" error={err("specialRequests")}>
-                {(p) => (
-                  <textarea
-                    {...p}
-                    rows={2}
-                    maxLength={1000}
-                    value={f.notes}
-                    onChange={(e) => set({ notes: e.target.value })}
-                    className={`${adminInput} resize-y`}
-                  />
-                )}
-              </Field>
+                  )}
+                </Field>
+                <Field label="Celular (WhatsApp)" error={err("guest.phone")}>
+                  {(p) => (
+                    <input
+                      {...p}
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="off"
+                      maxLength={24}
+                      value={f.phone}
+                      onChange={(e) => set({ phone: e.target.value })}
+                      placeholder="300 123 4567"
+                      className={adminInput}
+                    />
+                  )}
+                </Field>
+                <Field label="Ciudad (opcional)" error={err("guest.city")}>
+                  {(p) => (
+                    <input
+                      {...p}
+                      type="text"
+                      autoComplete="off"
+                      maxLength={80}
+                      value={f.city}
+                      onChange={(e) => set({ city: e.target.value })}
+                      className={adminInput}
+                    />
+                  )}
+                </Field>
+                <Field
+                  label="Correo"
+                  className="col-span-2"
+                  error={err("guest.email")}
+                  hint={data.me.email && f.email.trim() === data.me.email ? "Los correos de la reserva te llegarán a ti." : undefined}
+                >
+                  {(p) => (
+                    <div className="flex gap-2">
+                      <input
+                        {...p}
+                        type="email"
+                        inputMode="email"
+                        autoComplete="off"
+                        maxLength={160}
+                        value={f.email}
+                        onChange={(e) => set({ email: e.target.value })}
+                        className={`${adminInput} min-w-0 flex-1`}
+                      />
+                      {/* El huésped sin correo: se usa el de quien registra la reserva (el de su sesión). */}
+                      {data.me.email && (
+                        <Button variant="secondary" title={data.me.email} onClick={() => set({ email: data.me.email })} className="flex-none">
+                          Usar mi correo
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </Field>
+                <fieldset className="col-span-2 flex min-w-0 flex-col gap-1.5">
+                  <legend className="mb-1.5 text-[13px] font-semibold text-ink">Tipo de documento</legend>
+                  <Segmented label="Tipo de documento" size="sm" value={f.docType} onChange={(v) => set({ docType: v })} options={DOCS} />
+                </fieldset>
+                <Field label="Número de documento" className="col-span-2" error={err("guest.docNumber")}>
+                  {(p) => (
+                    <input
+                      {...p}
+                      type="text"
+                      autoComplete="off"
+                      maxLength={15}
+                      value={f.docNumber}
+                      onChange={(e) => set({ docNumber: e.target.value.replace(/[^A-Za-z0-9]/g, "") })}
+                      className={adminInput}
+                    />
+                  )}
+                </Field>
+                <CompanionFields list={f.companions} onChange={(companions) => set({ companions })} people={people} err={err} />
+                <Field label="Notas (opcional)" className="col-span-2" error={err("specialRequests")}>
+                  {(p) => (
+                    <textarea
+                      {...p}
+                      rows={2}
+                      maxLength={1000}
+                      value={f.notes}
+                      onChange={(e) => set({ notes: e.target.value })}
+                      className={`${adminInput} resize-y`}
+                    />
+                  )}
+                </Field>
+              </div>
             </div>
           </section>
 

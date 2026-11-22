@@ -55,13 +55,15 @@ export function PaymentFields({
     <>
       <fieldset className="flex min-w-0 flex-col gap-2">
         <legend className="mb-1.5 text-[13px] font-semibold text-ink">¿Cuánto pagó?</legend>
-        <div className={`grid grid-cols-1 gap-2 ${options.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+        {/* Pago completo y abono lado a lado; «Otro valor», debajo y a lo ancho cuando quedan tres. */}
+        <div className="grid grid-cols-2 gap-2">
           {options.map((o) => {
             const on = choice === o.value;
+            const wide = o.value === "custom" && options.length % 2 === 1;
             return (
               <label
                 key={o.value}
-                className={`flex cursor-pointer items-start gap-2.5 rounded-[18px] border p-3.5 transition-colors ${on ? "border-ink bg-panel/60" : "border-line-strong hover:bg-panel/40"}`}
+                className={`flex cursor-pointer items-start gap-2.5 rounded-[18px] border p-3.5 transition-colors ${wide ? "col-span-2" : ""} ${on ? "border-ink bg-panel/60" : "border-line-strong hover:bg-panel/40"}`}
               >
                 <input
                   type="radio"

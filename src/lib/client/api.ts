@@ -6,6 +6,9 @@ import { cachedFile, cachedGet, mutate, onlineOnly } from "@/lib/offline/runtime
 import type {
   ActivityPage,
   AdminAction,
+  OnlinePayInfo,
+  OnlinePayStatus,
+  PaymentKind,
   AdminData,
   AdminNotification,
   Bathroom,
@@ -47,7 +50,8 @@ import type {
   SiteInput,
 } from "@/lib/types";
 import type { NotificationGroup } from "@/lib/notification-groups";
-import type { SiteContent, SiteService } from "@/lib/site";
+import type { Decoration, SiteContent, SiteService } from "@/lib/site";
+import type { EmailTemplate } from "@/lib/email-templates";
 
 // Clave de idempotencia por intento de reserva (sobrevive a reintentos y recargas de la pestaña).
 function idemKey() {
@@ -76,17 +80,27 @@ export const api = {
   createReservation: (body: ReservationInput) =>
     request<PublicReservation | ValidationError>("POST", "/reservations", { body, headers: { "Idempotency-Key": idemKey() } }),
   lookup: (q: { code: string; email: string }) => request<PublicReservation>("GET", "/reservations/lookup", { query: q }),
+  // Pagos en línea (Wompi): con el correo de la reserva (Mi reserva) o con la firma del enlace de pago (k).
+  payments: {
+    info: (q: { code: string; email?: string; k?: string }) => request<OnlinePayInfo>("GET", "/payments", { query: q }),
+    start: (b: { code: string; email?: string; k?: string; kind: PaymentKind; card?: { token: string; installments: number }; accepted?: boolean }) =>
+      request<{ url: string; reference: string }>("POST", "/payments", { body: b }),
+    status: (q: { ref: string; id?: string }) => request<OnlinePayStatus>("GET", "/payments/status", { query: q }),
+    simulate: (b: { ref: string; result: "approved" | "declined" }) => request<{ ok: true }>("POST", "/payments/simulate", { body: b }),
+  },
   admin: {
     login: (b: { email: string; password: string }) => request<object>("POST", "/admin/login", { body: b }),
     logout: () => request<object>("POST", "/admin/logout"),
     ping: () => request<object>("GET", "/admin/sync/ping", { noRetry: true }),
     data: () => request<AdminData>("GET", "/admin/data"),
+    // Enlace de pago en línea de una reserva (solo con conexión: la firma la hace el servidor).
+    payLink: (code: string) => request<{ url: string }>("GET", "/admin/pay-link", { query: { code } }),
     action: (b: AdminAction) => {
       const direct = () => request<Reservation>("POST", "/admin/action", { body: b });
       // Pagos, plazo y cancelación de un grupo: con conexión (el reparto lo hace el servidor).
       if ("group" in b && b.group) return onlineOnly(direct);
       if (b.action !== "guest") return mutate("reservation.action", b, direct);
-      return mutate("reservation.guest", { code: b.code, ...b.guest }, direct);
+      return mutate("reservation.guest", { code: b.code, ...b.guest, ...(b.companions && { companions: b.companions }) }, direct);
     },
     createReservation: (b: ManualReservationInput) => {
       const direct = () => request<ManualReservationResult | ValidationError | ApiError>("POST", "/admin/reservations", { body: b });
@@ -127,6 +141,9 @@ export const api = {
       mutate("email.send", b, () => request<EmailRecord | ApiError>("POST", "/admin/emails", { body: { action: "send", ...b } })),
     retryEmail: (id: string) =>
       mutate("email.retry", { id }, () => request<EmailRecord | ApiError>("POST", "/admin/emails", { body: { action: "retry", id } })),
+    // Reenviar el correo del estado de la reserva: con conexión (el servidor elige el correo y lo envía en el momento).
+    resendEmail: (code: string, requestId: string) =>
+      onlineOnly(() => request<EmailRecord | ValidationError | ApiError>("POST", "/admin/emails", { body: { action: "resend", code, requestId } })),
     reset: () => request<object>("POST", "/admin/reset"),
     saveSite: (b: SiteInput) => mutate("site.save", b, () => request<SiteContent>("PUT", "/admin/site", { body: b })),
     savePaymentTerms: (b: PaymentTerms) => mutate("terms.save", b, () => request<SiteContent>("PUT", "/admin/payment-terms", { body: b })),
@@ -134,6 +151,18 @@ export const api = {
       mutate("sitePhoto.set", { slot, file, name }, () => upload<Record<string, string>>("/admin/photos", formOf({ slot, file }, name))),
     deletePhoto: (slot: string) => mutate("sitePhoto.delete", { slot }, () => request<Record<string, string>>("DELETE", "/admin/photos", { query: { slot } })),
     // Servicios del sitio: cada operación responde con la lista completa en orden.
+    // Plantillas de los correos automáticos (Correos): se leen y se guardan con conexión.
+    emailTemplates: {
+      list: () => request<EmailTemplate[]>("GET", "/admin/email-templates"),
+      save: (b: Omit<EmailTemplate, "updatedAt">) => onlineOnly(() => request<EmailTemplate[] | ValidationError>("PUT", "/admin/email-templates", { body: b })),
+    },
+    decorations: {
+      create: (b: Omit<Decoration, "id">) =>
+        mutate("decoration.create", b, () => request<Decoration[] | ValidationError>("POST", "/admin/decorations", { body: b })),
+      update: (b: Decoration) => mutate("decoration.update", b, () => request<Decoration[] | ValidationError>("PUT", "/admin/decorations", { body: b })),
+      reorder: (order: string[]) => mutate("decoration.reorder", { order }, () => request<Decoration[]>("PATCH", "/admin/decorations", { body: { order } })),
+      remove: (id: string) => mutate("decoration.delete", { id }, () => request<Decoration[]>("DELETE", "/admin/decorations", { query: { id } })),
+    },
     services: {
       create: (b: Omit<SiteService, "id">) =>
         mutate("service.create", b, () => request<SiteService[] | ValidationError>("POST", "/admin/services", { body: b })),

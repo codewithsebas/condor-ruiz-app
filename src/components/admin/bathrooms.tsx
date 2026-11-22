@@ -6,7 +6,7 @@
 import Link from "next/link";
 import { useId, useMemo, useState } from "react";
 import { BanIcon, BathIcon, CalendarIcon, CheckIcon, ClockIcon, HomeIcon, PencilIcon, PlusIcon, TrashIcon, WrenchIcon } from "@/components/ui/icons";
-import { BATHROOM_BLOCK_REASONS, unitLabel } from "@/lib/booking";
+import { BATHROOM_BLOCK_REASONS, cabinName } from "@/lib/booking";
 import { api, type Bathrooms } from "@/lib/client/api";
 import { addDays, fmtDate, nightsBetween, plural, timeAgo } from "@/lib/format";
 import { can } from "@/lib/permissions";
@@ -628,7 +628,7 @@ function BathroomEditor({ initial, onClose, onDelete }: { initial: BathDraft; on
                       cabin
                         ? [
                             ...(cabin.units > 1 ? [{ value: "", label: "Todas las unidades" }] : []),
-                            ...Array.from({ length: cabin.units }, (_, i) => ({ value: String(i + 1), label: `Cabaña ${unitLabel(cabin, i + 1)}` })),
+                            ...Array.from({ length: cabin.units }, (_, i) => ({ value: String(i + 1), label: cabinName(cabin, i + 1) })),
                           ]
                         : [{ value: "", label: "—", disabled: true }]
                     }

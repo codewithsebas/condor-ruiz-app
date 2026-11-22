@@ -1,14 +1,29 @@
 import { after, type NextRequest } from "next/server";
-import { TRANSITIONS, adjustedQuote, computeQuote, findUnit, normalizePhone, unitFree, validateGuest } from "@/lib/booking";
+import {
+  TRANSITIONS,
+  adjustedQuote,
+  cleanCompanions,
+  computeQuote,
+  findUnit,
+  pickAddons,
+  withAddons,
+  normalizePhone,
+  unitFree,
+  validateCompanions,
+  validateGuest,
+} from "@/lib/booking";
 import { addDays, isISO, nightsBetween } from "@/lib/format";
-import { isExclusionViolation, loadCabinTypes, loadDepositPct, loadOccupancy, loadSeasons, toReservation } from "@/lib/server/db";
+import { isExclusionViolation, loadCabinTypes, loadDecorations, loadDepositPct, loadOccupancy, loadSeasons, toReservation } from "@/lib/server/db";
 import { baseVersionOf, businessError, fail, json, occurredAtOf, opIdOf, operationDay, readJson, requireStaff, syncRoute } from "@/lib/server/http";
 import { processOutbox } from "@/lib/server/mailer";
 import { dispatchPush } from "@/lib/server/push";
 import { originOf, siteUrl } from "@/lib/server/site";
-import { PAY_METHODS, manualPaymentNote, unpaidUntil } from "@/lib/payments";
+import { createActorClient } from "@/lib/supabase/server";
+import { PAY_METHODS, unpaidUntil } from "@/lib/payments";
 import { can } from "@/lib/permissions";
-import type { AdminAction, Quote } from "@/lib/types";
+import type { AdminAction, Quote, ReservationAddon } from "@/lib/types";
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // POST /api/admin/action { code, action, ... } → cambia el estado, registra un pago, reprograma o agrega una nota.
 // confirm / balance: pago recibido en persona (efectivo o transferencia) registrado por el equipo, por el abono, por todo
@@ -39,9 +54,18 @@ export const POST = syncRoute(async (req: NextRequest) => {
   try {
     if (b.action === "guest") {
       const g = b.guest ?? ({} as typeof b.guest);
-      const fields = validateGuest(g);
-      if (Object.keys(fields).length)
-        return fail(422, "VALIDATION_ERROR", { fields: Object.fromEntries(Object.entries(fields).map(([k, v]) => [`guest.${k}`, v])) });
+      // Acompañantes (opcional: sin la lista, no se tocan). Caben las personas de la reserva (o del grupo) menos el titular.
+      const people = groupCode
+        ? (await sb.from("reservations").select("adults,children,status").eq("group_code", groupCode).throwOnError()).data
+            .filter((m) => m.status !== "cancelled")
+            .reduce((sum, m) => sum + m.adults + m.children, 0)
+        : current.adults + current.children;
+      const fields = {
+        ...Object.fromEntries(Object.entries(validateGuest(g)).map(([k, v]) => [`guest.${k}`, v])),
+        ...validateCompanions(b.companions, people),
+      };
+      if (Object.keys(fields).length) return fail(422, "VALIDATION_ERROR", { fields });
+      const companions = b.companions === undefined ? {} : { companions: cleanCompanions(b.companions) };
       const phone = normalizePhone(g.phone);
       const base = baseVersionOf(req);
       let q = sb
@@ -54,6 +78,7 @@ export const POST = syncRoute(async (req: NextRequest) => {
           guest_email: (g.email ?? "").trim(),
           guest_phone: phone,
           guest_city: (g.city ?? "").trim(),
+          ...companions,
         })
         .eq("code", current.code);
       if (base !== null) q = q.eq("version", base);
@@ -70,10 +95,20 @@ export const POST = syncRoute(async (req: NextRequest) => {
             guest_email: same.guest_email,
             guest_phone: same.guest_phone,
             guest_city: same.guest_city,
+            companions: same.companions,
           })
           .eq("group_code", groupCode)
           .neq("code", current.code)
           .throwOnError();
+      }
+      // Dirección nueva: los correos que aún no salen (en cola o fallidos) van a ella; cada fila guarda la suya al encolarse.
+      const email = (g.email ?? "").trim();
+      if (email !== (current.guest_email ?? "") && EMAIL.test(email)) {
+        const codes = groupCode
+          ? (await sb.from("reservations").select("code").eq("group_code", groupCode).throwOnError()).data.map((m) => m.code)
+          : [current.code];
+        const service = await createActorClient(me.id);
+        await service.from("email_outbox").update({ to_email: email }).in("reservation_code", codes).in("status", ["pending", "failed"]).throwOnError();
       }
     } else if (b.action === "note") {
       const text = String(b.text ?? "")
@@ -96,6 +131,10 @@ export const POST = syncRoute(async (req: NextRequest) => {
       const amount = b.full || b.amount === undefined ? null : Number(b.amount);
       if (amount !== null && (!Number.isInteger(amount) || amount <= 0)) return fail(400, "INVALID_AMOUNT");
       if (b.method !== undefined && !PAY_METHODS.some((m) => m.value === b.method)) return fail(400, "INVALID_BODY");
+      // Dividido: la parte en efectivo (el resto fue transferencia). La base de datos exige que sea menor al valor recibido.
+      const cash = b.method === "both" ? Number(b.cash) : null;
+      if (cash !== null && (!Number.isInteger(cash) || cash <= 0)) return fail(422, "INVALID_SPLIT");
+      if (cash === null && b.cash !== undefined) return fail(400, "INVALID_BODY");
       const kind = b.full ? "full" : b.action === "balance" ? "balance" : "deposit";
       // Registrado sin conexión: si mientras tanto entró otro pago, podría ser el mismo dinero. Lo decide quien lo registró.
       if (b.basePaid !== undefined && !b.force && b.basePaid !== groupPaid) return fail(409, "PAID_CHANGED", { paid: groupPaid });
@@ -104,7 +143,12 @@ export const POST = syncRoute(async (req: NextRequest) => {
         .rpc("register_manual_payment", {
           p_code: current.code,
           p_kind: kind,
-          p_note: manualPaymentNote(b.method, b.note),
+          // La base de datos antepone el medio a la nota de cada fila.
+          p_note: String(b.note ?? "")
+            .trim()
+            .slice(0, 200),
+          p_method: b.method ?? "",
+          ...(cash !== null && { p_cash: cash }),
           ...(amount !== null && { p_amount: amount }),
           ...(opId && { p_op_id: opId }),
           ...(occurredAt && { p_occurred_at: occurredAt }),
@@ -120,7 +164,8 @@ export const POST = syncRoute(async (req: NextRequest) => {
       const occ = await loadOccupancy(sb, ci, addDays(co, -1), type.id);
       const unit = findUnit(occ, units[type.id] ?? 0, type.id, ci, co, current.code);
       if (!unit) return fail(409, "DATES_UNAVAILABLE");
-      const quote = computeQuote(type, ci, co, current.adults + current.children, seasons, depositPct);
+      // Las decoraciones se conservan con su precio acordado.
+      const quote = withAddons(computeQuote(type, ci, co, current.adults + current.children, seasons, depositPct), current.addons as ReservationAddon[]);
       // Con el abono ya pagado, el abono es lo que se pagó y el saldo es el resto del nuevo total.
       // Si ya estaba todo pagado y el nuevo total es mayor, vuelve a quedar saldo pendiente.
       const reopensBalance = !!current.balance_paid_at && quote.total > current.paid_amount;
@@ -174,6 +219,29 @@ export const POST = syncRoute(async (req: NextRequest) => {
           .eq("code", current.code)
           .throwOnError();
       }
+    } else if (b.action === "addons") {
+      // Decoraciones de la reserva: reemplaza la lista. Las que ya tenía conservan su precio; las nuevas, el del catálogo.
+      // En una reserva con varias cabañas van en la principal.
+      if (groupCode && current.code !== groupCode) return fail(400, "INVALID_BODY");
+      const had = (current.addons as ReservationAddon[]) ?? [];
+      const addons = pickAddons(b.addons, await loadDecorations(sb), had, true);
+      if (!addons) return fail(422, "VALIDATION_ERROR", { fields: { addons: "Alguna decoración ya no está disponible. Actualiza la página." } });
+      const q = current.quote as Quote;
+      const quote = withAddons(q, addons);
+      if (current.deposit_paid_at) quote.balance = Math.max(0, quote.total - current.paid_amount);
+      // Quitar una decoración ya pagada dejaría pagado más que el total: eso se resuelve con un reembolso, no aquí.
+      if (quote.total < current.paid_amount)
+        return fail(422, "VALIDATION_ERROR", { fields: { addons: "Ya se pagó más que el nuevo total: no se puede quitar esa decoración." } });
+      await sb
+        .from("reservations")
+        .update({
+          addons,
+          quote,
+          // Si ya estaba todo pagado y el valor nuevo es mayor, vuelve a quedar saldo pendiente.
+          ...(current.balance_paid_at && quote.total > current.paid_amount && { balance_paid_at: null }),
+        })
+        .eq("code", current.code)
+        .throwOnError();
     } else if (b.action === "cancel" && groupCode) {
       if (b.group) {
         // La principal al final: su aviso y su correo hablan por el grupo.

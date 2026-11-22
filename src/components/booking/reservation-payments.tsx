@@ -7,8 +7,9 @@ import { useEffect, useRef, useState } from "react";
 import { cop, fmtDateTime, wa } from "@/lib/format";
 import { PAYMENT_STATUS, depositPctOf, kindLabel, moneyOf, stageOf, type Stage } from "@/lib/payments";
 import type { PublicPayment, PublicReservation } from "@/lib/types";
-import { CheckIcon, WhatsAppIcon } from "@/components/ui/icons";
+import { CheckIcon, CopyIcon, WhatsAppIcon } from "@/components/ui/icons";
 import { useSite } from "@/components/site/site-provider";
+import { OnlinePayButtons } from "@/components/booking/online-pay";
 
 /* ───────────── Hora del servidor ───────────── */
 
@@ -77,10 +78,54 @@ function Panel({ t = "plain", eyebrow, title, children }: { t?: keyof typeof ton
   );
 }
 
+// Cómo pagar por transferencia: los datos de la cuenta, la llave Bre-B (con botón para copiarla) y el QR, los que estén
+// configurados en Condiciones de pago. Sin ninguno, no se muestra.
+function HowToPay({ transfer, payKey, qr }: { transfer: string; payKey: string; qr: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!transfer && !payKey && !qr) return null;
+  const copy = () =>
+    navigator.clipboard
+      ?.writeText(payKey)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => {});
+  return (
+    <div className="flex flex-col gap-4 rounded-md bg-card-muted p-4 sm:flex-row sm:items-start">
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <span className="text-[.74rem] font-extrabold tracking-[.08em] uppercase">Cómo pagar</span>
+        {transfer && <p className="text-[.92rem] leading-relaxed font-semibold whitespace-pre-wrap">{transfer}</p>}
+        {payKey && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[.9rem] font-semibold">Llave Bre-B:</span>
+            <span className="rounded-md bg-card px-2.5 py-1 font-mono text-[.95rem] font-bold break-all">{payKey}</span>
+            <button type="button" onClick={copy} className="btn btn-outline-light min-h-10 gap-1.5 px-3 text-[.85rem]">
+              {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
+              {copied ? "Copiada" : "Copiar llave"}
+            </button>
+            <span aria-live="polite" className="sr-only">
+              {copied ? "Llave copiada" : ""}
+            </span>
+          </div>
+        )}
+      </div>
+      {qr && (
+        <figure className="flex flex-none flex-col items-center gap-1.5 self-center sm:self-start">
+          {/* eslint-disable-next-line @next/next/no-img-element -- QR subido por el negocio, con su tamaño original */}
+          <img src={qr} alt="Código QR para pagar" width={176} height={176} className="size-44 rounded-md bg-white object-contain p-2" />
+          <figcaption className="text-[.8rem] font-semibold">Escanéalo desde la app de tu banco</figcaption>
+        </figure>
+      )}
+    </div>
+  );
+}
+
 /* ───────────── Tarjeta por etapa ───────────── */
 
 // Lo que el huésped debe saber y hacer ahora. `onRefresh`: volver a consultar la API al vencer el plazo del abono.
-export function PaymentStage({ r, onRefresh }: { r: PublicReservation; onRefresh: () => void }) {
+// `access`: el código y el correo con que se consultó la reserva (para pagar en línea); sin él, solo los datos de transferencia.
+export function PaymentStage({ r, onRefresh, access }: { r: PublicReservation; onRefresh: () => void; access?: { code: string; email: string } }) {
   const { c } = useSite();
   const stage0 = stageOf(r);
   const live = stage0 === "awaiting_deposit";
@@ -89,6 +134,8 @@ export function PaymentStage({ r, onRefresh }: { r: PublicReservation; onRefresh
   const m = moneyOf(r);
   // Datos para la transferencia (Condiciones de pago, en el panel); mientras no se configuren, solo se ofrece WhatsApp.
   const transfer = c.datosPagoAbono && !c.datosPagoAbono.includes("{") ? c.datosPagoAbono : "";
+  const howToPay = <HowToPay transfer={transfer} payKey={c.llavePago} qr={c.qrPago} />;
+  const canTransfer = !!(transfer || c.llavePago || c.qrPago);
 
   // Al llegar el plazo a cero, el servidor decide (registra el vencimiento) y la página se actualiza con su respuesta.
   const deadline = stage0 === "awaiting_deposit" ? r.depositDueAt : null;
@@ -120,9 +167,13 @@ export function PaymentStage({ r, onRefresh }: { r: PublicReservation; onRefresh
               { k: `Abono para confirmar (${depositPctOf(r.quote)} %)`, v: m.deposit, strong: true },
             ]}
           />
+          {access && <OnlinePayButtons access={access} />}
+          {howToPay}
           <p className="text-[.92rem] font-semibold">
-            {transfer ? `Paga por transferencia: ${transfer}. ` : ""}Después envíanos el comprobante y confirmamos tu reserva. Lo pagado para confirmar no es
-            reembolsable.
+            {canTransfer
+              ? "Paga por transferencia y después envíanos el comprobante: confirmamos tu reserva. "
+              : "Escríbenos y te enviamos los datos para pagar. "}
+            Lo pagado para confirmar no es reembolsable.
           </p>
           {whatsapp(`Hola, quiero pagar el abono de mi reserva ${r.code}.`)}
         </Panel>
@@ -164,6 +215,8 @@ export function PaymentStage({ r, onRefresh }: { r: PublicReservation; onRefresh
               { k: "Saldo pendiente", v: m.due, strong: true, note: "Puedes pagarlo por transferencia antes de llegar o en recepción." },
             ]}
           />
+          {access && <OnlinePayButtons access={access} />}
+          {howToPay}
           <p className="text-[.9rem] font-semibold">Check-in de {c.checkIn.replace(/\.$/, "")}. Presenta tu documento de identidad físico al llegar.</p>
         </Panel>
       );
@@ -171,7 +224,7 @@ export function PaymentStage({ r, onRefresh }: { r: PublicReservation; onRefresh
       return (
         <Panel t="wait" eyebrow="Check-in realizado" title="Tu reserva está activa">
           <p className="text-[1.05rem] font-bold">
-            Para completar el servicio paga el saldo de {cop(m.due)} en recepción{transfer ? ` o por transferencia: ${transfer}` : ""}.
+            Para completar el servicio paga el saldo de {cop(m.due)} en recepción{canTransfer ? " o por transferencia" : ""}.
           </p>
           <Amounts
             rows={[
@@ -180,6 +233,8 @@ export function PaymentStage({ r, onRefresh }: { r: PublicReservation; onRefresh
               { k: "Saldo restante", v: m.due, strong: true },
             ]}
           />
+          {access && <OnlinePayButtons access={access} />}
+          {howToPay}
         </Panel>
       );
     case "paid_in_full":

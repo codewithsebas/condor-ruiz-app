@@ -7,29 +7,35 @@ import {
   cleanDayRates,
   cleanPersonRates,
   cleanUnitLabels,
+  cleanUnitNames,
   adjustedQuote,
+  cleanCompanions,
   computeQuote,
   busyBlocks,
   invalidPersonRates,
   invalidUnitLabels,
+  invalidUnitNames,
   findUnit,
   unitFree,
   invalidDayRates,
   newReservationCode,
   normalizePhone,
   slugify,
+  validateCompanions,
   validateGuest,
   validateManualReservation,
   withTotal,
+  pickAddons,
+  withAddons,
   TRANSITIONS,
   type Occupancy,
 } from "@/lib/booking";
 import { addDays, dateOf, isISO, nightsBetween, todayISO } from "@/lib/format";
 import { uuid } from "@/lib/offline/config";
 import { sorted, unitsOf } from "@/lib/offline/data";
-import { manualPaymentNote, unpaidUntil } from "@/lib/payments";
+import { manualPaymentNote, paymentParts, unpaidUntil } from "@/lib/payments";
 import { can, type Permission } from "@/lib/permissions";
-import type { SiteContent, SiteService } from "@/lib/site";
+import type { Decoration, SiteContent, SiteService } from "@/lib/site";
 import type {
   AdminAction,
   AdminData,
@@ -41,16 +47,19 @@ import type {
   CabinType,
   ClientProfile,
   ClientProfileInput,
+  Companion,
   EmailRecord,
   Guest,
   ImportRow,
   ManualReservationInput,
+  PayMethod,
   PaymentKind,
   PaymentRecord,
   PaymentTerms,
   ProofReview,
   Rates,
   Reservation,
+  ReservationAddon,
   SeasonInput,
   SiteInput,
 } from "@/lib/types";
@@ -146,7 +155,13 @@ const occupancy = (d: AdminData): Occupancy => ({
 const activeSeasons = (d: AdminData) => d.seasons.filter((s) => s.activa);
 const depositPct = (d: AdminData) => d.site.settings.depositPct;
 
-export type NewReservation = ManualReservationInput & { code: string; localUnit: number; localQuote: Reservation["quote"]; arrival: string };
+export type NewReservation = ManualReservationInput & {
+  code: string;
+  localUnit: number;
+  localQuote: Reservation["quote"];
+  localAddons?: ReservationAddon[];
+  arrival: string;
+};
 
 const clientKeyOf = (g: Pick<Guest, "docType" | "docNumber">) => `${g.docType}:${g.docNumber.trim().toUpperCase()}`;
 
@@ -167,26 +182,34 @@ function paymentOutcome(r: Reservation, kind: PaymentKind, amount: number | null
   return { amt, pending, covered: amt >= owed, kind: (r.depositPaidAt ? "balance" : amt >= owed ? "full" : "deposit") as PaymentKind };
 }
 
-function applyPayment(d: AdminData, code: string, kind: PaymentKind, amount: number | null, note: string, op: Pick<Op, "opId" | "occurredAt">): AdminData {
+// Un pago dividido entre efectivo y transferencia queda en una fila por medio (como en el servidor).
+function applyPayment(
+  d: AdminData,
+  code: string,
+  kind: PaymentKind,
+  amount: number | null,
+  pay: { method?: PayMethod; cash?: number; note?: string },
+  op: Pick<Op, "opId" | "occurredAt">,
+): AdminData {
   const r = d.reservations.find((x) => x.code === code);
   if (!r) return d;
   const o = paymentOutcome(r, kind, amount);
   if (isErr(o)) return d;
   const at = nowIso(op);
-  const record: PaymentRecord = {
-    id: op.opId,
+  const records: PaymentRecord[] = paymentParts(pay.method, pay.cash, o.amt).map((part, i) => ({
+    id: i ? `${op.opId}-${i + 1}` : op.opId,
     reservationCode: code,
-    reference: `${code}-LOCAL`,
+    reference: `${code}-LOCAL${i ? `-${i + 1}` : ""}`,
     kind: o.kind,
     status: "approved",
-    amount: o.amt,
+    amount: part.amount,
     provider: "manual",
-    method: "",
-    detail: note || "Registrado por el equipo",
+    method: part.method,
+    detail: manualPaymentNote(part.method, pay.note),
     createdAt: at,
     expiresAt: null,
     approvedAt: at,
-  };
+  }));
   return {
     ...updateReservation(d, code, (x) => ({
       ...x,
@@ -197,7 +220,7 @@ function applyPayment(d: AdminData, code: string, kind: PaymentKind, amount: num
       depositPaidAt: x.depositPaidAt ?? at,
       balancePaidAt: o.covered ? at : x.balancePaidAt,
     })),
-    payments: sorted("payments", [record, ...d.payments.filter((p) => p.id !== op.opId)]),
+    payments: sorted("payments", [...records, ...d.payments.filter((p) => !records.some((x) => x.id === p.id))]),
   };
 }
 
@@ -209,7 +232,7 @@ function freeUnitFor(d: AdminData, r: Reservation) {
 
 const reservationOf = (d: AdminData, code: string) => d.reservations.find((r) => r.code === code) ?? null;
 
-type GuestEdit = Guest & { code: string };
+type GuestEdit = Guest & { code: string; companions?: Companion[] };
 
 const guestFields = (g: Guest) => ({ fullName: g.fullName, docType: g.docType, docNumber: g.docNumber, email: g.email, phone: g.phone, city: g.city });
 const ACTION_LABEL: Record<string, string> = {
@@ -222,6 +245,8 @@ const ACTION_LABEL: Record<string, string> = {
   move: "Cambio de cabaña",
   extend_hold: "Plazo de pago",
   note: "Nota",
+  adjust: "Cambio de valor",
+  addons: "Decoraciones",
 };
 const ACTION_TARGET: Record<string, string> = { cancel: "cancelled", checkin: "checked_in", checkout: "completed" };
 
@@ -239,7 +264,9 @@ const reservationOps = {
         guest: { ...input.guest, phone: normalizePhone(input.guest.phone) },
       };
       const fields = validateManualReservation(b, types, units, today);
-      if (Object.keys(fields).length) return fieldErr(fields);
+      const addons = pickAddons(b.addons, d.site.decorations, [], true);
+      if (!addons) fields.addons = "Alguna decoración ya no está disponible o le falta el texto o el precio. Vuelve a elegirlas.";
+      if (Object.keys(fields).length || !addons) return fieldErr(fields);
       const type = types.find((t) => t.id === b.cabinTypeId)!;
       const occ = occupancy(d);
       // Solo la unidad pedida, si se eligió una: las demás cuentan como ocupadas.
@@ -253,17 +280,18 @@ const reservationOps = {
       );
       if (!unit) return err(409, "DATES_UNAVAILABLE");
       const quote = computeQuote(type, b.checkIn, b.checkOut, b.adults + b.children, activeSeasons(d), depositPct(d));
-      const finalQuote = b.total ? withTotal(quote, b.total, depositPct(d)) : quote;
+      const finalQuote = withAddons(b.total ? withTotal(quote, b.total, depositPct(d)) : quote, addons);
       return {
         ...b,
         code: newReservationCode(),
         expectedTotal: finalQuote.total,
         localUnit: unit,
         localQuote: finalQuote,
+        localAddons: addons,
         arrival: b.estimatedArrival || d.site.settings.checkInStart,
       } as NewReservation;
     },
-    request: (p) => ({ method: "POST", path: "/admin/reservations", body: omit(p, "localUnit", "localQuote", "arrival") }),
+    request: (p) => ({ method: "POST", path: "/admin/reservations", body: omit(p, "localUnit", "localQuote", "localAddons", "arrival") }),
     apply: (d, p, op) => {
       const g = p.guest;
       const docNumber = g.docNumber.trim().toUpperCase();
@@ -280,11 +308,15 @@ const reservationOps = {
         decoration: { requested: false, occasion: "", notes: "" },
         estimatedArrival: p.arrival,
         guest: { fullName: g.fullName.trim(), docType: g.docType, docNumber, email: g.email.trim(), phone: g.phone, city: (g.city ?? "").trim() },
+        companions: cleanCompanions(p.companions),
+        addons: p.localAddons ?? [],
         specialRequests: (p.specialRequests ?? "").trim(),
         consents: { policies: false, dataProcessing: false, marketing: false },
         quote: p.localQuote,
         depositDueAt: unpaidUntil(p.checkIn),
         createdAt: op.occurredAt,
+        // Lo mismo que guarda la base: el nombre del empleado (o su correo) y la hora en que la hizo.
+        createdByName: d.me.name || d.me.email,
         notes: [],
         depositPaidAt: null,
         balancePaidAt: null,
@@ -304,11 +336,22 @@ const reservationOps = {
   "reservation.guest": {
     label: (p) => `Datos de ${p.fullName} · ${p.code}`,
     entities: (p) => [`reservations:${p.code}`],
-    validate: (p) => {
-      const fields = validateGuest(p);
-      return Object.keys(fields).length ? fieldErr(Object.fromEntries(Object.entries(fields).map(([k, v]) => [`guest.${k}`, v]))) : null;
+    validate: (p, d) => {
+      // Cupo de acompañantes: las personas de la reserva (o de su grupo) menos el titular.
+      const r = reservationOf(d, p.code);
+      const group = r?.groupCode ? d.reservations.filter((x) => x.groupCode === r.groupCode && x.status !== "cancelled") : r ? [r] : [];
+      const people = group.reduce((sum, x) => sum + x.adults + x.children, 0);
+      const fields = {
+        ...Object.fromEntries(Object.entries(validateGuest(p)).map(([k, v]) => [`guest.${k}`, v])),
+        ...(r ? validateCompanions(p.companions, people) : {}),
+      };
+      return Object.keys(fields).length ? fieldErr(fields) : null;
     },
-    request: ({ code, ...guest }) => ({ method: "POST", path: "/admin/action", body: { code, action: "guest", guest: guestFields(guest) } }),
+    request: ({ code, companions, ...guest }) => ({
+      method: "POST",
+      path: "/admin/action",
+      body: { code, action: "guest", guest: guestFields(guest), ...(companions && { companions }) },
+    }),
     apply: (d, p) =>
       updateReservation(d, p.code, (r) => ({
         ...r,
@@ -320,6 +363,7 @@ const reservationOps = {
           email: (p.email ?? "").trim(),
           city: (p.city ?? "").trim(),
         },
+        ...(p.companions && { companions: cleanCompanions(p.companions) }),
       })),
     result: (d, p) => reservationOf(d, p.code),
     version: (d, p) => reservationOf(d, p.code)?.version,
@@ -348,6 +392,7 @@ const reservationOps = {
         if (amount !== null && (!Number.isInteger(amount) || amount <= 0)) return err(400, "INVALID_AMOUNT");
         const o = paymentOutcome(r, p.full ? "full" : p.action === "balance" ? "balance" : "deposit", amount);
         if (isErr(o)) return o;
+        if (p.method === "both" ? !Number.isInteger(p.cash) || p.cash! <= 0 || p.cash! >= o.amt : p.cash !== undefined) return err(422, "INVALID_SPLIT");
         if (o.pending && !freeUnitFor(d, r)) return err(409, "NO_AVAILABILITY");
         // Lo pagado que se veía: si en el servidor es otro, entró otro pago mientras tanto (¿el mismo dinero?).
         return { ...p, basePaid: r.paid };
@@ -370,6 +415,12 @@ const reservationOps = {
           return err(400, "INVALID_BODY");
         if (p.adults + p.children > type.maxPersonas) return err(422, "OVER_CAPACITY");
       }
+      if (p.action === "addons") {
+        if (r.groupCode && r.groupCode !== r.code) return err(400, "INVALID_BODY");
+        const addons = pickAddons(p.addons, d.site.decorations, r.addons, true);
+        if (!addons) return fieldErr({ addons: "Alguna decoración ya no está disponible o le falta el texto o el precio. Actualiza la página." });
+        if (withAddons(r.quote, addons).total < r.paid) return fieldErr({ addons: "Ya se pagó más que el nuevo total: no se puede quitar esa decoración." });
+      }
       return p;
     },
     request: (body) => ({ method: "POST", path: "/admin/action", body }),
@@ -378,7 +429,7 @@ const reservationOps = {
       if (!r) return d;
       if (p.action === "confirm" || p.action === "balance") {
         const kind = p.full ? "full" : p.action === "balance" ? "balance" : "deposit";
-        return applyPayment(d, p.code, kind, p.full || p.amount === undefined ? null : Number(p.amount), manualPaymentNote(p.method, p.note), op);
+        return applyPayment(d, p.code, kind, p.full || p.amount === undefined ? null : Number(p.amount), p, op);
       }
       if (p.action === "note")
         return updateReservation(d, p.code, (x) => ({ ...x, notes: [...x.notes, { at: op.occurredAt, text: String(p.text).trim().slice(0, 2000) }] }));
@@ -401,10 +452,21 @@ const reservationOps = {
           balancePaidAt: x.balancePaidAt && p.total > x.paid ? null : x.balancePaidAt,
         }));
       }
+      if (p.action === "addons") {
+        const addons = pickAddons(p.addons, d.site.decorations, r.addons, true) ?? r.addons ?? [];
+        const quote = withAddons(r.quote, addons);
+        if (r.depositPaidAt) quote.balance = Math.max(0, quote.total - r.paid);
+        return updateReservation(d, p.code, (x) => ({
+          ...x,
+          addons,
+          quote,
+          balancePaidAt: x.balancePaidAt && quote.total > x.paid ? null : x.balancePaidAt,
+        }));
+      }
       if (p.action === "reschedule") {
         const type = d.cabinTypes.find((t) => t.id === r.cabinTypeId);
         if (!type) return d;
-        const quote = computeQuote(type, p.checkIn, p.checkOut, r.adults + r.children, activeSeasons(d), depositPct(d));
+        const quote = withAddons(computeQuote(type, p.checkIn, p.checkOut, r.adults + r.children, activeSeasons(d), depositPct(d)), r.addons);
         if (r.depositPaidAt) {
           quote.deposit = r.quote.deposit;
           quote.balance = Math.max(0, quote.total - r.paid);
@@ -459,7 +521,7 @@ const reservationOps = {
       };
       const r = reservationOf(d, proof.reservationCode);
       return approve && p.confirmReservation && r && (r.status === "pending_deposit" || r.status === "expired") && !r.depositPaidAt
-        ? applyPayment(next, r.code, "deposit", null, "Comprobante de pago aprobado", op)
+        ? applyPayment(next, r.code, "deposit", null, { method: "transfer", note: "Comprobante de pago aprobado" }, op)
         : next;
     },
     result: (d, p) => d.proofs.find((x) => x.id === p.id) ?? null,
@@ -826,6 +888,8 @@ const cabinErrors = (b: CabinInput) => {
   if (!Number.isInteger(b.units) || b.units < 0 || b.units > 20) fields.units = "El número de cabañas debe estar entre 0 y 20.";
   const badLabels = Number.isInteger(b.units) ? invalidUnitLabels(b.unitLabels, b.units) : null;
   if (badLabels) fields.unitLabels = badLabels;
+  const badNames = Number.isInteger(b.units) ? invalidUnitNames(b.unitNames, b.units) : null;
+  if (badNames) fields.unitNames = badNames;
   return Object.keys(fields).length ? fieldErr(fields) : null;
 };
 
@@ -837,6 +901,7 @@ const cabinFields = (b: CabinInput) => ({
   maxPersonas: b.maxPersonas,
   units: b.units,
   ...(b.unitLabels !== undefined && { unitLabels: cleanUnitLabels(b.unitLabels, b.units) }),
+  ...(b.unitNames !== undefined && { unitNames: cleanUnitNames(b.unitNames, b.units) }),
   precioPareja: b.precioPareja,
   personaAdicional: b.personaAdicional,
   activa: !!b.activa,
@@ -1104,10 +1169,13 @@ const contentOps = {
         : null,
     request: (body) => ({ method: "PUT", path: "/admin/payment-terms", body }),
     apply: (d, p) =>
-      withSite(d, { settings: { ...d.site.settings, depositPct: p.depositPct }, texts: { ...d.site.texts, payment: { instructions: p.instructions } } }),
+      withSite(d, {
+        settings: { ...d.site.settings, depositPct: p.depositPct },
+        texts: { ...d.site.texts, payment: { instructions: p.instructions, key: p.key ?? d.site.texts.payment.key } },
+      }),
     result: (d) => d.site,
     version: (d) => d.site.version,
-    view: (d) => ({ depositPct: d.site.settings.depositPct, instructions: d.site.texts.payment.instructions }),
+    view: (d) => ({ depositPct: d.site.settings.depositPct, instructions: d.site.texts.payment.instructions, key: d.site.texts.payment.key }),
   } satisfies OpDef<PaymentTerms>,
   "sitePhoto.set": {
     perm: "content",
@@ -1170,6 +1238,50 @@ const contentOps = {
     apply: (d, p) => withSite(d, { services: d.site.services.filter((s) => s.id !== p.id) }),
     result: (d) => d.site.services,
     family: { name: "service", role: "delete" },
+  } satisfies OpDef<{ id: string }>,
+  "decoration.create": {
+    perm: "rates",
+    label: (p) => `Decoración ${p.name}`,
+    entities: (p) => [`decorations:${p.id}`],
+    prepare: (p) => ({ ...p, id: uuid() }),
+    request: (body) => ({ method: "POST", path: "/admin/decorations", body }),
+    apply: (d, p) => withSite(d, { decorations: [...d.site.decorations.filter((s) => s.id !== p.id), p] }),
+    result: (d) => d.site.decorations,
+    family: { name: "decoration", role: "create" },
+  } satisfies OpDef<Decoration>,
+  "decoration.update": {
+    perm: "rates",
+    label: (p) => `Decoración ${p.name}`,
+    entities: (p) => [`decorations:${p.id}`],
+    request: (body) => ({ method: "PUT", path: "/admin/decorations", body }),
+    apply: (d, p) =>
+      withSite(d, {
+        decorations: swap(
+          d.site.decorations,
+          (s) => s.id === p.id,
+          () => p,
+        ),
+      }),
+    result: (d) => d.site.decorations,
+    family: { name: "decoration", role: "update" },
+  } satisfies OpDef<Decoration>,
+  "decoration.reorder": {
+    perm: "rates",
+    label: () => "Orden de las decoraciones",
+    entities: () => ["decorationOrder"],
+    request: (body) => ({ method: "PATCH", path: "/admin/decorations", body }),
+    apply: (d, p) => withSite(d, { decorations: [...d.site.decorations].sort((a, b) => p.order.indexOf(a.id) - p.order.indexOf(b.id)) }),
+    result: (d) => d.site.decorations,
+    family: { name: "decorationOrder", role: "update" },
+  } satisfies OpDef<{ order: string[] }>,
+  "decoration.delete": {
+    perm: "rates",
+    label: () => "Eliminar decoración",
+    entities: (p) => [`decorations:${p.id}`],
+    request: (p) => ({ method: "DELETE", path: "/admin/decorations", query: { id: p.id } }),
+    apply: (d, p) => withSite(d, { decorations: d.site.decorations.filter((s) => s.id !== p.id) }),
+    result: (d) => d.site.decorations,
+    family: { name: "decoration", role: "delete" },
   } satisfies OpDef<{ id: string }>,
   // Nunca lleva contraseña: cambiarla exige conexión (api.ts).
   "profile.save": {
@@ -1282,6 +1394,7 @@ export const CONFLICT_TEXT: Record<string, string> = {
   INVALID_TRANSITION: "La reserva cambió de estado y esta acción ya no aplica.",
   ALREADY_PAID: "Esta reserva ya está pagada por completo.",
   INVALID_AMOUNT: "El valor es mayor a lo que falta por pagar.",
+  INVALID_SPLIT: "La parte en efectivo debe ser menor al valor recibido.",
   NOT_APPLICABLE: "En su estado actual, esta reserva no admite pagos.",
   BALANCE_PENDING: "Falta pagar el saldo: no se puede hacer el check-out.",
   HAS_RESERVATIONS: "Esta cabaña ya tiene reservas: no se puede eliminar.",

@@ -7,10 +7,12 @@ import {
   BookingIcon,
   CalendarIcon,
   FileTextIcon,
+  GiftIcon,
   GridIcon,
   HomeIcon,
   IdCardIcon,
   ListIcon,
+  MailIcon,
   ReceiptIcon,
   RefreshIcon,
   ShieldIcon,
@@ -37,8 +39,10 @@ export type ModuleId =
   | "cabanas"
   | "bloqueos"
   | "tarifas"
+  | "decoraciones"
   | "finanzas"
   | "condiciones"
+  | "correos"
   | "contenido"
   | "empleados"
   | "actividad"
@@ -128,6 +132,14 @@ export const MODULES: Record<ModuleId, Module> = {
     description: "Precio base por cabaña y temporadas con precio especial.",
     perm: "rates",
   },
+  decoraciones: {
+    label: "Decoraciones",
+    href: "/admin/decoraciones",
+    icon: GiftIcon,
+    group: "Alojamiento",
+    description: "Decoraciones con costo que se agregan, opcionales, a una reserva.",
+    perm: "rates",
+  },
   bloqueos: {
     label: "Bloqueos y baños",
     href: "/admin/bloqueos",
@@ -150,6 +162,14 @@ export const MODULES: Record<ModuleId, Module> = {
     group: "Negocio",
     description: "El abono para confirmar las reservas y los datos de pago que ve el huésped.",
     perm: "rates",
+  },
+  correos: {
+    label: "Correos",
+    href: "/admin/correos",
+    icon: MailIcon,
+    group: "Negocio",
+    description: "Los correos automáticos que reciben los huéspedes: cuándo salen, sus textos y cuáles están activos.",
+    perm: "content",
   },
   contenido: {
     label: "Contenido del sitio",
@@ -307,10 +327,12 @@ export const paths = {
   bloqueos: (q?: Query) => withQuery("/admin/bloqueos", q),
   finanzas: (q?: Query) => withQuery("/admin/finanzas", q),
   condiciones: "/admin/condiciones",
+  correos: "/admin/correos",
   cabanas: "/admin/cabanas",
   nuevaCabana: "/admin/cabanas/nueva",
   cabana: (id: string) => `/admin/cabanas/${encodeURIComponent(id)}`,
   tarifas: (q?: Query) => withQuery("/admin/tarifas", q),
+  decoraciones: "/admin/decoraciones",
   contenido: (section?: ContentSectionId) => (section ? `/admin/contenido/${section}` : "/admin/contenido"),
   notificaciones: (q?: Query) => withQuery("/admin/notificaciones", q),
   configuracion: "/admin/configuracion",

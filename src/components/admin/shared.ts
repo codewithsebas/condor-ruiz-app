@@ -1,10 +1,38 @@
-import { cop, dateOf, fmtClock, fmtDate, mask, nightsBetween, plural } from "@/lib/format";
-import type { ApiResult, Reservation } from "@/lib/types";
+import { isFromBooking } from "@/lib/booking";
+import { cop, dateOf, fmtClock, fmtDate, mask, nightsBetween, plural, timeAgo } from "@/lib/format";
+import type { ApiResult, EmailStatus, Reservation } from "@/lib/types";
 import type { DayMark } from "@/components/admin/date-picker";
 import type { Tone } from "@/components/admin/ui";
 
 // "sáb 13 oct, 3:45 p. m." (fecha límite de una retención).
 export const fmtDeadline = (iso: string) => `${fmtDate(dateOf(iso))}, ${fmtClock(iso)}`;
+
+// Quién creó la reserva y cuándo. Sin empleado, su origen: el sitio web, Booking o el equipo (las anteriores al registro).
+// Las del archivo de importación dicen «Importada».
+const createdVerb = (r: Reservation) => (r.source === "import" && !isFromBooking(r) ? "Importada" : "Creada");
+// «Importada el sáb 14 nov, 3:45 p. m. por Ana Ruiz» (modal y página de la reserva).
+export function createdFull(r: Reservation) {
+  const who = r.createdByName
+    ? `por ${r.createdByName}`
+    : isFromBooking(r)
+      ? "desde Booking"
+      : r.source === "panel" || r.source === "import"
+        ? "por el equipo"
+        : "desde el sitio web";
+  const when = fmtDeadline(r.createdAt);
+  return `${createdVerb(r)} el ${when.charAt(0).toLowerCase()}${when.slice(1)} ${who}`;
+}
+// «Creada hace 2 h · Ana», «Creada 14 nov · Sitio web» (calendario y tarjetas): el primer nombre o el origen.
+export function createdShort(r: Reservation, now: number) {
+  const who = r.createdByName
+    ? r.createdByName.split("@")[0].trim().split(/\s+/)[0]
+    : isFromBooking(r)
+      ? "Booking"
+      : r.source === "panel" || r.source === "import"
+        ? "Equipo"
+        : "Sitio web";
+  return `${createdVerb(r)} ${timeAgo(r.createdAt, now)} · ${who}`;
+}
 
 // Confirmación previa a una acción. Puede pedir fechas nuevas, una nota o una casilla, que llegan a run().
 export type ConfirmCfg = {
@@ -60,6 +88,14 @@ export const EMAIL_KIND: Record<string, string> = {
   reservation_cancelled: "Reserva cancelada",
   reservation_expired: "Reserva vencida",
   arrival_reminder: "Recordatorio de llegada",
+};
+
+// Estado de un correo en la bandeja de salida, con su color.
+export const EMAIL_STATUS: Record<EmailStatus, { label: string; tone: "success" | "danger" | "info" }> = {
+  pending: { label: "En cola", tone: "info" },
+  sending: { label: "Enviando", tone: "info" },
+  sent: { label: "Enviado", tone: "success" },
+  failed: { label: "No enviado", tone: "danger" },
 };
 
 // Reservas que activan acciones operativas (llegan hoy, salen hoy, etc.).

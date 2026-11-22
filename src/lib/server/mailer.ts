@@ -9,6 +9,7 @@ import {
   teamMessageEmail,
   type RenderedEmail,
 } from "@/lib/emails";
+import { isTemplateKind, overridesOf, type EmailOverrides } from "@/lib/email-templates";
 import { dirHref, ics, wa } from "@/lib/format";
 import { mergeSite, type SiteConfig } from "@/lib/site";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -16,15 +17,17 @@ import { createServiceClient } from "@/lib/supabase/server";
 import type { EmailRecord, Quote } from "@/lib/types";
 import { type Db, toEmail } from "@/lib/server/db";
 import { EMAIL_LOGO_CID, EMAIL_LOGO_PNG_BASE64 } from "@/lib/server/email-logo";
+import { EMAIL_MAP_CID, loadEmailMap } from "@/lib/server/email-map";
 import { loadSiteContent } from "@/lib/server/site";
 import { env } from "@/lib/server/env";
+import { activeProvider, payLinkUrl } from "@/lib/server/online-payments";
 
 // Bandeja de salida (tabla email_outbox): quien necesita un correo lo encola (los de la reserva los encola la base de datos:
 // al crearse, al aprobarse el abono, al completarse el pago, al reprogramarse, al cancelarse o vencerse y dos días antes de llegar) y este módulo lo envía con Resend. El envío va aparte de la respuesta al huésped: si Resend falla,
 // la reserva sigue confirmada, el error queda registrado (y avisa al panel) y el correo se reintenta con espera creciente.
 
 type Row = Tables<"email_outbox">;
-// content_id: imagen en línea, la que el HTML usa como src="cid:…" (el logo).
+// content_id: imagen en línea, la que el HTML usa como src="cid:…" (el logo y el mapa).
 type Attachment = { filename: string; content: string; content_id?: string };
 const LOGO: Attachment = { filename: "el-condor-del-ruiz.png", content: EMAIL_LOGO_PNG_BASE64, content_id: EMAIL_LOGO_CID };
 
@@ -60,12 +63,18 @@ async function sendWithResend(m: { to: string; subject: string; html: string; te
   return body.id;
 }
 
-type Ctx = { sb: Db; base: string; site?: SiteConfig };
+type Ctx = { sb: Db; base: string; site?: SiteConfig & { emailTexts: EmailOverrides } };
 
+// El sitio y los textos de los correos que el equipo cambió (Correos → plantillas), una vez por tanda de envíos.
 async function siteOf(ctx: Ctx) {
   if (!ctx.site) {
-    const content = await loadSiteContent(ctx.sb);
-    ctx.site = mergeSite(content.settings, content.policies, content.texts);
+    // Si las plantillas no se pueden leer (p. ej. la migración aún no está), el correo sale con sus textos originales.
+    const [content, { data: templates, error }] = await Promise.all([loadSiteContent(ctx.sb), ctx.sb.from("email_templates").select("*")]);
+    if (error) console.error("[correos] No se pudieron leer las plantillas; se usan los textos originales:", error.message);
+    ctx.site = {
+      ...mergeSite(content.settings, content.policies, content.texts, content.photos),
+      emailTexts: overridesOf((templates ?? []).filter((t) => isTemplateKind(t.kind)) as Parameters<typeof overridesOf>[0]),
+    };
   }
   return ctx.site;
 }
@@ -95,7 +104,7 @@ function cabinList(names: string[]) {
 }
 
 // Correos de la reserva: se leen la reserva y su cabaña al enviar (siempre con los datos vigentes).
-async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: string): Promise<Rendered> {
+async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig & { emailTexts: EmailOverrides }, logoUrl: string): Promise<Rendered> {
   if (!row.reservation_code) throw new Error("La reserva del correo ya no existe.");
   const { data: lead } = await ctx.sb.from("reservations").select("*").eq("code", row.reservation_code).single().throwOnError();
   // Reserva con varias cabañas: el correo de la principal habla por todo el grupo (cabañas, personas, valores y pagos).
@@ -108,12 +117,19 @@ async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: str
   const group = members.length ? members : [lead];
   const { data: cabins } = await ctx.sb
     .from("cabin_types")
-    .select("id,nombre")
+    .select("id,nombre,unit_names")
     .in("id", [...new Set(group.map((m) => m.cabin_type_id))])
     .throwOnError();
   const r = { ...lead, ...sumGroup(group) };
   const q = r.quote as Quote;
-  const cabana = cabinList(group.map((m) => cabins.find((c) => c.id === m.cabin_type_id)?.nombre ?? m.cabin_type_id));
+  // El tipo de cabaña y, si la unidad tiene nombre propio, el nombre: «Cabaña Premium con Jacuzzi «El Mirador»».
+  const cabana = cabinList(
+    group.map((m) => {
+      const c = cabins.find((x) => x.id === m.cabin_type_id);
+      const own = c?.unit_names?.[m.unit - 1]?.trim();
+      return `${c?.nombre ?? m.cabin_type_id}${own ? ` «${own}»` : ""}`;
+    }),
+  );
   const stay = {
     nombre: r.guest_full_name,
     codigo: r.code,
@@ -123,6 +139,8 @@ async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: str
     adultos: r.adults,
     ninos: r.children,
     logoUrl,
+    // Decoraciones con costo: en un grupo van en la principal.
+    decoraciones: Array.isArray(lead.addons) ? (lead.addons as { name: string; price: number }[]) : [],
   };
   const mascota = !!(r.pet as { hasPet?: boolean } | null)?.hasPet;
   // Con el sitio público sin publicar (solo panel), los enlaces a «Mi reserva» y «Reservar» llevarían al ingreso del
@@ -131,6 +149,13 @@ async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: str
   const miReservaUrl = site ? `${ctx.base}/mi-reserva?code=${encodeURIComponent(r.code)}` : "";
   const whatsappUrl = wa(c.whatsapp, `Hola, tengo una pregunta sobre mi reserva ${r.code}.`);
   const guest = (email: RenderedEmail): Rendered => ({ email, to: row.to_email });
+  // Mapa de la dirección (en los correos con «Cómo llegar»): imagen en línea, como el logo. Sin ella, el correo sale igual.
+  const withMap = async () => {
+    const png = await loadEmailMap();
+    return png
+      ? { mapaUrl: `cid:${EMAIL_MAP_CID}`, map: [{ filename: "como-llegar.png", content: png.toString("base64"), content_id: EMAIL_MAP_CID }] }
+      : { mapaUrl: undefined, map: [] };
+  };
 
   switch (row.kind) {
     case "reservation_confirmed": {
@@ -147,6 +172,7 @@ async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: str
         .throwOnError();
       // El primer pago de cada cabaña (en un grupo, el abono se reparte entre ellas).
       const firstPaid = group.reduce((sum, m) => sum + (deposits.find((d) => d.reservation_code === m.code)?.amount ?? 0), 0);
+      const { mapaUrl, map } = await withMap();
       const email = reservationConfirmedEmail(c, {
         ...stay,
         mascota,
@@ -155,13 +181,26 @@ async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: str
         pagado: firstPaid || q.deposit,
         miReservaUrl,
         comoLlegarUrl: dirHref(),
+        mapaUrl,
         whatsappUrl,
       });
       const calendar = ics({ code: r.code, checkIn: r.check_in, checkOut: r.check_out, cabinTypeId: r.cabin_type_id }, c, cabana);
-      return { ...guest(email), attachments: [{ filename: `reserva-${r.code}.ics`, content: Buffer.from(calendar).toString("base64") }] };
+      return { ...guest(email), attachments: [...map, { filename: `reserva-${r.code}.ics`, content: Buffer.from(calendar).toString("base64") }] };
     }
     case "reservation_received":
-      return guest(reservationReceivedEmail(c, { ...stay, mascota, total: q.total, abono: q.deposit, plazo: r.deposit_due_at, miReservaUrl, whatsappUrl }));
+      return guest(
+        reservationReceivedEmail(c, {
+          ...stay,
+          mascota,
+          total: q.total,
+          abono: q.deposit,
+          plazo: r.deposit_due_at,
+          miReservaUrl,
+          whatsappUrl,
+          // Pagar en línea: el enlace firmado, también sin el sitio público (/pagar queda abierto en el modo solo panel).
+          pagarUrl: activeProvider() ? payLinkUrl(ctx.base, r.code) : "",
+        }),
+      );
     case "reservation_cancelled":
     case "reservation_expired":
       return guest(
@@ -173,18 +212,22 @@ async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: str
           whatsappUrl,
         }),
       );
-    case "balance_paid":
-      return guest(
-        balancePaidEmail(c, {
-          ...stay,
-          total: q.total,
-          pagado: r.paid_amount,
-          enEstadia: r.status === "checked_in",
-          comoLlegarUrl: dirHref(),
-          miReservaUrl,
-          whatsappUrl,
-        }),
-      );
+    case "balance_paid": {
+      // Ya hospedado no lleva las indicaciones de llegada: tampoco el mapa.
+      const enEstadia = r.status === "checked_in";
+      const { mapaUrl, map } = enEstadia ? { mapaUrl: undefined, map: [] } : await withMap();
+      const email = balancePaidEmail(c, {
+        ...stay,
+        total: q.total,
+        pagado: r.paid_amount,
+        enEstadia,
+        comoLlegarUrl: dirHref(),
+        mapaUrl,
+        miReservaUrl,
+        whatsappUrl,
+      });
+      return { ...guest(email), attachments: map };
+    }
     case "reservation_rescheduled":
     case "reservation_moved": {
       // Las fechas de este cambio quedan en la fila: si se reprograma otra vez, cada correo cuenta el suyo.
@@ -208,8 +251,18 @@ async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: str
       const calendar = ics({ code: r.code, checkIn: d.checkIn, checkOut: d.checkOut, cabinTypeId: r.cabin_type_id }, c, cabana);
       return { ...guest(email), attachments: [{ filename: `reserva-${r.code}.ics`, content: Buffer.from(calendar).toString("base64") }] };
     }
-    case "arrival_reminder":
-      return guest(arrivalReminderEmail(c, { ...stay, saldo: Math.max(0, q.total - r.paid_amount), comoLlegarUrl: dirHref(), miReservaUrl, whatsappUrl }));
+    case "arrival_reminder": {
+      const { mapaUrl, map } = await withMap();
+      const email = arrivalReminderEmail(c, {
+        ...stay,
+        saldo: Math.max(0, q.total - r.paid_amount),
+        comoLlegarUrl: dirHref(),
+        mapaUrl,
+        miReservaUrl,
+        whatsappUrl,
+      });
+      return { ...guest(email), attachments: map };
+    }
     default:
       throw new Error(`Tipo de correo desconocido: ${row.kind}`);
   }

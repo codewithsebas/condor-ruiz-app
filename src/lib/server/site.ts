@@ -17,11 +17,13 @@ export const photoPath = (url: string) => {
 };
 
 export async function loadSiteContent(sb: Db): Promise<SiteContent> {
-  const [{ data: s }, { data: policies }, { data: photos }, { data: services }] = await Promise.all([
+  const [{ data: s }, { data: policies }, { data: photos }, { data: services }, { data: decorations }] = await Promise.all([
     sb.from("site_settings").select("*").maybeSingle().throwOnError(),
     sb.from("site_policies").select("id, question, answer").order("sort").throwOnError(),
     sb.from("site_photos").select("slot, path").throwOnError(),
     sb.from("site_services").select("id, title, description, icon, note, visible").order("sort").order("created_at").throwOnError(),
+    // Sin .throwOnError(): si el catálogo de decoraciones no se puede leer, el resto del contenido sigue (queda vacío).
+    sb.from("decorations").select("id, name, description, price, visible").order("sort").order("created_at"),
   ]);
   return {
     version: s?.version,
@@ -41,6 +43,7 @@ export async function loadSiteContent(sb: Db): Promise<SiteContent> {
     texts: mergeTexts(s?.content),
     // Todos, también los ocultos (el panel los necesita); las páginas públicas muestran solo los visibles.
     services,
+    decorations: decorations ?? [],
     theme: mergeTheme(s?.theme),
   };
 }
@@ -61,7 +64,7 @@ export const getSiteContent = cache(async (): Promise<SiteContent> => {
 
 export async function getSite() {
   const content = await getSiteContent();
-  return { ...content, c: mergeSite(content.settings, content.policies, content.texts) };
+  return { ...content, c: mergeSite(content.settings, content.policies, content.texts, content.photos) };
 }
 
 // URL base del sitio para los enlaces que salen de él (correos).

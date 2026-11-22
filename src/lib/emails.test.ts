@@ -21,6 +21,23 @@ const stay = {
   logoUrl: "https://x/logo.png",
 };
 
+describe("mapa de la dirección", () => {
+  const reminder = { ...stay, saldo: 0, comoLlegarUrl: "https://maps/dir", miReservaUrl: "", whatsappUrl: "https://wa.me/1" };
+
+  it("con imagen, el mapa enlaza a «Cómo llegar»; sin imagen, no hay mapa", () => {
+    const withMap = arrivalReminderEmail(c, { ...reminder, mapaUrl: "cid:mapa" });
+    expect(withMap.html).toMatch(/<a href="https:\/\/maps\/dir"[^>]*><img src="cid:mapa"/);
+    expect(withMap.html).toContain("Mapa de ");
+    expect(arrivalReminderEmail(c, reminder).html).not.toContain("cid:mapa");
+  });
+
+  it("saldo pagado ya en estadía: sin indicaciones de llegada ni mapa", () => {
+    const base = { ...stay, total: 1, pagado: 1, comoLlegarUrl: "https://maps/dir", mapaUrl: "cid:mapa", miReservaUrl: "", whatsappUrl: "" };
+    expect(balancePaidEmail(c, { ...base, enEstadia: false }).html).toContain("cid:mapa");
+    expect(balancePaidEmail(c, { ...base, enEstadia: true }).html).not.toContain("cid:mapa");
+  });
+});
+
 describe("correos automáticos de la reserva", () => {
   it("reserva recibida: código, abono y plazo", () => {
     const e = reservationReceivedEmail(c, {
@@ -36,6 +53,29 @@ describe("correos automáticos de la reserva", () => {
     expect(e.html).toContain("$150.000");
     expect(e.html).toContain("Ver mi reserva");
     expect(e.text).toContain("$150.000");
+  });
+
+  it("reserva recibida: llave Bre-B y QR para pagar, si están configurados", () => {
+    const data = {
+      ...stay,
+      mascota: false,
+      total: 500000,
+      abono: 150000,
+      plazo: "2026-12-01T20:00:00Z",
+      miReservaUrl: "",
+      whatsappUrl: "https://wa.me/573000000000",
+    };
+    const texts = { ...defaultContent.texts, payment: { instructions: "", key: "@condor<x>" } };
+    const withPay = mergeSite(defaultContent.settings, defaultContent.policies, texts, { "payment-qr": "https://x/qr.webp" });
+    const e = reservationReceivedEmail(withPay, data);
+    expect(e.html).toContain("Llave Bre-B");
+    expect(e.html).toContain("@condor&lt;x&gt;");
+    expect(e.html).toContain('src="https://x/qr.webp"');
+    expect(e.text).toContain("Llave Bre-B: @condor<x>");
+    // Sin datos: se pide escribir por WhatsApp y no hay QR.
+    const none = reservationReceivedEmail(c, data);
+    expect(none.html).not.toContain("Llave Bre-B");
+    expect(none.html).not.toContain("Código QR");
   });
 
   it("sin el sitio público (solo panel) no enlaza «Mi reserva» ni «Reservar»", () => {

@@ -3,11 +3,14 @@ import { config, type CabinTypeId } from "@/lib/config";
 import { unpaidUntil } from "@/lib/payments";
 import { WD, WD_FULL, addDays, cop, fmtDate, isISO, nightsBetween, parseISO } from "@/lib/format";
 import type {
+  ReservationAddon,
   Availability,
   Block,
   CabinType,
   ChannelStay,
   ExtraCabin,
+  Companion,
+  CompanionDocType,
   FieldErrors,
   ImportRow,
   ManualReservationInput,
@@ -35,6 +38,7 @@ export const TRANSITIONS: Record<string, { from: ReservationStatus[]; to?: Reser
   reschedule: { from: ["pending_deposit", "confirmed", "rescheduled"] },
   move: { from: ["pending_deposit", "confirmed", "rescheduled", "checked_in"] },
   adjust: { from: ["pending_deposit", "confirmed", "rescheduled", "checked_in"] },
+  addons: { from: ["pending_deposit", "confirmed", "rescheduled", "checked_in"] },
   extend_hold: { from: ["pending_deposit", "expired"] },
   note: { from: ["pending_deposit", "confirmed", "cancelled", "expired", "rescheduled", "checked_in", "completed"] },
   guest: { from: ["pending_deposit", "confirmed", "cancelled", "expired", "rescheduled", "checked_in", "completed"] },
@@ -59,6 +63,43 @@ export function validateGuest(g: { fullName?: string; docType?: string; docNumbe
   if (phone.length < 7 || phone.length > 15) f.phone = "Escribe un celular válido.";
   if ((g.city ?? "").length > 60) f.city = "Máximo 60 caracteres.";
   return f;
+}
+
+export const COMPANION_DOC_TYPES: CompanionDocType[] = ["CC", "CE", "Pasaporte", "PPT", "TI", "RC"];
+
+// Acompañantes del titular: como mucho, las personas de la reserva menos el titular. Nombre, tipo y número de documento
+// obligatorios; celular, correo y ciudad opcionales (si vienen, válidos). Errores con clave "companions.<i>.<campo>".
+export function validateCompanions(list: unknown, people: number): FieldErrors {
+  if (list === undefined || list === null) return {};
+  if (!Array.isArray(list)) return { companions: "Lista de huéspedes no válida." };
+  if (list.length > Math.max(0, people - 1))
+    return { companions: `Con ${people} ${people === 1 ? "persona" : "personas"} caben ${Math.max(0, people - 1)} huéspedes además del titular.` };
+  const f: FieldErrors = {};
+  list.forEach((raw, i) => {
+    const c = (raw ?? {}) as Partial<Record<keyof Companion, unknown>>;
+    const s = (v: unknown) => (typeof v === "string" ? v : "");
+    const k = (x: string) => `companions.${i}.${x}`;
+    if (s(c.fullName).trim().length < 3 || s(c.fullName).length > 120) f[k("fullName")] = "Escribe el nombre completo.";
+    if (!COMPANION_DOC_TYPES.includes(s(c.docType) as CompanionDocType)) f[k("docType")] = "Elige el tipo de documento.";
+    if (!/^[A-Za-z0-9]{5,15}$/.test(s(c.docNumber).trim())) f[k("docNumber")] = "Escribe el número de documento (sin puntos).";
+    const phone = s(c.phone).replace(/\D/g, "");
+    if (phone && (phone.length < 7 || phone.length > 15)) f[k("phone")] = "Escribe un celular válido.";
+    if (s(c.email).trim() && (!EMAIL_RE.test(s(c.email).trim()) || s(c.email).length > 160)) f[k("email")] = "Escribe un correo válido.";
+    if (s(c.city).length > 80) f[k("city")] = "La ciudad es demasiado larga.";
+  });
+  return f;
+}
+
+// Acompañantes listos para guardar (ya validados): sin espacios de más, documento en mayúsculas y celular normalizado.
+export function cleanCompanions(list: Companion[] | undefined): Companion[] {
+  return (list ?? []).map((c) => ({
+    fullName: c.fullName.trim(),
+    docType: c.docType,
+    docNumber: c.docNumber.trim().toUpperCase(),
+    phone: c.phone?.trim() ? normalizePhone(c.phone) : "",
+    email: (c.email ?? "").trim(),
+    city: (c.city ?? "").trim(),
+  }));
 }
 
 const IMPORT_STATUSES: ImportRow["status"][] = ["confirmed", "completed", "cancelled"];
@@ -100,8 +141,31 @@ type Priced = Pick<CabinType, "id" | "precioPareja" | "personaAdicional" | "prec
 // Número con el que se muestra una unidad: el propio, si tiene; si no, su posición. Internamente siempre es la posición.
 export const unitLabel = (c: { unitLabels?: string[] } | null | undefined, unit: number) => c?.unitLabels?.[unit - 1]?.trim() || String(unit);
 
-// Nombre de una cabaña física, como en Booking: «Cabaña 3». El tipo (Doble, Familiar…) se muestra aparte cuando hace falta.
-export const cabinName = (c: { unitLabels?: string[] } | null | undefined, unit: number) => `Cabaña ${unitLabel(c, unit)}`;
+// Nombre propio de una unidad ("El Mirador") o "" si no tiene.
+export const unitName = (c: { unitNames?: string[] } | null | undefined, unit: number) => c?.unitNames?.[unit - 1]?.trim() ?? "";
+
+// Nombre de una cabaña física: el propio si lo tiene («El Mirador»); si no, como en Booking, «Cabaña 3». El tipo (Doble,
+// Familiar…) se muestra aparte cuando hace falta.
+export const cabinName = (c: { unitLabels?: string[]; unitNames?: string[] } | null | undefined, unit: number) =>
+  unitName(c, unit) || `Cabaña ${unitLabel(c, unit)}`;
+
+// Nombres de unidad limpios: uno por unidad, sin espacios de más (al reducir unidades se descartan los que sobran).
+export const cleanUnitNames = (names: unknown, units: number): string[] =>
+  Array.from({ length: units }, (_, i) =>
+    String((Array.isArray(names) ? names[i] : "") ?? "")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+
+// Hasta 40 caracteres, sin repetirse dentro de la cabaña. En blanco: sin nombre.
+export function invalidUnitNames(names: unknown, units: number): string | null {
+  const clean = cleanUnitNames(names, units);
+  if (clean.some((x) => x.length > 40)) return "Cada nombre admite hasta 40 caracteres.";
+  if (clean.some((x) => x && !/^[\p{L}\p{N}][\p{L}\p{N} .,'&()-]*$/u.test(x))) return "Usa letras, números y espacios en los nombres.";
+  const keys = clean.map((x) => x.toLocaleLowerCase("es"));
+  const repeated = clean.find((x, i) => x && keys.indexOf(keys[i]) !== i);
+  return repeated ? `El nombre «${repeated}» está repetido en esta cabaña.` : null;
+}
 
 // Números de unidad limpios: uno por unidad, sin espacios y sin nada de más (al reducir unidades se descartan los que sobran).
 export const cleanUnitLabels = (labels: unknown, units: number): string[] =>
@@ -282,6 +346,78 @@ export function withTotal(q: Quote, total: number, depositPct = config.depositPc
   return { ...q, total, deposit, balance: total - deposit, adjustment: total - (q.base + q.extraAmount) };
 }
 
+/* ───────────── Decoraciones con costo ───────────── */
+
+export const addonsTotal = (addons: readonly { price: number }[] | undefined) => (addons ?? []).reduce((s, a) => s + a.price, 0);
+
+// Pone las decoraciones en la cotización: el total es el alojamiento más las decoraciones; el abono no cambia (se calcula
+// sobre el alojamiento) y la diferencia va al saldo. Reemplaza las que tuviera.
+export function withAddons(q: Quote, addons: readonly { price: number }[] | undefined): Quote {
+  const lodging = q.total - (q.addons ?? 0);
+  const sum = addonsTotal(addons);
+  const total = lodging + sum;
+  const rest: Quote = { ...q };
+  delete rest.addons;
+  return { ...rest, total, balance: Math.max(0, total - q.deposit), ...(sum > 0 && { addons: sum }) };
+}
+
+// Una decoración del catálogo (panel): nombre, descripción y precio. Errores por campo.
+export function invalidDecoration(d: { name: string; description: string; price: number }): FieldErrors {
+  const f: FieldErrors = {};
+  if (!d.name || d.name.length > 60) f.name = "Escribe el nombre de la decoración (máximo 60 caracteres).";
+  if (d.description.length > 200) f.description = "La descripción admite hasta 200 caracteres.";
+  if (!Number.isInteger(d.price) || d.price < 0 || d.price > 20_000_000) f.price = "Escribe el precio en pesos, sin decimales.";
+  return f;
+}
+
+// Prefijo de las decoraciones que escribe el equipo (fuera del catálogo): lo que pidió el huésped, con su precio.
+export const CUSTOM_ADDON = "otra-";
+export const isCustomAddon = (id: string) => id.startsWith(CUSTOM_ADDON);
+
+// Una decoración escrita por el equipo: texto y precio. Mensaje de error o "" si está bien.
+export function invalidCustomAddon(a: { name: string; price: number }) {
+  const name = String(a.name ?? "").trim();
+  if (!name || name.length > 80) return "Escribe lo que desea el huésped (máximo 80 caracteres).";
+  if (!Number.isInteger(a.price) || a.price < 0 || a.price > 20_000_000) return "Escribe el precio en pesos, sin decimales.";
+  return "";
+}
+
+// Decoraciones elegidas → { id, name, price }. Cada elemento es el id de una del catálogo (con su precio) o, si
+// `custom` (solo el panel), una escrita por el equipo { name, price }. null si la lista no es válida: ids repetidos,
+// desconocidos u ocultos (salvo `keep`: las que la reserva ya tenía, que se conservan con su precio acordado) o una
+// escrita sin texto o con un precio inválido.
+export function pickAddons(
+  ids: unknown,
+  catalog: readonly { id: string; name: string; price: number; visible: boolean }[],
+  keep: readonly ReservationAddon[] = [],
+  custom = false,
+): ReservationAddon[] | null {
+  if (ids === undefined || ids === null) return [];
+  if (!Array.isArray(ids) || ids.length > 30) return null;
+  const strings = ids.filter((x) => typeof x === "string");
+  if (new Set(strings).size !== strings.length) return null;
+  const out: ReservationAddon[] = [];
+  for (const id of ids) {
+    if (custom && id && typeof id === "object") {
+      const a = id as { name?: unknown; price?: unknown };
+      const item = { name: String(a.name ?? "").trim(), price: Number(a.price) };
+      if (invalidCustomAddon(item)) return null;
+      out.push({ id: `${CUSTOM_ADDON}${crypto.randomUUID().slice(0, 8)}`, ...item });
+      continue;
+    }
+    if (typeof id !== "string") return null;
+    const had = keep.find((a) => a.id === id);
+    if (had) {
+      out.push({ id: had.id, name: had.name, price: had.price });
+      continue;
+    }
+    const d = catalog.find((x) => x.id === id && x.visible);
+    if (!d) return null;
+    out.push({ id: d.id, name: d.name, price: d.price });
+  }
+  return out;
+}
+
 type PricedStay = {
   quote: Quote;
   checkIn: string;
@@ -302,9 +438,18 @@ export function suggestedTotal(r: PricedStay, t: Priced, people: number, seasons
 }
 
 // Otras personas y otro valor, mismas fechas. Con el abono ya pagado, el abono es lo que se pagó y el saldo es el resto.
-export function adjustedQuote(r: PricedStay, t: Priced, people: number, total: number, seasons: RateSeason[] = [], depositPct = config.depositPct): Quote {
+// `total` incluye las decoraciones de la reserva, que se conservan: el precio especial queda en el alojamiento.
+export function adjustedQuote(
+  r: PricedStay & { addons?: ReservationAddon[] },
+  t: Priced,
+  people: number,
+  total: number,
+  seasons: RateSeason[] = [],
+  depositPct = config.depositPct,
+): Quote {
   const rate = computeQuote(t, r.checkIn, r.checkOut, people, seasons, depositPct);
-  const q = total === rate.total ? rate : withTotal(rate, total, depositPct);
+  const lodging = Math.max(0, total - addonsTotal(r.addons));
+  const q = withAddons(lodging === rate.total ? rate : withTotal(rate, lodging, depositPct), r.addons);
   return r.depositPaidAt ? { ...q, deposit: r.quote.deposit, balance: Math.max(0, total - r.paid) } : q;
 }
 
@@ -349,6 +494,9 @@ export function validateManualReservation(b: ManualReservationInput, types: Cabi
   if (b.estimatedArrival && !/^\d{2}:\d{2}$/.test(b.estimatedArrival)) f.estimatedArrival = "Hora de llegada no válida.";
   if ((b.specialRequests ?? "").length > 1000) f.specialRequests = "El texto es demasiado largo.";
   if (b.total !== null && (!Number.isInteger(b.total) || b.total < SPECIAL_TOTAL.min || b.total > SPECIAL_TOTAL.max)) f.total = "Escribe un precio válido.";
+  // Todas las personas de la reserva (la primera cabaña y las demás): el titular y hasta ese total menos uno acompañantes.
+  const people = [{ adults, children }, ...(Array.isArray(b.more) ? b.more : [])].reduce((s, c) => s + (Number(c.adults) || 0) + (Number(c.children) || 0), 0);
+  Object.assign(f, validateCompanions(b.companions, people));
   return f;
 }
 

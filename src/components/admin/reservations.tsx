@@ -17,7 +17,7 @@ import { DateRangePicker } from "@/components/admin/date-picker";
 import { NewReservationDialog } from "@/components/admin/new-reservation";
 import { Paginator, usePaged } from "@/components/admin/paginator";
 import { MODULES, paths } from "@/components/admin/routes";
-import { ARRIVING, DEPARTING, adminInput, norm, rowOf } from "@/components/admin/shared";
+import { ARRIVING, DEPARTING, adminInput, createdShort, norm, rowOf } from "@/components/admin/shared";
 import { SyncMark } from "@/components/admin/sync";
 import { useReservationActions } from "@/components/admin/reservation-detail";
 import { ACTION_ICON, ActionMenu, inMenu, type ActionKind } from "@/components/admin/action-menu";
@@ -273,7 +273,7 @@ export function ReservationsView() {
 // Reserva como un boleto: franja del color de su estado, código y canal, huésped, las fechas en grande con las noches,
 // el total y el pago; abajo, sus acciones.
 function Ticket({ r, latest, proof }: { r: Reservation; latest: boolean; proof: boolean }) {
-  const { cabinLabel } = useAdmin();
+  const { cabinLabel, now } = useAdmin();
   const x = rowOf(r, cabinLabel);
   const pay = paymentState(r);
   const d = (iso: string) => {
@@ -303,6 +303,7 @@ function Ticket({ r, latest, proof }: { r: Reservation; latest: boolean; proof: 
             </span>
             <span className="mt-0.5 block truncate text-[15px] font-semibold text-ink">{x.name}</span>
             <span className="block truncate text-[12px] text-ink-muted">{x.cabin}</span>
+            <span className="mt-0.5 block truncate text-[11.5px] text-ink-subtle">{createdShort(r, now)}</span>
           </span>
           <StatusPill status={r.status} size="sm" />
         </span>

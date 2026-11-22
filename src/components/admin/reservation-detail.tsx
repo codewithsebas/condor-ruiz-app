@@ -1,10 +1,11 @@
 "use client";
 
-// Una reserva: la página (/admin/reservas/[codigo]) y el modal que abre el calendario muestran lo mismo. Arriba, el estado,
-// las acciones y cinco tarjetas (estadía, cabaña, pago, huéspedes y el siguiente paso); debajo, el huésped (editable, con su
-// historial de cliente) y la estadía como línea de tiempo, y después el pago, los correos, los comprobantes y las notas.
+// Una reserva: la página (/admin/reservas/[codigo]) y el modal que abre el calendario muestran lo mismo, con el estilo del
+// Dashboard. Arriba, el estado, las acciones y una franja con lo esencial (estadía, cabaña, pago, huéspedes y el siguiente
+// paso); debajo, a la izquierda, la estadía como línea de tiempo, el pago, las decoraciones y los correos; a la derecha, el
+// huésped (editable, con su historial de cliente), las notas y los comprobantes.
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   AlertIcon,
   ArrowRightIcon,
@@ -19,42 +20,45 @@ import {
   LockIcon,
   LoginIcon,
   LogoutIcon,
-  MailIcon,
   MoonIcon,
-  NoteIcon,
   PencilIcon,
   RefreshIcon,
   UserIcon,
   UsersIcon,
   WalletIcon,
   WhatsAppIcon,
+  LinkIcon,
 } from "@/components/ui/icons";
 import { StatusPill } from "@/components/ui/status-pill";
 import { balanceDue, buildClients, pendingOf, typeMarks, type ClientSummary } from "@/lib/admin-metrics";
-import { ACTIVE_STATUSES, CHANNEL_NAME, busyBlocks, isFromBooking, unitLabel, validateGuest } from "@/lib/booking";
+import { ACTIVE_STATUSES, CHANNEL_NAME, busyBlocks, isFromBooking, unitLabel, unitName, validateCompanions, validateGuest } from "@/lib/booking";
 import { api } from "@/lib/client/api";
 import { config } from "@/lib/config";
 import { can } from "@/lib/permissions";
 import { groupMoney, groupOf } from "@/lib/groups";
 import { addDays, cop, dateOf, fmtClock, fmtDate, fmtDateTime, nightsBetween, plural, timeAgo, waTo } from "@/lib/format";
-import { PaymentFields, type PayChoice, type PayOption } from "@/components/admin/payment-fields";
+import { PaymentFields, cashSplitError, type PayChoice, type PayOption } from "@/components/admin/payment-fields";
 import { PAYMENT_STATUS, depositPctOf, kindLabel, unpaidUntil } from "@/lib/payments";
 import { fmtTime } from "@/lib/site";
-import type { DocType, EmailRecord, Guest, PayMethod, PaymentRecord, Reservation } from "@/lib/types";
+import type { ApiResult, Companion, DocType, EmailRecord, Guest, PayMethod, PaymentRecord, Reservation } from "@/lib/types";
 import { Combobox } from "@/components/ui/combobox";
+import { CompanionFields } from "@/components/admin/companions";
 import { useAdmin } from "@/components/admin/context";
 import { BathroomWarning } from "@/components/admin/bathrooms";
 import { initialsOf } from "@/components/admin/calendar/shared";
 import { MoveCabinDialog } from "@/components/admin/move-cabin";
+import { AddonsCard } from "@/components/admin/addons";
 import { AdjustReservationDialog } from "@/components/admin/adjust-reservation";
 import { ACTION_ICON, ActionMenu, inMenu, type Action, type ActionKind } from "@/components/admin/action-menu";
+import { MoreLink, Panel, SummaryStrip, type SummaryCell } from "@/components/admin/board";
 import { ProofCard } from "@/components/admin/proofs";
 import { paths } from "@/components/admin/routes";
 import { SyncMark } from "@/components/admin/sync";
 import { useRouteParam } from "@/components/admin/route-param";
-import { EMAIL_KIND, TRUST, type ConfirmCfg, adminInput } from "@/components/admin/shared";
+import { EMAIL_KIND, EMAIL_STATUS, TRUST, type ConfirmCfg, adminInput, createdFull, createdShort } from "@/components/admin/shared";
+import { hasEmail, newRequestId } from "@/components/admin/email-composer";
+import { stateEmailKind, type EmailTemplateKind } from "@/lib/email-templates";
 import {
-  ACCENT,
   Badge,
   Button,
   CopyButton,
@@ -67,7 +71,6 @@ import {
   Modal,
   ModalPresence,
   PageHeader,
-  StatCard,
   Stars,
   buttonClass,
 } from "@/components/admin/ui";
@@ -146,10 +149,38 @@ export function ReservationModal({ code, onClose }: { code: string; onClose: () 
   );
 }
 
+/* ───────────── Enlace de pago ───────────── */
+
+// Copia el enlace de pago en línea (Wompi) para mandarlo al huésped. El enlace cobra siempre lo que falte en ese momento.
+function PayLinkButton({ code }: { code: string }) {
+  const { toast, onAuthError } = useAdmin();
+  const [busy, setBusy] = useState(false);
+  async function copy() {
+    setBusy(true);
+    try {
+      const r = await api.admin.payLink(code);
+      if (r.status === 401 || r.status === 403) return onAuthError();
+      if (r.status === 503) return toast("Los pagos en línea no están activos (faltan las llaves de Wompi).", "error");
+      if (r.status !== 200 || !r.data) return toast("No se pudo crear el enlace. Revisa la conexión.", "error");
+      await navigator.clipboard.writeText(r.data.url);
+      toast("Enlace de pago copiado: pégalo en el chat del huésped");
+    } catch {
+      toast("No se pudo copiar el enlace. Inténtalo de nuevo.", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Button variant="secondary" loading={busy} icon={<LinkIcon size={16} />} onClick={copy}>
+      Enlace de pago
+    </Button>
+  );
+}
+
 /* ───────────── Vista ───────────── */
 
 function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean }) {
-  const { data, cabinLabel, today } = useAdmin();
+  const { data, cabinLabel, today, now } = useAdmin();
   const [editing, setEditing] = useState(false);
   const cabin = cabinLabel(r.cabinTypeId, r.unit);
   // Reserva con varias cabañas: pagos, comprobantes y correos son del grupo; los valores se suman.
@@ -161,6 +192,7 @@ function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean
   const proofs = data.proofs.filter((p) => codes.has(p.reservationCode));
   const payments = data.payments.filter((p) => codes.has(p.reservationCode));
   const emails = data.emails.filter((e) => !!e.reservationCode && codes.has(e.reservationCode));
+  const emailsOff = useEmailsOff();
   const pendingProof = proofs.some((p) => p.status === "pending");
   const due = balanceDue(m);
   const nights = nightsBetween(r.checkIn, r.checkOut);
@@ -202,7 +234,7 @@ function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean
       <StatusPill status={r.status} size="sm" />
       <SyncMark entity={`reservations:${r.code}`} />
       {inGroup && <Badge tone="info">{`Grupo ${r.groupCode} · ${plural(group.length, "cabaña", "cabañas")}`}</Badge>}
-      {r.source === "panel" && <Badge tone="neutral">Creada por el equipo</Badge>}
+      <Badge tone="neutral">{createdShort(r, now)}</Badge>
       {isFromBooking(r) ? (
         <Badge tone="neutral" icon={<BookingIcon size={12} />}>
           {CHANNEL_NAME}
@@ -234,19 +266,23 @@ function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean
         <WhatsAppIcon size={16} />
         WhatsApp
       </a>
+      {owed > 0 && !isFromBooking(r) && ["pending_deposit", "expired", "confirmed", "rescheduled", "checked_in"].includes(r.status) && (
+        <PayLinkButton code={r.groupCode ?? r.code} />
+      )}
       <ActionMenu actions={actions.filter(inMenu)} />
     </>
   );
-  // Editar desde la tarjeta que muestra el dato.
+  // Editar desde la cifra que muestra el dato.
   const cardAction = (id: ActionKind, label: string) => {
     const a = actions.find((x) => x.id === id);
     return a ? (
       <button
         type="button"
         onClick={a.run}
-        className="mt-1 self-start rounded-full bg-paper/70 px-3 py-1 text-[12.5px] font-semibold text-ink transition-colors hover:bg-paper"
+        className="mt-1 inline-flex items-center gap-1 self-start text-[12.5px] font-medium text-ink-muted transition-colors hover:text-ink"
       >
         {label}
+        <ArrowRightIcon size={12} />
       </button>
     ) : null;
   };
@@ -274,89 +310,79 @@ function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean
 
       {/* Columnas según el ancho disponible (modal o página, con o sin barra lateral), no el de la pantalla. */}
       <div className="@container flex flex-col gap-4">
-        <div className="grid grid-cols-1 gap-3 @lg:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-5">
-          <StatCard
-            accent="yellow"
-            label="Estadía"
-            value={`${fmtDate(r.checkIn)} → ${fmtDate(r.checkOut)}`}
-            hint={plural(nights, "noche", "noches")}
-            icon={<CalendarIcon size={15} />}
-            action={cardAction("reschedule", "Cambiar fechas")}
-          />
-          <StatCard
-            accent="pink"
-            label="Cabaña"
-            value={unitLabel(cabinType, r.unit)}
-            hint={cabinType?.nombre}
-            icon={<HomeIcon size={15} />}
-            action={cardAction("move", "Cambiar")}
-          />
-          <StatCard
-            accent="green"
-            label="Pagado"
-            value={cop(m.paid)}
-            hint={
-              <span className="flex w-full flex-col gap-1.5">
-                <span>{`${owed > 0 ? `de ${cop(m.quote.total)} · faltan ${cop(owed)}` : `de ${cop(m.quote.total)} · pagada`}${inGroup ? " · del grupo" : ""}`}</span>
-                <span aria-hidden="true" className="h-1.5 w-full overflow-hidden rounded-full bg-paper/60">
-                  <span className="block h-full rounded-full bg-ink transition-[width] duration-500" style={{ width: `${pct}%` }} />
-                </span>
-              </span>
-            }
-            icon={<WalletIcon size={15} />}
-          />
-          <StatCard
-            accent="blue"
-            label="Huéspedes"
-            value={r.adults + r.children}
-            hint={`${plural(r.adults, "adulto", "adultos")}${r.children ? ` · ${plural(r.children, "niño", "niños")}` : ""}${r.pet?.hasPet ? " · mascota" : ""}`}
-            icon={<UsersIcon size={15} />}
-            action={cardAction("adjust", "Editar")}
-          />
-          <StatCard accent="yellow" label="Siguiente paso" value={next.value} hint={next.hint} icon={<ClockIcon size={15} />} />
-        </div>
+        <Summary
+          cells={[
+            {
+              label: "Estadía",
+              value: `${fmtDate(r.checkIn)} → ${fmtDate(r.checkOut)}`,
+              hint: plural(nights, "noche", "noches"),
+              icon: <CalendarIcon size={16} />,
+              action: cardAction("reschedule", "Cambiar fechas"),
+            },
+            {
+              label: "Cabaña",
+              value: unitName(cabinType, r.unit) || unitLabel(cabinType, r.unit),
+              hint: cabinType?.nombre ?? "",
+              icon: <HomeIcon size={16} />,
+              action: cardAction("move", "Cambiar"),
+            },
+            {
+              label: inGroup ? "Pagado (grupo)" : "Pagado",
+              value: cop(m.paid),
+              hint: owed > 0 ? `de ${cop(m.quote.total)} · faltan ${cop(owed)}` : `de ${cop(m.quote.total)} · pagada`,
+              icon: <WalletIcon size={16} />,
+              meter: pct,
+            },
+            {
+              label: "Huéspedes",
+              value: r.adults + r.children,
+              hint: `${plural(r.adults, "adulto", "adultos")}${r.children ? ` · ${plural(r.children, "niño", "niños")}` : ""}${r.pet?.hasPet ? " · mascota" : ""}`,
+              icon: <UsersIcon size={16} />,
+              action: cardAction("adjust", "Editar"),
+            },
+            { label: "Siguiente paso", value: next.value, hint: next.hint, icon: <ClockIcon size={16} /> },
+          ]}
+        />
 
         {ACTIVE_STATUSES.includes(r.status) && <BathroomWarning cabinTypeId={r.cabinTypeId} unit={r.unit} from={r.checkIn} to={addDays(r.checkOut, -1)} />}
-        {inGroup && <GroupCard r={r} group={group} />}
         {(r.status === "pending_deposit" || r.status === "expired") && <HoldCard r={r} />}
 
-        {/* Quién viene y cuándo, a la vista; debajo, el pago y las notas. */}
-        <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-2">
-          <GuestCard r={r} client={client} onEdit={() => setEditing(true)} />
-          <StayCard r={r} cabin={cabin} />
-        </div>
-
-        <div className="grid grid-cols-1 items-start gap-4 @3xl:grid-cols-2">
+        {/* A la izquierda, la estadía y el dinero; a la derecha, quién viene y lo que anota el equipo. */}
+        <div className="grid grid-cols-1 items-start gap-4 @4xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <div className="flex min-w-0 flex-col gap-4">
+            {inGroup && <GroupCard r={r} group={group} />}
+            <StayCard r={r} cabin={cabin} />
             <PaymentSummary r={m} payments={payments} />
-            <EmailsCard emails={emails} />
+            <AddonsCard r={r} />
+            <EmailsCard r={gm} emails={emails} off={emailsOff} />
+          </div>
+          <div className="flex min-w-0 flex-col gap-4">
+            <GuestCard r={r} client={client} onEdit={() => setEditing(true)} />
+            <Notes r={r} />
             {proofs.length > 0 && (
-              <Card aria-labelledby="dt-proofs" className="flex flex-col gap-3 p-5 sm:p-6">
-                <CardHeader
-                  id="dt-proofs"
-                  icon={<FileTextIcon size={18} />}
-                  title="Comprobantes de pago"
-                  subtitle="Transferencias que envió el huésped desde «Mi reserva»."
-                  actions={
-                    <span className="flex items-center gap-1 text-[12px] text-ink-subtle">
-                      <LockIcon size={12} />
-                      Privados
-                    </span>
-                  }
-                />
+              <Panel
+                id="dt-proofs"
+                title="Comprobantes de pago"
+                subtitle="Transferencias que envió el huésped desde «Mi reserva»."
+                action={
+                  <span className="flex flex-none items-center gap-1 text-[12px] text-ink-subtle">
+                    <LockIcon size={12} />
+                    Privados
+                  </span>
+                }
+              >
                 <ul className="flex flex-col gap-2">
                   {proofs.map((p) => (
                     <ProofCard key={p.id} p={p} r={r} />
                   ))}
                 </ul>
-              </Card>
+              </Panel>
             )}
           </div>
-          <Notes r={r} />
         </div>
       </div>
 
-      <ModalPresence>{editing && <GuestEditor r={r} onClose={() => setEditing(false)} />}</ModalPresence>
+      <ModalPresence>{editing && <GuestEditor r={r} lead={gm} off={emailsOff} onClose={() => setEditing(false)} />}</ModalPresence>
       {dialog}
     </>
   );
@@ -377,6 +403,10 @@ export function Facts({ rows, className = "" }: { rows: { k: string; v: ReactNod
     </dl>
   );
 }
+
+// Lo esencial de la reserva en una franja con divisores (board.tsx): cinco cifras, la primera (las fechas) a lo ancho
+// en pantallas angostas.
+const Summary = ({ cells }: { cells: SummaryCell[] }) => <SummaryStrip label="Resumen de la reserva" cells={cells} wideFirst />;
 
 /* ───────────── Estadía ───────────── */
 
@@ -406,18 +436,14 @@ function StayCard({ r, cabin }: { r: Reservation; cabin: string }) {
   const left = r.status === "completed";
   const live = ACTIVE_STATUSES.includes(r.status) && !left;
   return (
-    <Card aria-labelledby="dt-stay" className="flex flex-col gap-4 p-5 sm:p-6">
-      <CardHeader
-        id="dt-stay"
-        icon={<CalendarIcon size={18} />}
-        accent="yellow"
-        title="Estadía"
-        subtitle={`${cabin}${type ? ` (${type})` : ""} · ${plural(nights, "noche", "noches")}`}
-        actions={live && !arrived ? <Chip>{fromToday(today, r.checkIn)}</Chip> : undefined}
-      />
+    <Panel
+      id="dt-stay"
+      title="Estadía"
+      subtitle={`${cabin}${type ? ` (${type})` : ""} · ${plural(nights, "noche", "noches")}`}
+      action={live && !arrived ? <Chip>{fromToday(today, r.checkIn)}</Chip> : undefined}
+    >
       <ol className="flex flex-col">
         <Stop
-          accent="yellow"
           icon={arrived ? <CheckIcon size={16} /> : <LoginIcon size={16} />}
           label="Llegada"
           day={fmtDate(r.checkIn, true)}
@@ -427,13 +453,12 @@ function StayCard({ r, cabin }: { r: Reservation; cabin: string }) {
         />
         <li
           aria-hidden="true"
-          className="ml-[33px] flex items-center gap-3 border-l-2 border-dashed border-line-strong py-2.5 pl-5 text-[12.5px] font-semibold text-ink-muted"
+          className="ml-[29px] flex items-center gap-3 border-l-2 border-dashed border-line-strong py-2.5 pl-5 text-[12.5px] font-medium text-ink-muted"
         >
           <MoonIcon size={13} />
           {plural(nights, "noche", "noches")}
         </li>
         <Stop
-          accent="green"
           icon={left ? <CheckIcon size={16} /> : <LogoutIcon size={16} />}
           label="Salida"
           day={fmtDate(r.checkOut, true)}
@@ -451,44 +476,28 @@ function StayCard({ r, cabin }: { r: Reservation; cabin: string }) {
             k: "Decoración",
             v: r.decoration?.requested ? `${OCC[r.decoration.occasion] || "Sí"}${r.decoration.notes ? ` · ${r.decoration.notes}` : ""}` : "No",
           },
-          { k: "Canal", v: r.source === "import" ? r.channel || "Importada" : r.source === "panel" ? "Creada por el equipo" : "Sitio web" },
+          { k: "Canal", v: r.source === "import" ? r.channel || "Importada" : r.source === "panel" ? "Panel" : "Sitio web" },
           { k: "Solicitudes", v: r.specialRequests || "—" },
-          { k: "Creada", v: fmtDateTime(r.createdAt) },
+          { k: "Creación", v: createdFull(r) },
         ]}
       />
-    </Card>
+    </Panel>
   );
 }
 
-// Parada de la línea de tiempo: círculo de color, qué es y qué día, y la hora en una píldora (como la agenda del diseño).
-function Stop({
-  accent,
-  icon,
-  label,
-  day,
-  text,
-  time,
-  timeLabel,
-}: {
-  accent: "yellow" | "green";
-  icon: ReactNode;
-  label: string;
-  day: string;
-  text: string;
-  time: string;
-  timeLabel: string;
-}) {
+// Parada de la línea de tiempo: icono en un círculo, qué es y qué día, y la hora en una píldora.
+function Stop({ icon, label, day, text, time, timeLabel }: { icon: ReactNode; label: string; day: string; text: string; time: string; timeLabel: string }) {
   return (
-    <li className="flex items-center gap-3 rounded-[18px] bg-paper/70 p-3 pr-3.5">
-      <span aria-hidden="true" className={`grid size-10 flex-none place-items-center rounded-full text-ink ${ACCENT[accent].bg}`}>
+    <li className="flex items-center gap-3 rounded-[16px] bg-panel p-3 pr-3.5">
+      <span aria-hidden="true" className="grid size-9 flex-none place-items-center rounded-full bg-paper text-ink ring-1 ring-line">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[12.5px] font-semibold text-ink-muted">{label}</span>
-        <span className="block text-[16px] leading-tight font-bold tracking-[-0.01em] text-ink">{day}</span>
-        <span className="mt-0.5 block text-[12.5px] text-ink-muted">{text}</span>
+        <span className="block text-[12px] font-medium text-ink-muted">{label}</span>
+        <span className="block text-[15.5px] leading-tight font-semibold tracking-[-0.01em] text-ink">{day}</span>
+        <span className="mt-0.5 block text-[12px] text-ink-subtle">{text}</span>
       </span>
-      <span className={`flex-none rounded-full px-3 py-1 text-[12.5px] font-bold whitespace-nowrap text-ink tabular-nums ${ACCENT[accent].bg}`}>
+      <span className="flex-none rounded-full bg-paper px-3 py-1 text-[12.5px] font-semibold whitespace-nowrap text-ink tabular-nums ring-1 ring-line">
         <span className="sr-only">{`${timeLabel}: `}</span>
         {time}
       </span>
@@ -497,7 +506,9 @@ function Stop({
 }
 
 const Chip = ({ children, className = "" }: { children: ReactNode; className?: string }) => (
-  <span className={`inline-flex items-center gap-1 rounded-full bg-paper px-3 py-1 text-[12.5px] font-bold whitespace-nowrap text-ink ${className}`}>
+  <span
+    className={`inline-flex flex-none items-center gap-1 rounded-full bg-panel px-3 py-1 text-[12.5px] font-semibold whitespace-nowrap text-ink ${className}`}
+  >
     {children}
   </span>
 );
@@ -530,31 +541,29 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
   ];
   const whatsapp = waTo(g.phone, `Hola ${g.fullName.split(" ")[0]}, te escribimos de ${config.name} por tu reserva ${r.code}.`);
   return (
-    <section aria-labelledby="dt-guest" className="@container flex min-w-0 flex-col gap-4 rounded-[22px] bg-pink p-5 sm:p-6">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3.5">
-          <span
-            aria-hidden="true"
-            className="grid size-13 flex-none place-items-center rounded-full bg-paper text-[17px] font-bold tracking-[-0.02em] text-ink"
-          >
-            {initialsOf(g.fullName)}
-          </span>
-          <div className="min-w-0">
-            <p className="text-[12.5px] font-semibold text-ink/70">Huésped</p>
-            <h2 id="dt-guest" className="text-[clamp(1.15rem,1.9vw,1.4rem)] leading-tight font-bold tracking-[-0.02em] break-words text-ink">
-              {client ? (
-                <Link href={paths.cliente(client.key)} className="underline decoration-ink/35 decoration-2 underline-offset-4 hover:decoration-ink">
-                  {g.fullName}
-                </Link>
-              ) : (
-                g.fullName
-              )}
-            </h2>
-          </div>
-        </div>
-        <Button size="sm" icon={<PencilIcon size={13} />} onClick={onEdit} className="flex-none bg-paper! ring-0!">
+    <section aria-labelledby="dt-guest" className="@container flex min-w-0 flex-col gap-4 rounded-[22px] bg-paper p-5 ring-1 ring-line ring-inset">
+      <div className="flex min-h-8 items-start justify-between gap-3">
+        <p className="text-[14px] font-semibold text-ink">Huésped</p>
+        <Button size="sm" icon={<PencilIcon size={13} />} onClick={onEdit} className="flex-none">
           Editar
         </Button>
+      </div>
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="grid size-11 flex-none place-items-center rounded-full bg-panel text-[15px] font-semibold tracking-[-0.02em] text-ink ring-1 ring-line"
+        >
+          {initialsOf(g.fullName)}
+        </span>
+        <h2 id="dt-guest" className="min-w-0 text-[18px] leading-tight font-semibold tracking-[-0.02em] break-words text-ink">
+          {client ? (
+            <Link href={paths.cliente(client.key)} className="underline decoration-ink/25 decoration-1 underline-offset-4 hover:decoration-ink">
+              {g.fullName}
+            </Link>
+          ) : (
+            g.fullName
+          )}
+        </h2>
       </div>
 
       {tags.length > 0 && (
@@ -562,7 +571,7 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
           {tags.map((t) => (
             <li
               key={t.label}
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] leading-none font-semibold ${t.alert ? "bg-error-soft text-error" : "bg-pink-deep text-ink"}`}
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] leading-none font-medium ${t.alert ? "bg-error-soft text-error" : "bg-panel text-ink ring-1 ring-line ring-inset"}`}
             >
               {t.alert && <AlertIcon size={12} />}
               {t.label}
@@ -571,9 +580,9 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
         </ul>
       )}
 
-      {/* Su historial en cifras, como los indicadores de las tarjetas del diseño. */}
+      {/* Su historial en cifras, como las filas de indicadores del Dashboard. */}
       {client && (
-        <dl className={`grid gap-2 rounded-[18px] bg-paper/45 px-4 py-3 ${can(data.me.role, "finance") ? "grid-cols-2 @md:grid-cols-4" : "grid-cols-3"}`}>
+        <dl className={`grid gap-3 rounded-[16px] bg-panel px-4 py-3 ${can(data.me.role, "finance") ? "grid-cols-2" : "grid-cols-3"}`}>
           {[
             { k: "Reservas", v: client.reservations.length },
             { k: "Estadías", v: client.stays },
@@ -581,8 +590,8 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
             ...(can(data.me.role, "finance") ? [{ k: "Ha generado", v: cop(client.value) }] : []),
           ].map((x) => (
             <div key={x.k} className="min-w-0">
-              <dt className="text-[11px] font-semibold tracking-[.06em] text-ink/60 uppercase">{x.k}</dt>
-              <dd className="truncate text-[17px] font-bold tracking-[-0.01em] text-ink tabular-nums">{x.v}</dd>
+              <dt className="truncate text-[12px] font-medium text-ink-muted">{x.k}</dt>
+              <dd className="mt-0.5 truncate text-[17px] font-semibold tracking-[-0.02em] text-ink tabular-nums">{x.v}</dd>
             </div>
           ))}
         </dl>
@@ -603,7 +612,7 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
                   href={whatsapp}
                   target="_blank"
                   rel="noopener"
-                  className="inline-flex items-center gap-1 rounded-full bg-paper px-2.5 py-0.5 text-[12px] font-semibold text-ink transition-colors hover:bg-paper/70"
+                  className="inline-flex items-center gap-1 rounded-full bg-panel px-2.5 py-0.5 text-[12px] font-medium text-ink ring-1 ring-line transition-colors ring-inset hover:bg-canvas"
                 >
                   <WhatsAppIcon size={12} />
                   Escribir
@@ -643,25 +652,50 @@ function GuestCard({ r, client, onEdit }: { r: Reservation; client?: ClientSumma
         ]}
       />
 
-      {client && (
-        <Link href={paths.cliente(client.key)} className={buttonClass("secondary", "sm", "mt-auto self-start bg-paper/60! ring-0!")}>
-          Ver ficha del cliente
-          <ArrowRightIcon size={14} />
-        </Link>
+      {/* Los demás huéspedes: nombre y documento siempre; el contacto, si lo dieron. */}
+      {(r.companions?.length ?? 0) > 0 && (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-[12px] font-medium text-ink-muted">{`Acompañantes · ${r.companions!.length}`}</h3>
+          <ul className="flex flex-col gap-1.5">
+            {r.companions!.map((c, i) => (
+              <li key={i} className="flex items-center gap-3 rounded-[14px] bg-panel px-3 py-2">
+                <span
+                  aria-hidden="true"
+                  className="grid size-8 flex-none place-items-center rounded-full bg-paper text-[12px] font-semibold text-ink ring-1 ring-line"
+                >
+                  {initialsOf(c.fullName)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[14px] font-semibold text-ink">{c.fullName}</span>
+                  <span className="block truncate text-[12.5px] text-ink-muted">
+                    {[`${c.docType} ${c.docNumber}`, c.phone, c.email, c.city].filter(Boolean).join(" · ")}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
+
+      {client && <MoreLink href={paths.cliente(client.key)}>Ver ficha del cliente</MoreLink>}
     </section>
   );
 }
 
 // Corregir los datos del huésped (nombre, documento, contacto). Cambiar el documento cambia el cliente al que pertenece.
-function GuestEditor({ r, onClose }: { r: Reservation; onClose: () => void }) {
-  const { reload, toast, onAuthError } = useAdmin();
+// Si cambia el correo, los que aún no salen pasan a la dirección nueva (servidor) y se ofrece reenviar el de su estado.
+// `lead`: la reserva con los pagos del grupo; `off`: los correos apagados en Correos.
+function GuestEditor({ r, lead, off, onClose }: { r: Reservation; lead: Reservation; off: ReadonlySet<EmailTemplateKind>; onClose: () => void }) {
+  const { data, reload, toast, onAuthError, ask } = useAdmin();
   const [g, setG] = useState<Guest>({ ...r.guest, docNumber: r.guest.docType === "SD" ? "" : r.guest.docNumber });
+  const [companions, setCompanions] = useState<Companion[]>(r.companions ?? []);
+  // Personas de la reserva (o de todas las cabañas del grupo): el titular y hasta ese total menos uno acompañantes.
+  const people = groupOf(data.reservations, r).reduce((sum, x) => sum + x.adults + x.children, 0);
   const [busy, setBusy] = useState(false);
   const [tried, setTried] = useState(false);
   const [server, setServer] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
-  const local = validateGuest(g);
+  const local: Record<string, string> = { ...validateGuest(g), ...validateCompanions(companions, people) };
   const err = (k: string) => server[k] || (tried ? local[k] : "") || undefined;
   const set = (p: Partial<Guest>) => {
     setG((x) => ({ ...x, ...p }));
@@ -674,7 +708,7 @@ function GuestEditor({ r, onClose }: { r: Reservation; onClose: () => void }) {
     if (busy || Object.keys(local).length) return;
     setBusy(true);
     try {
-      const res = await api.admin.action({ code: r.code, action: "guest", guest: g });
+      const res = await api.admin.action({ code: r.code, action: "guest", guest: g, companions });
       if (res.status === 401 || res.status === 403) return onAuthError();
       if (res.status !== 200) {
         const fields = (res.data as { fields?: Record<string, string> } | null)?.fields;
@@ -683,8 +717,12 @@ function GuestEditor({ r, onClose }: { r: Reservation; onClose: () => void }) {
         return;
       }
       await reload();
-      toast("Datos del huésped actualizados");
+      toast("Datos de los huéspedes actualizados");
       onClose();
+      const email = (g.email ?? "").trim();
+      const kind = stateEmailKind(lead);
+      if (email !== (r.guest.email ?? "").trim() && hasEmail(email) && kind && !off.has(kind) && !res.queued)
+        ask(resendDialog(kind, { ...lead, guest: { ...lead.guest, email } }, "¿Reenviar el correo a la dirección nueva?"));
     } catch {
       setError("Error de conexión. Inténtalo de nuevo.");
     } finally {
@@ -707,13 +745,13 @@ function GuestEditor({ r, onClose }: { r: Reservation; onClose: () => void }) {
             </span>
             <div className="pt-1">
               <h2 id="ge-title" className="text-[18px] font-bold tracking-[-0.02em] text-ink">
-                Datos del huésped
+                Datos de los huéspedes
               </h2>
               <p className="text-[13.5px] text-ink-muted">{`${r.code} · se usan en los correos y para agrupar al cliente.`}</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Nombre completo" error={err("fullName")} className="col-span-2">
+            <Field label="Nombre completo del titular" error={err("fullName")} className="col-span-2">
               {(p) => (
                 <input
                   {...p}
@@ -775,6 +813,16 @@ function GuestEditor({ r, onClose }: { r: Reservation; onClose: () => void }) {
                 />
               )}
             </Field>
+            <CompanionFields
+              list={companions}
+              onChange={(l) => {
+                setCompanions(l);
+                setServer({});
+                setError("");
+              }}
+              people={people}
+              err={err}
+            />
           </div>
           {error && <FieldError>{error}</FieldError>}
         </div>
@@ -793,13 +841,11 @@ function GuestEditor({ r, onClose }: { r: Reservation; onClose: () => void }) {
 function GroupCard({ r, group }: { r: Reservation; group: Reservation[] }) {
   const { cabinLabel } = useAdmin();
   return (
-    <Card aria-labelledby="dt-group" className="flex flex-col gap-3 p-4 sm:p-5">
-      <CardHeader
-        id="dt-group"
-        icon={<UsersIcon size={18} />}
-        title={`Reserva de ${plural(group.length, "cabaña", "cabañas")}`}
-        subtitle={`Código del huésped: ${r.groupCode}. El pago, el plazo y los correos son de todo el grupo.`}
-      />
+    <Panel
+      id="dt-group"
+      title={`Reserva de ${plural(group.length, "cabaña", "cabañas")}`}
+      subtitle={`Código del huésped: ${r.groupCode}. El pago, el plazo y los correos son de todo el grupo.`}
+    >
       <ul className="flex flex-col gap-1.5">
         {group.map((x) => {
           const body = (
@@ -813,13 +859,13 @@ function GroupCard({ r, group }: { r: Reservation; group: Reservation[] }) {
           return (
             <li key={x.code}>
               {x.code === r.code ? (
-                <div aria-current="true" className="flex items-center gap-3 rounded-[14px] bg-yellow-soft px-3 py-2 text-[13.5px]">
+                <div aria-current="true" className="flex items-center gap-3 rounded-[14px] bg-panel px-3 py-2 text-[13.5px] ring-1 ring-line-strong ring-inset">
                   {body}
                 </div>
               ) : (
                 <Link
                   href={paths.reserva(x.code)}
-                  className="flex items-center gap-3 rounded-[14px] bg-panel px-3 py-2 text-[13.5px] transition-colors hover:bg-canvas"
+                  className="flex items-center gap-3 rounded-[14px] px-3 py-2 text-[13.5px] ring-1 ring-line transition-colors ring-inset hover:bg-panel"
                 >
                   {body}
                 </Link>
@@ -828,7 +874,7 @@ function GroupCard({ r, group }: { r: Reservation; group: Reservation[] }) {
           );
         })}
       </ul>
-    </Card>
+    </Panel>
   );
 }
 
@@ -870,7 +916,7 @@ function HoldCard({ r }: { r: Reservation }) {
   }
 
   return (
-    <Card aria-labelledby="dt-hold" className="flex flex-col gap-3 p-4 sm:p-5">
+    <Card aria-labelledby="dt-hold" className="flex flex-col gap-3 bg-warning-soft! p-4 ring-0! sm:p-5">
       <CardHeader
         id="dt-hold"
         icon={<ClockIcon size={18} />}
@@ -898,6 +944,7 @@ function HoldCard({ r }: { r: Reservation }) {
 const PAY_ERRORS: Record<string, string> = {
   ALREADY_PAID: "La reserva ya está pagada por completo.",
   INVALID_AMOUNT: "El valor no puede ser mayor a lo que falta por pagar.",
+  INVALID_SPLIT: "La parte en efectivo debe ser menor al valor recibido.",
   NO_AVAILABILITY: "Esas fechas ya no están libres: la reserva no se puede reactivar.",
   DATES_UNAVAILABLE: "Esas fechas ya no están libres: la reserva no se puede reactivar.",
   NOT_APPLICABLE: "En su estado actual la reserva no admite pagos.",
@@ -1052,6 +1099,7 @@ function PaymentDialog({ r, title, group = false, onClose }: { r: Reservation; t
   const [choice, setChoice] = useState<PayChoice>(pending && offerDeposit ? "deposit" : "full");
   const [custom, setCustom] = useState(0);
   const [method, setMethod] = useState<PayMethod | null>(null);
+  const [cash, setCash] = useState(0);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [tried, setTried] = useState(false);
@@ -1060,6 +1108,7 @@ function PaymentDialog({ r, title, group = false, onClose }: { r: Reservation; t
   const amountError =
     choice !== "custom" ? "" : custom <= 0 ? "Escribe el valor que recibiste." : custom > owed ? `No puede ser más de lo que falta (${cop(owed)}).` : "";
   const left = Math.max(0, owed - amount);
+  const cashError = cashSplitError(method, cash, amount);
 
   const options: PayOption[] = [
     { value: "full", label: r.paid > 0 ? "Todo lo que falta" : "Pago completo", hint: cop(owed) },
@@ -1069,7 +1118,7 @@ function PaymentDialog({ r, title, group = false, onClose }: { r: Reservation; t
 
   async function save() {
     setTried(true);
-    if (busy || amountError || !method) return;
+    if (busy || amountError || !method || cashError) return;
     setBusy(true);
     setError("");
     try {
@@ -1077,6 +1126,7 @@ function PaymentDialog({ r, title, group = false, onClose }: { r: Reservation; t
         code: r.code,
         action: pending ? "confirm" : "balance",
         method,
+        ...(method === "both" && { cash }),
         note: note.trim(),
         ...(choice === "full" ? { full: true } : { amount }),
         ...(group && { group: true }),
@@ -1149,6 +1199,9 @@ function PaymentDialog({ r, title, group = false, onClose }: { r: Reservation; t
             amountError={amountError}
             method={method}
             onMethod={setMethod}
+            amount={amount}
+            cash={cash}
+            onCash={setCash}
             note={note}
             onNote={setNote}
             tried={tried}
@@ -1179,53 +1232,56 @@ function PaymentSummary({ r, payments }: { r: Reservation; payments: PaymentReco
   const pct = q.total ? Math.min(100, Math.round((r.paid / q.total) * 100)) : 0;
   const due = balanceDue(r);
   const fullPayment = payments.some((p) => p.kind === "full" && p.status === "approved");
-  // Cada parte del pago como una fila de la lista del diseño: círculo de color con el estado y el valor en una píldora.
-  const line = (label: string, amount: number, state: ReactNode, tone: "ok" | "wait" | "bad" | "muted") => (
-    <li className="flex items-center gap-3 rounded-[18px] bg-paper/70 p-3 pr-3.5">
+  // Cada parte del pago en una fila: su color de serie (abono morado, saldo verde, como en Pagos y Finanzas), el estado
+  // con su icono y el valor.
+  const line = (label: string, color: string, amount: number, state: ReactNode, tone: "ok" | "wait" | "bad" | "muted") => (
+    <li className="flex items-center gap-3 rounded-[16px] bg-panel p-3 pr-4">
       <span
         aria-hidden="true"
-        className={`grid size-10 flex-none place-items-center rounded-full ${tone === "ok" ? "bg-green text-ink" : tone === "wait" ? "bg-yellow text-ink" : tone === "bad" ? "bg-error-soft text-error" : "bg-panel text-ink-subtle"}`}
+        className={`grid size-9 flex-none place-items-center rounded-full bg-paper ring-1 ring-line ${tone === "ok" ? "text-success" : tone === "wait" ? "text-warning" : tone === "bad" ? "text-error" : "text-ink-subtle"}`}
       >
         {tone === "ok" ? <CheckIcon size={16} /> : tone === "wait" ? <ClockIcon size={16} /> : <span className="size-1.5 rounded-full bg-current" />}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[14.5px] font-semibold text-ink">{label}</span>
-        <span className={`block text-[12.5px] ${tone === "bad" ? "font-semibold text-error" : "text-ink-muted"}`}>{state}</span>
+        <span className="flex items-center gap-1.5 text-[14px] font-semibold text-ink">
+          <span aria-hidden="true" className="size-2.5 flex-none rounded-[3px]" style={{ background: color }} />
+          {label}
+        </span>
+        <span className={`block text-[12px] ${tone === "bad" ? "font-semibold text-error" : "text-ink-muted"}`}>{state}</span>
       </span>
-      <span className={`flex-none rounded-full px-3 py-1 text-[13px] font-bold text-ink tabular-nums ${tone === "ok" ? "bg-green" : "bg-panel"}`}>
-        {cop(amount)}
-      </span>
+      <span className="flex-none text-[14px] font-semibold text-ink tabular-nums">{cop(amount)}</span>
     </li>
   );
   // El abono es el primer pago (puede ser un valor distinto al 30 %); lo demás es saldo, que puede pagarse por partes.
-  // En un grupo cada cabaña tiene su parte del abono: se suma el primer pago de cada una.
-  const firsts = [...new Set(payments.map((p) => p.reservationCode))]
-    .map((code) => payments.filter((p) => p.reservationCode === code && p.status === "approved" && p.kind === "deposit").at(-1))
-    .filter((p): p is PaymentRecord => !!p);
+  // Solo el primer pago de cada cabaña es de tipo abono (después todo es saldo); un abono dividido entre efectivo y
+  // transferencia son dos filas, y en un grupo cada cabaña tiene su parte: se suman todas.
+  const firsts = payments.filter((p) => p.status === "approved" && p.kind === "deposit");
   const depositAmount = firsts.length ? firsts.reduce((s, p) => s + p.amount, 0) : r.depositPaidAt ? Math.min(q.deposit, r.paid || q.deposit) : q.deposit;
   const balanceAmount = Math.max(0, q.total - depositAmount);
   const balanceReceived = r.depositPaidAt ? Math.max(0, Math.min(balanceAmount, r.paid - depositAmount)) : 0;
+  // Lo cobrado en una barra: el abono recibido y lo recibido del saldo, cada uno en su color.
+  const width = (n: number) => (q.total ? `${Math.min(100, (n / q.total) * 100)}%` : "0%");
+  const depositReceived = r.depositPaidAt ? Math.min(depositAmount, r.paid) : 0;
   return (
-    <Card aria-labelledby="dt-pay" className="p-5 sm:p-6">
-      <CardHeader
-        id="dt-pay"
-        icon={<WalletIcon size={18} />}
-        accent="green"
-        title="Pago"
-        subtitle={pct >= 100 ? "Pagada por completo" : `${cop(r.paid)} cobrado · ${pct} %`}
-        actions={
-          <p className="text-[12.5px] leading-tight font-semibold text-ink-muted sm:text-right">
-            Total
-            <strong className="block text-[22px] font-bold tracking-[-0.02em] text-ink tabular-nums">{cop(q.total)}</strong>
-          </p>
-        }
-      />
-      <span aria-hidden="true" className="mt-4 block h-2.5 overflow-hidden rounded-full bg-ink/8">
-        <span className="block h-full rounded-full bg-ink transition-[width] duration-500" style={{ width: `${pct}%` }} />
+    <Panel
+      id="dt-pay"
+      title="Pago"
+      subtitle={pct >= 100 ? "Pagada por completo" : `${cop(r.paid)} cobrado · ${pct} %`}
+      action={
+        <p className="flex-none text-right text-[12px] leading-tight font-medium text-ink-muted">
+          Total
+          <strong className="mt-0.5 block text-[22px] font-semibold tracking-[-0.02em] text-ink tabular-nums">{cop(q.total)}</strong>
+        </p>
+      }
+    >
+      <span aria-hidden="true" className="flex h-2.5 overflow-hidden rounded-full bg-ink/8">
+        <span className="block h-full transition-[width] duration-500" style={{ width: width(depositReceived), background: "var(--color-chart-a)" }} />
+        <span className="block h-full transition-[width] duration-500" style={{ width: width(balanceReceived), background: "var(--color-chart-b)" }} />
       </span>
-      <ul className="mt-4 flex flex-col gap-2">
+      <ul className="flex flex-col gap-2">
         {line(
           depositAmount === q.deposit ? `Abono (${depositPctOf(q)} %)` : "Abono",
+          "var(--color-chart-a)",
           depositAmount,
           r.depositPaidAt
             ? `Recibido el ${fmtDate(dateOf(r.depositPaidAt))}${fullPayment ? " · pago total" : ""}`
@@ -1238,6 +1294,7 @@ function PaymentSummary({ r, payments }: { r: Reservation; payments: PaymentReco
         )}
         {line(
           "Saldo",
+          "var(--color-chart-b)",
           balanceAmount,
           r.balancePaidAt
             ? `Pagado el ${fmtDate(dateOf(r.balancePaidAt))}${fullPayment ? " · pago total" : r.checkedInAt && r.balancePaidAt < r.checkedInAt ? " · antes de llegar" : ""}`
@@ -1254,10 +1311,10 @@ function PaymentSummary({ r, payments }: { r: Reservation; payments: PaymentReco
         )}
       </ul>
       {q.seasonNights ? (
-        <p className="mt-2 text-[12px] text-ink-muted">{`Incluye ${plural(q.seasonNights, "noche", "noches")} con tarifa de temporada.`}</p>
+        <p className="-mt-2 text-[12px] text-ink-muted">{`Incluye ${plural(q.seasonNights, "noche", "noches")} con tarifa de temporada.`}</p>
       ) : null}
       <PaymentHistory payments={payments} />
-    </Card>
+    </Panel>
   );
 }
 
@@ -1265,24 +1322,23 @@ function PaymentSummary({ r, payments }: { r: Reservation; payments: PaymentReco
 function PaymentHistory({ payments }: { payments: PaymentRecord[] }) {
   const { now } = useAdmin();
   const [all, setAll] = useState(false);
-  if (!payments.length) return <p className="mt-4 border-t border-line pt-4 text-[13px] text-ink-muted">Aún no hay pagos registrados.</p>;
+  if (!payments.length) return <p className="border-t border-line pt-4 text-[13px] text-ink-muted">Aún no hay pagos registrados.</p>;
   const list = all ? payments : payments.slice(0, 4);
   return (
-    <div className="mt-4 border-t border-line pt-4">
-      <h3 className="mb-2 text-[13px] font-bold text-ink">Pagos registrados</h3>
-      <ul className="flex flex-col gap-1.5">
+    <div className="border-t border-line pt-4">
+      <h3 className="mb-2 text-[13px] font-semibold text-ink">Pagos registrados</h3>
+      <ul className="flex flex-col divide-y divide-line">
         {list.map((p) => {
           const st = PAYMENT_STATUS[p.status];
           return (
-            <li key={p.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-[16px] bg-paper/50 px-3.5 py-2.5">
+            <li key={p.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2.5 first:pt-0">
               <span className="min-w-0">
                 <span className="flex flex-wrap items-center gap-1.5 text-[13.5px] font-semibold text-ink">
                   {kindLabel(p.kind)} · {cop(p.amount)}
                   <Badge tone={st.tone}>{st.label}</Badge>
                 </span>
                 <span className="block text-[12px] text-ink-muted">
-                  {p.provider === "manual" ? "Registrado por el equipo" : "Pago en línea (anterior)"} · {timeAgo(p.approvedAt ?? p.createdAt, now)} ·{" "}
-                  {p.reference}
+                  {p.provider === "manual" ? "Registrado por el equipo" : "Pago en línea"} · {timeAgo(p.approvedAt ?? p.createdAt, now)} · {p.reference}
                 </span>
                 {p.detail && !(p.provider === "manual" && p.detail === "Registrado por el equipo") && (
                   <span className={`block text-[12px] ${p.status === "declined" || p.status === "error" ? "text-error" : "text-ink-muted"}`}>{p.detail}</span>
@@ -1301,18 +1357,50 @@ function PaymentHistory({ payments }: { payments: PaymentRecord[] }) {
   );
 }
 
-const EMAIL_STATUS: Record<EmailRecord["status"], { label: string; tone: "success" | "warning" | "danger" | "info" }> = {
-  pending: { label: "En cola", tone: "info" },
-  sending: { label: "Enviando", tone: "info" },
-  sent: { label: "Enviado", tone: "success" },
-  failed: { label: "No enviado", tone: "danger" },
-};
+// Correos apagados en el módulo Correos (sin conexión se suponen activos: el servidor igual se niega a reenviarlos).
+function useEmailsOff() {
+  const [off, setOff] = useState<ReadonlySet<EmailTemplateKind>>(() => new Set());
+  useEffect(() => {
+    let live = true;
+    api.admin.emailTemplates.list().then(
+      (res) => {
+        if (live && res.status === 200 && Array.isArray(res.data)) setOff(new Set(res.data.filter((t) => !t.enabled).map((t) => t.kind)));
+      },
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  return off;
+}
 
-// Correos de la reserva: si la confirmación no salió, se ve el motivo y se puede reintentar (sin duplicarla).
-function EmailsCard({ emails }: { emails: EmailRecord[] }) {
-  const { reload, toast, onAuthError, now } = useAdmin();
+// Reenvía el correo del estado de la reserva. Si no salió, vuelve como error con el motivo (para el diálogo).
+async function resendStateEmail(code: string): Promise<ApiResult<unknown>> {
+  const res = await api.admin.resendEmail(code, newRequestId());
+  const e = res.data as EmailRecord | null;
+  if (res.status === 200 && e && e.status !== "sent")
+    return { status: 502, data: { fields: { email: `No se pudo enviar: ${e.lastError || "inténtalo de nuevo en un momento."}` } } };
+  return res;
+}
+
+// El diálogo para reenviar el correo del estado, con la dirección vigente.
+const resendDialog = (kind: EmailTemplateKind, r: Reservation, title = `Reenviar «${EMAIL_KIND[kind]}»`): ConfirmCfg => ({
+  title,
+  text: `«${EMAIL_KIND[kind]}» le llega a ${r.guest.email} con los datos de hoy de la reserva.`,
+  okLabel: "Reenviar",
+  done: "Correo reenviado",
+  run: () => resendStateEmail(r.code),
+});
+
+// Correos de la reserva: si uno no salió, se ve el motivo y se puede reintentar (sin duplicarlo); «Reenviar» manda otra
+// vez el de su estado. `r`: la reserva con los pagos del grupo (groupMoney), para elegir el correo de su estado.
+function EmailsCard({ r, emails, off }: { r: Reservation; emails: EmailRecord[]; off: ReadonlySet<EmailTemplateKind> }) {
+  const { reload, toast, onAuthError, now, ask } = useAdmin();
   const [busy, setBusy] = useState<string | null>(null);
-  if (!emails.length) return null;
+  const kind = stateEmailKind(r);
+  if (!emails.length && !kind) return null;
+  const blocked = !kind ? "" : off.has(kind) ? "Este correo está apagado en Correos." : !hasEmail(r.guest.email) ? "El huésped no tiene un correo válido." : "";
   const retry = async (id: string) => {
     setBusy(id);
     try {
@@ -1329,41 +1417,53 @@ function EmailsCard({ emails }: { emails: EmailRecord[] }) {
     }
   };
   return (
-    <Card aria-labelledby="dt-mail" className="flex flex-col gap-3 p-4 sm:p-5">
-      <CardHeader
-        id="dt-mail"
-        icon={<MailIcon size={18} />}
-        title="Correos"
-        subtitle="Los de la reserva salen solos: al crearla, al confirmarla, si se cancela o vence y dos días antes de la llegada."
-      />
-      <ul className="flex flex-col gap-2">
-        {emails.map((e) => {
-          const st = EMAIL_STATUS[e.status];
-          return (
-            <li
-              key={e.id}
-              className={`flex flex-wrap items-center justify-between gap-3 rounded-[16px] px-4 py-2.5 ${e.status === "failed" ? "bg-error-soft" : "bg-canvas/60"}`}
-            >
-              <span className="min-w-0 flex-1">
-                <span className="flex flex-wrap items-center gap-1.5 text-[13.5px] font-semibold text-ink">
-                  {EMAIL_KIND[e.kind] ?? (e.subject || "Mensaje del equipo")}
-                  <Badge tone={st.tone}>{st.label}</Badge>
+    <Panel
+      id="dt-mail"
+      title="Correos"
+      subtitle="Los de la reserva salen solos: al crearla, al confirmarla, si se cancela o vence y dos días antes de la llegada."
+      action={
+        kind && (
+          <Button size="sm" icon={<RefreshIcon size={14} />} disabled={!!blocked} title={blocked || undefined} onClick={() => ask(resendDialog(kind, r))}>
+            Reenviar
+          </Button>
+        )
+      }
+    >
+      {kind && (
+        <p className="-mt-2 text-[12px] text-ink-muted">
+          {blocked || `Reenviar manda otra vez «${EMAIL_KIND[kind]}», el correo de su estado actual, a la dirección vigente.`}
+        </p>
+      )}
+      {emails.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {emails.map((e) => {
+            const st = EMAIL_STATUS[e.status];
+            return (
+              <li
+                key={e.id}
+                className={`flex flex-wrap items-center justify-between gap-3 rounded-[16px] px-4 py-2.5 ${e.status === "failed" ? "bg-error-soft" : "bg-panel"}`}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-1.5 text-[13.5px] font-semibold text-ink">
+                    {EMAIL_KIND[e.kind] ?? (e.subject || "Mensaje del equipo")}
+                    <Badge tone={st.tone}>{st.label}</Badge>
+                  </span>
+                  <span className="block text-[12px] text-ink-muted">
+                    {e.to} · {e.sentAt ? `enviado ${timeAgo(e.sentAt, now)}` : `${plural(e.attempts, "intento", "intentos")}`}
+                  </span>
+                  {e.status === "failed" && e.lastError && <span className="block text-[12px] text-error">{e.lastError}</span>}
                 </span>
-                <span className="block text-[12px] text-ink-muted">
-                  {e.to} · {e.sentAt ? `enviado ${timeAgo(e.sentAt, now)}` : `${plural(e.attempts, "intento", "intentos")}`}
-                </span>
-                {e.status === "failed" && e.lastError && <span className="block text-[12px] text-error">{e.lastError}</span>}
-              </span>
-              {e.status !== "sent" && e.status !== "sending" && (
-                <Button size="sm" icon={<RefreshIcon size={14} />} loading={busy === e.id} onClick={() => retry(e.id)}>
-                  Reintentar
-                </Button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </Card>
+                {e.status !== "sent" && e.status !== "sending" && (
+                  <Button size="sm" icon={<RefreshIcon size={14} />} loading={busy === e.id} onClick={() => retry(e.id)}>
+                    Reintentar
+                  </Button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Panel>
   );
 }
 
@@ -1386,18 +1486,15 @@ function Notes({ r }: { r: Reservation }) {
     });
   };
   return (
-    <Card aria-labelledby="dt-notes" className="flex flex-col gap-4 p-5 sm:p-6">
-      <CardHeader
-        id="dt-notes"
-        icon={<NoteIcon size={18} />}
-        accent="blue"
-        title="Notas internas"
-        subtitle={r.notes.length ? `${plural(r.notes.length, "nota", "notas")} · solo las ve el equipo` : "Solo las ve el equipo."}
-      />
+    <Panel
+      id="dt-notes"
+      title="Notas internas"
+      subtitle={r.notes.length ? `${plural(r.notes.length, "nota", "notas")} · solo las ve el equipo` : "Solo las ve el equipo."}
+    >
       {r.notes.length ? (
         <ol className="flex flex-col gap-2">
           {r.notes.map((n) => (
-            <li key={n.at} className="rounded-[18px] bg-paper/70 px-4 py-3">
+            <li key={n.at} className="rounded-[16px] bg-panel px-4 py-3">
               <p className="text-[12px] font-semibold text-ink-muted">{fmtDateTime(n.at)}</p>
               <p className="mt-1 text-[14px] leading-relaxed whitespace-pre-wrap text-ink">{n.text}</p>
             </li>
@@ -1421,6 +1518,6 @@ function Notes({ r }: { r: Reservation }) {
       <Button variant="primary" size="sm" disabled={!note.trim()} onClick={addNote} className="self-start">
         Agregar nota
       </Button>
-    </Card>
+    </Panel>
   );
 }

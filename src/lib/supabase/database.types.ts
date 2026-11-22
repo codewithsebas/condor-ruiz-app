@@ -379,6 +379,7 @@ export type Database = {
           precios_personas: Json
           sort: number
           unit_labels: string[]
+          unit_names: string[]
           units: number
           updated_at: string
           version: number
@@ -399,6 +400,7 @@ export type Database = {
           precios_personas?: Json
           sort?: number
           unit_labels?: string[]
+          unit_names?: string[]
           units: number
           updated_at?: string
           version?: number
@@ -419,6 +421,7 @@ export type Database = {
           precios_personas?: Json
           sort?: number
           unit_labels?: string[]
+          unit_names?: string[]
           units?: number
           updated_at?: string
           version?: number
@@ -638,6 +641,42 @@ export type Database = {
         }
         Relationships: []
       }
+      decorations: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          name: string
+          price: number
+          sort: number
+          updated_at: string
+          version: number
+          visible: boolean
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          name: string
+          price: number
+          sort?: number
+          updated_at?: string
+          version?: number
+          visible?: boolean
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          price?: number
+          sort?: number
+          updated_at?: string
+          version?: number
+          visible?: boolean
+        }
+        Relationships: []
+      }
       email_outbox: {
         Row: {
           attempts: number
@@ -696,6 +735,95 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "email_outbox_reservation_code_fkey"
+            columns: ["reservation_code"]
+            isOneToOne: false
+            referencedRelation: "reservations"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      email_templates: {
+        Row: {
+          closing: string
+          enabled: boolean
+          intro: string
+          kind: string
+          preheader: string
+          subject: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          closing?: string
+          enabled?: boolean
+          intro?: string
+          kind: string
+          preheader?: string
+          subject?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          closing?: string
+          enabled?: boolean
+          intro?: string
+          kind?: string
+          preheader?: string
+          subject?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      online_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          detail: string
+          expires_at: string | null
+          kind: Database["public"]["Enums"]["payment_kind"]
+          method: string
+          provider: string
+          reference: string
+          reservation_code: string
+          settled_at: string | null
+          status: string
+          tx_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          detail?: string
+          expires_at?: string | null
+          kind: Database["public"]["Enums"]["payment_kind"]
+          method?: string
+          provider: string
+          reference: string
+          reservation_code: string
+          settled_at?: string | null
+          status?: string
+          tx_id?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          detail?: string
+          expires_at?: string | null
+          kind?: Database["public"]["Enums"]["payment_kind"]
+          method?: string
+          provider?: string
+          reference?: string
+          reservation_code?: string
+          settled_at?: string | null
+          status?: string
+          tx_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "online_payments_reservation_code_fkey"
             columns: ["reservation_code"]
             isOneToOne: false
             referencedRelation: "reservations"
@@ -965,7 +1093,11 @@ export type Database = {
           code: string
           commission: number
           consents: Json
+          addons: Json
+          companions: Json
           created_at: string
+          created_by: string | null
+          created_by_name: string | null
           decoration: Json
           deposit_due_at: string
           deposit_paid_at: string | null
@@ -1003,7 +1135,11 @@ export type Database = {
           code: string
           commission?: number
           consents: Json
+          addons?: Json
+          companions?: Json
           created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
           decoration?: Json
           deposit_due_at: string
           deposit_paid_at?: string | null
@@ -1041,7 +1177,11 @@ export type Database = {
           code?: string
           commission?: number
           consents?: Json
+          addons?: Json
+          companions?: Json
           created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
           decoration?: Json
           deposit_due_at?: string
           deposit_paid_at?: string | null
@@ -1330,11 +1470,23 @@ export type Database = {
       register_manual_payment: {
         Args: {
           p_amount?: number
+          p_cash?: number
           p_code: string
           p_kind: Database["public"]["Enums"]["payment_kind"]
+          p_method?: string
           p_note?: string
           p_occurred_at?: string
           p_op_id?: string
+        }
+        Returns: Json
+      }
+      settle_online_payment: {
+        Args: {
+          p_detail?: string
+          p_method?: string
+          p_reference: string
+          p_status: string
+          p_tx_id: string
         }
         Returns: Json
       }

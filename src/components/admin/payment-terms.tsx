@@ -4,17 +4,18 @@
 // reparto en pesos; lo que ve el huésped en «Mi reserva»; los datos para pagar; el abono y el saldo de cada cabaña con
 // estos valores; y cómo va el cobro de abonos en los últimos 90 días. El abono lo usan las cotizaciones del sitio y del
 // panel; las reservas que ya existen conservan el de su cotización.
-import { useState } from "react";
-import { AlertIcon, CheckIcon, ClockIcon, InfoIcon, WalletIcon } from "@/components/ui/icons";
+import { useRef, useState } from "react";
+import { AlertIcon, CheckIcon, ClockIcon, InfoIcon, QrIcon, TrashIcon, UploadIcon, WalletIcon } from "@/components/ui/icons";
 import { api } from "@/lib/client/api";
 import { isFromBooking } from "@/lib/booking";
 import { addDays, cop, plural } from "@/lib/format";
-import { TEXT_LIMITS } from "@/lib/site";
+import { PAYMENT_QR_SLOT, TEXT_LIMITS } from "@/lib/site";
+import { resizeImage } from "@/lib/client/image-resize";
 import { useAdmin } from "@/components/admin/context";
 import { MODULES } from "@/components/admin/routes";
 import { adminInput } from "@/components/admin/shared";
 import { Panel, money } from "@/components/admin/board";
-import { Callout, Field, RangeSlider, SaveBar, Stepper, enter } from "@/components/admin/ui";
+import { Button, Callout, Field, FieldError, RangeSlider, SaveBar, Stepper, enter } from "@/components/admin/ui";
 
 // Valores frecuentes para elegir con un toque.
 const QUICK = [20, 30, 50, 100];
@@ -26,11 +27,11 @@ const SALDO = "var(--color-chart-b)";
 
 export function PaymentTermsView() {
   const { data, setData, toast, onAuthError } = useAdmin();
-  const saved = { depositPct: data.site.settings.depositPct, instructions: data.site.texts.payment.instructions };
+  const saved = { depositPct: data.site.settings.depositPct, instructions: data.site.texts.payment.instructions, key: data.site.texts.payment.key };
   const [f, setF] = useState(saved);
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const dirty = f.depositPct !== saved.depositPct || f.instructions.trim() !== saved.instructions.trim();
+  const dirty = f.depositPct !== saved.depositPct || f.instructions.trim() !== saved.instructions.trim() || f.key.trim() !== saved.key.trim();
   const setPct = (v: number) => setF((x) => ({ ...x, depositPct: Math.min(100, Math.max(1, Math.round(v))) }));
 
   async function save() {
@@ -38,7 +39,7 @@ export function PaymentTermsView() {
     setBusy(true);
     setErrors({});
     try {
-      const r = await api.admin.savePaymentTerms({ depositPct: f.depositPct, instructions: f.instructions.trim() });
+      const r = await api.admin.savePaymentTerms({ depositPct: f.depositPct, instructions: f.instructions.trim(), key: f.key.trim() });
       if (r.status === 401 || r.status === 403) return onAuthError();
       if (r.status !== 200 || !r.data) {
         const fields = (r.data as { fields?: Record<string, string> } | null)?.fields;
@@ -48,7 +49,7 @@ export function PaymentTermsView() {
       }
       const site = r.data;
       setData((d) => ({ ...d, site }));
-      setF({ depositPct: site.settings.depositPct, instructions: site.texts.payment.instructions });
+      setF({ depositPct: site.settings.depositPct, instructions: site.texts.payment.instructions, key: site.texts.payment.key });
       toast("Condiciones de pago guardadas");
     } catch {
       toast("Error de conexión. Inténtalo de nuevo.", "error");
@@ -69,14 +70,14 @@ export function PaymentTermsView() {
           <DepositPanel pct={f.depositPct} savedPct={saved.depositPct} onChange={setPct} error={errors.depositPct} />
         </div>
         <div {...enter(1.6)} className="min-w-0 xl:col-span-5">
-          <GuestPreview pct={f.depositPct} instructions={f.instructions.trim()} />
+          <GuestPreview pct={f.depositPct} instructions={f.instructions.trim()} payKey={f.key.trim()} qr={data.site.photos[PAYMENT_QR_SLOT]} />
         </div>
 
         <div {...enter(2.2)} className="min-w-0 xl:col-span-7">
           <Panel
             id="pt-instructions"
             title="Datos para pagar"
-            subtitle="Cuenta o llave donde el huésped paga el abono y el saldo. Los ve en «Mi reserva»."
+            subtitle="Cuenta, llave y QR donde el huésped paga el abono y el saldo. Los ve en «Mi reserva» y en el correo de reserva recibida."
             action={<WalletIcon size={17} className="text-ink-muted" />}
           >
             <Field
@@ -103,7 +104,27 @@ export function PaymentTermsView() {
                 style={{ width: `${Math.min(100, (f.instructions.length / TEXT_LIMITS.instructions) * 100)}%` }}
               />
             </span>
-            {!f.instructions.trim() && (
+            <Field
+              label="Llave Bre-B (opcional)"
+              error={errors.key}
+              hint="Celular, correo, documento o llave alfanumérica. El huésped la ve con un botón para copiarla."
+              className="mt-2"
+            >
+              {(p) => (
+                <input
+                  {...p}
+                  type="text"
+                  autoComplete="off"
+                  maxLength={TEXT_LIMITS.paymentKey}
+                  value={f.key}
+                  onChange={(e) => setF((x) => ({ ...x, key: e.target.value }))}
+                  placeholder="@condordelruiz · 3001234567"
+                  className={adminInput}
+                />
+              )}
+            </Field>
+            <PaymentQr />
+            {!f.instructions.trim() && !f.key.trim() && !data.site.photos[PAYMENT_QR_SLOT] && (
               <Callout tone="warning">Aún no hay datos para pagar: el huésped solo verá que debe escribir por WhatsApp o pagar en recepción.</Callout>
             )}
           </Panel>
@@ -233,7 +254,7 @@ function DepositPanel({ pct, savedPct, onChange, error }: { pct: number; savedPc
 /* ───────────── Vista del huésped ───────────── */
 
 // Tarjeta oscura con una maqueta de «Mi reserva» mientras la reserva espera el abono.
-function GuestPreview({ pct, instructions }: { pct: number; instructions: string }) {
+function GuestPreview({ pct, instructions, payKey, qr }: { pct: number; instructions: string; payKey: string; qr?: string }) {
   const deposit = Math.round((SAMPLE * pct) / 100);
   return (
     <section aria-labelledby="pt-preview" className="flex h-full flex-col gap-5 rounded-[22px] bg-ink p-6 text-paper">
@@ -264,11 +285,27 @@ function GuestPreview({ pct, instructions }: { pct: number; instructions: string
           <span className="tabular-nums">{cop(SAMPLE - deposit)}</span>
         </div>
         <div className="h-px bg-line" aria-hidden="true" />
-        {instructions ? (
-          <p className="text-[12.5px] leading-relaxed whitespace-pre-wrap">
-            <span className="font-semibold">Paga por transferencia: </span>
-            {instructions}
-          </p>
+        {instructions || payKey || qr ? (
+          <div className="flex items-start gap-3">
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5 text-[12.5px] leading-relaxed">
+              {instructions && (
+                <p className="whitespace-pre-wrap">
+                  <span className="font-semibold">Paga por transferencia: </span>
+                  {instructions}
+                </p>
+              )}
+              {payKey && (
+                <p>
+                  <span className="font-semibold">Llave Bre-B: </span>
+                  <span className="break-all">{payKey}</span>
+                </p>
+              )}
+            </div>
+            {qr && (
+              // eslint-disable-next-line @next/next/no-img-element -- QR subido por el negocio, con su tamaño original
+              <img src={qr} alt="QR para pagar" className="size-20 flex-none rounded-[10px] bg-paper object-contain ring-1 ring-line" />
+            )}
+          </div>
         ) : (
           <p className="flex items-start gap-2 text-[12.5px] text-ink-muted">
             <AlertIcon size={14} className="mt-0.5 flex-none" />
@@ -281,6 +318,105 @@ function GuestPreview({ pct, instructions }: { pct: number; instructions: string
         Cuando recibas un pago, regístralo en la ficha de la reserva: abono, total u otro valor, en efectivo o por transferencia.
       </p>
     </section>
+  );
+}
+
+/* ───────────── QR para pagar ───────────── */
+
+const QR_ERRORS: Record<number, string> = {
+  413: "La imagen pesa demasiado (máximo 5 MB).",
+  415: "Formato no compatible. Usa JPG, PNG o WebP.",
+  501: "La subida de imágenes no está disponible en modo simulado.",
+};
+
+// Imagen del QR del banco (Bre-B, Bancolombia, Nequi…). Se publica al subirla, sin esperar a «Guardar cambios».
+function PaymentQr() {
+  const { data, setData, ask, toast, onAuthError } = useAdmin();
+  const qr = data.site.photos[PAYMENT_QR_SLOT];
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function upload(file: File | undefined) {
+    if (!file) return;
+    setError("");
+    if (!file.type.startsWith("image/")) return setError("Elige una imagen JPG, PNG o WebP.");
+    setBusy(true);
+    try {
+      // Sin recorte: el QR se sube completo, a un tamaño que se lee bien en pantalla y en el correo.
+      const blob = await resizeImage(file, { maxSide: 1000 });
+      const r = await api.admin.uploadPhoto(PAYMENT_QR_SLOT, blob, `qr.${blob.type === "image/webp" ? "webp" : "jpg"}`);
+      if (r.status === 401 || r.status === 403) return onAuthError();
+      if (r.status !== 200 || !r.data) return setError(QR_ERRORS[r.status] ?? "No se pudo subir el QR. Inténtalo de nuevo.");
+      const photos = r.data;
+      setData((d) => ({ ...d, site: { ...d.site, photos } }));
+      toast("QR para pagar publicado");
+    } catch {
+      setError("No se pudo leer la imagen. Prueba con otra en JPG, PNG o WebP.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const remove = () =>
+    ask({
+      title: "Quitar el QR",
+      text: "El huésped dejará de ver el QR en «Mi reserva» y en los correos. Los demás datos para pagar se conservan.",
+      okLabel: "Quitar QR",
+      danger: true,
+      done: "QR quitado",
+      run: async () => {
+        const r = await api.admin.deletePhoto(PAYMENT_QR_SLOT);
+        if (r.status === 200 && r.data) {
+          const photos = r.data;
+          setData((d) => ({ ...d, site: { ...d.site, photos } }));
+        }
+        return r;
+      },
+    });
+
+  return (
+    <div className="mt-2 flex flex-col gap-2">
+      <span className="text-[13px] font-semibold text-ink">QR para pagar (opcional)</span>
+      <div className="flex items-center gap-4 rounded-[18px] border border-line p-3">
+        {qr ? (
+          // eslint-disable-next-line @next/next/no-img-element -- QR subido por el negocio, con su tamaño original
+          <img src={qr} alt="QR para pagar" className="size-24 flex-none rounded-[12px] bg-paper object-contain ring-1 ring-line" />
+        ) : (
+          <span aria-hidden="true" className="grid size-24 flex-none place-items-center rounded-[12px] bg-panel text-ink-subtle ring-1 ring-line">
+            <QrIcon size={28} />
+          </span>
+        )}
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <p className="text-[12.5px] text-ink-muted">
+            {qr ? "El huésped lo ve en «Mi reserva» y en el correo de reserva recibida." : "Sube la imagen del QR de tu banco o de Bre-B. JPG, PNG o WebP."}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" loading={busy} icon={<UploadIcon size={14} />} onClick={() => input.current?.click()}>
+              {qr ? "Cambiar QR" : "Subir QR"}
+            </Button>
+            {qr && (
+              <Button size="sm" variant="danger-ghost" icon={<TrashIcon size={14} />} onClick={remove}>
+                Quitar
+              </Button>
+            )}
+          </div>
+        </div>
+        <input
+          ref={input}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={(e) => {
+            upload(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+      </div>
+      {error && <FieldError>{error}</FieldError>}
+    </div>
   );
 }
 

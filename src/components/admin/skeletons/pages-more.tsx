@@ -2,25 +2,25 @@
 
 // Esqueletos del resto de páginas del panel (alojamiento, negocio, equipo y fichas de detalle). Mismo criterio que
 // pages.tsx: la estructura y los textos fijos de cada vista, con los datos en gris.
-import type { ReactNode } from "react";
 import {
+  AlertIcon,
   ArrowLeftIcon,
   BanIcon,
   BathIcon,
   CalendarIcon,
   CheckIcon,
   ClockIcon,
-  FileTextIcon,
   HomeIcon,
-  IdCardIcon,
   ListIcon,
   LockIcon,
   LoginIcon,
+  MailIcon,
   MoonIcon,
   PencilIcon,
   PlusIcon,
   ReceiptIcon,
   RefreshIcon,
+  SendIcon,
   ShieldIcon,
   TagIcon,
   TrendIcon,
@@ -30,7 +30,7 @@ import {
   WalletIcon,
 } from "@/components/ui/icons";
 import { CONTENT_GROUPS, CONTENT_SECTIONS, MODULES, type ContentSectionId } from "@/components/admin/routes";
-import { ACCENT, Deco, type Accent } from "@/components/admin/ui";
+import { Deco } from "@/components/admin/ui";
 import {
   Block,
   Box,
@@ -58,21 +58,6 @@ import {
 
 const GRID = "grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3";
 const cabinCombo = <Combo icon={<HomeIcon size={14} className="text-ink-muted" />} w="13ch" />;
-
-// Indicador de color (ui.tsx, StatCard con acento) con su figura decorativa y el rótulo fijo.
-function AccentStat({ accent, label, icon, w = "5ch" }: { accent: Accent; label: string; icon: ReactNode; w?: string }) {
-  return (
-    <div className={`relative isolate flex min-w-0 flex-col gap-1.5 overflow-hidden rounded-[22px] p-4 sm:p-5 ${ACCENT[accent].bg}`}>
-      <Deco accent={accent} className="-top-5 -right-5 size-[104px] rotate-12" />
-      <div className="flex items-center justify-between gap-2">
-        <p className="truncate text-[13.5px] font-semibold text-ink">{label}</p>
-        <span className="grid size-8 flex-none place-items-center rounded-full bg-paper/70 text-ink">{icon}</span>
-      </div>
-      <Line w={w} tone="soft" className="text-[clamp(1.45rem,2.1vw,1.85rem)] leading-tight font-bold" />
-      <Line w="12ch" tone="soft" className="text-[12.5px] leading-[22px]" />
-    </div>
-  );
-}
 
 // Fila de datos con rótulo y valor (Facts del detalle).
 function Facts({ rows }: { rows: string[] }) {
@@ -224,6 +209,24 @@ export function CabinEditorSkeleton() {
           <Block className="h-[220px] rounded-[20px]" />
         </div>
       </div>
+    </>
+  );
+}
+
+/* ───────────── Decoraciones ───────────── */
+
+export function DecorationsSkeleton() {
+  return (
+    <>
+      <ModHead eyebrow="Extras con costo que se agregan, opcionales, a una reserva" title={MODULES.decoraciones.label} />
+      <Block className="h-[64px] rounded-[16px]" />
+      <Box title="Decoraciones" subtitle={null}>
+        <div className="flex flex-col gap-2">
+          {[0, 1, 2].map((i) => (
+            <Block key={i} className="h-[60px] rounded-[14px]" />
+          ))}
+        </div>
+      </Box>
     </>
   );
 }
@@ -808,9 +811,12 @@ export function EmployeesSkeleton() {
         eyebrow="Cada persona entra con su propio correo; el rol decide qué puede ver y hacer"
         title={MODULES.empleados.label}
         actions={
-          <Btn variant="primary" icon={<UserPlusIcon size={15} />}>
-            Nuevo empleado
-          </Btn>
+          <>
+            <Btn icon={<ShieldIcon size={15} />}>Roles y permisos</Btn>
+            <Btn variant="primary" icon={<UserPlusIcon size={15} />}>
+              Nuevo empleado
+            </Btn>
+          </>
         }
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
@@ -842,20 +848,6 @@ export function EmployeesSkeleton() {
           <Box title="Actividad reciente" subtitle="Último ingreso de cada cuenta" className="h-auto!">
             <RecentSignInsSkeleton />
           </Box>
-          {[
-            { title: "Recepción", icon: <IdCardIcon size={15} /> },
-            { title: "Administrador", icon: <ShieldIcon size={15} /> },
-          ].map((r) => (
-            <Box
-              key={r.title}
-              title={r.title}
-              subtitle={null}
-              className="h-auto!"
-              action={<span className="grid size-8 place-items-center rounded-full bg-panel text-ink ring-1 ring-line">{r.icon}</span>}
-            >
-              <Block className="h-[120px] rounded-[16px]" />
-            </Box>
-          ))}
         </div>
       </div>
     </>
@@ -1060,6 +1052,72 @@ export function ProfileSkeleton() {
   );
 }
 
+/* ───────────── Correos (pestaña Enviados, la que abre) ───────────── */
+
+export function EmailsSkeleton() {
+  return (
+    <>
+      <ModHead eyebrow="Los correos que reciben los huéspedes" title={MODULES.correos.label} />
+      <Seg
+        counts={false}
+        options={[
+          { label: "Enviados", icon: <SendIcon size={15} /> },
+          { label: "Plantillas", icon: <PencilIcon size={15} /> },
+        ]}
+      />
+      <div className="@container flex flex-col gap-4">
+        {/* Franja de resumen con divisores (SummaryStrip). */}
+        <div className="overflow-hidden rounded-[22px] bg-panel ring-1 ring-line ring-inset">
+          <div className="-mr-px -mb-px grid grid-cols-2 @3xl:grid-cols-4">
+            {(
+              [
+                ["Enviados", <SendIcon key="i" size={16} />, "3ch"],
+                ["En cola", <ClockIcon key="i" size={16} />, "2ch"],
+                ["No enviados", <AlertIcon key="i" size={16} />, "2ch"],
+                ["Último envío", <MailIcon key="i" size={16} />, "9ch"],
+              ] as const
+            ).map(([label, icon, w]) => (
+              <div key={label} className="flex min-w-0 items-start gap-3 border-r border-b border-line px-4 py-4 @md:px-5">
+                <span className="hidden size-9 flex-none place-items-center rounded-full bg-paper text-ink ring-1 ring-line @md:grid">{icon}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12px] font-medium text-ink-muted">{label}</p>
+                  <Line w={w} className="mt-1 text-[17px] leading-tight font-semibold" />
+                  <Line w="14ch" className="mt-1 text-[11.5px]" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <Box
+          title="Correos enviados"
+          subtitle="Los automáticos y los mensajes del equipo, del más reciente al más antiguo."
+          action={<Line w="9ch" className="text-[12.5px]" />}
+        >
+          <div className="flex flex-col gap-2.5 @xl:flex-row @xl:flex-wrap @xl:items-center">
+            <Search placeholder="Correo, código o huésped" className="@xl:min-w-[240px] @xl:flex-1 @6xl:max-w-[320px]" />
+            <Combo w="14ch" className="@xl:w-[220px]" />
+            <Seg size="sm" counts={false} options={["Todos", "Enviados", "En cola", "No enviados"]} className="@6xl:ml-auto" />
+          </div>
+          <ul className="-mx-1 flex flex-col divide-y divide-line">
+            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+              <li key={i} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 py-3">
+                <div className="min-w-0 flex-1 basis-60">
+                  <div className="flex items-center gap-1.5">
+                    <Line w={`${14 + (i % 3) * 4}ch`} className="text-[13.5px] font-semibold" />
+                    <Pill w="62px" />
+                  </div>
+                  <Line w="30ch" className="mt-0.5 text-[12px]" />
+                </div>
+                <Line w="12ch" className="flex-none text-[12px]" />
+              </li>
+            ))}
+          </ul>
+        </Box>
+      </div>
+    </>
+  );
+}
+
 /* ───────────── Ficha de una reserva ───────────── */
 
 export function ReservationDetailSkeleton() {
@@ -1081,33 +1139,57 @@ export function ReservationDetailSkeleton() {
         </div>
       </header>
       <div className="@container flex flex-col gap-4">
-        <div className="grid grid-cols-1 gap-3 @lg:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-5">
-          <AccentStat accent="yellow" label="Estadía" icon={<CalendarIcon size={15} />} w="9ch" />
-          <AccentStat accent="pink" label="Cabaña" icon={<HomeIcon size={15} />} w="8ch" />
-          <AccentStat accent="green" label="Pagado" icon={<WalletIcon size={15} />} w="7ch" />
-          <AccentStat accent="blue" label="Huéspedes" icon={<UsersIcon size={15} />} w="4ch" />
-          <AccentStat accent="yellow" label="Siguiente paso" icon={<ClockIcon size={15} />} w="9ch" />
-        </div>
-        <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-2">
-          <CardSk title="Huésped" subtitle={null} icon={<UserIcon size={18} />} className="flex flex-col gap-4 p-5 sm:p-6">
-            <Facts rows={["Documento", "Celular", "Correo", "Ciudad"]} />
-          </CardSk>
-          <CardSk title="Estadía" subtitle={null} icon={<CalendarIcon size={18} />} className="flex flex-col gap-4 p-5 sm:p-6">
-            <Facts rows={["Llegada", "Salida", "Cabaña", "Huéspedes"]} />
-          </CardSk>
-        </div>
-        <div className="grid grid-cols-1 items-start gap-4 @3xl:grid-cols-2">
-          <div className="flex min-w-0 flex-col gap-4">
-            <CardSk title="Pagos" subtitle={null} icon={<WalletIcon size={18} />} className="flex flex-col gap-4 p-5 sm:p-6">
-              <Facts rows={["Total", "Abono", "Saldo"]} />
-            </CardSk>
-            <CardSk title="Correos" subtitle={null} icon={<FileTextIcon size={18} />} className="flex flex-col gap-3 p-5 sm:p-6">
-              <Block className="h-[96px] rounded-[16px]" />
-            </CardSk>
+        {/* Franja de resumen con divisores (como «Hoy» en el Dashboard). */}
+        <div className="overflow-hidden rounded-[22px] bg-panel ring-1 ring-line ring-inset">
+          <div className="-mr-px -mb-px grid grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-5">
+            {(
+              [
+                ["Estadía", <CalendarIcon key="i" size={16} />, "11ch"],
+                ["Cabaña", <HomeIcon key="i" size={16} />, "8ch"],
+                ["Pagado", <WalletIcon key="i" size={16} />, "8ch"],
+                ["Huéspedes", <UsersIcon key="i" size={16} />, "2ch"],
+                ["Siguiente paso", <ClockIcon key="i" size={16} />, "10ch"],
+              ] as const
+            ).map(([label, icon, w]) => (
+              <div
+                key={label}
+                className="flex min-w-0 items-start gap-3 border-r border-b border-line px-4 py-4 first:col-span-2 @md:px-5 @3xl:first:col-span-1"
+              >
+                <span className="hidden size-9 flex-none place-items-center rounded-full bg-paper text-ink ring-1 ring-line @md:grid">{icon}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12px] font-medium text-ink-muted">{label}</p>
+                  <Line w={w} className="mt-1 text-[17px] leading-tight font-semibold" />
+                  <Line w="9ch" className="mt-1 text-[11.5px]" />
+                </div>
+              </div>
+            ))}
           </div>
-          <CardSk title="Notas" subtitle={null} icon={<PencilIcon size={18} />} className="flex flex-col gap-3 p-5 sm:p-6">
-            <Block className="h-[140px] rounded-[16px]" />
-          </CardSk>
+        </div>
+        <div className="grid grid-cols-1 items-start gap-4 @4xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <div className="flex min-w-0 flex-col gap-4">
+            <Box title="Estadía" subtitle={null}>
+              <Block className="h-[64px] rounded-[16px]" />
+              <Block className="h-[64px] rounded-[16px]" />
+              <Facts rows={["Huéspedes", "Mascota", "Canal", "Creación"]} />
+            </Box>
+            <Box title="Pago" subtitle={null} action={<Line w="8ch" className="text-[22px] font-semibold" />}>
+              <Block className="h-2.5 rounded-full" />
+              <Block className="h-[60px] rounded-[16px]" />
+              <Block className="h-[60px] rounded-[16px]" />
+            </Box>
+          </div>
+          <div className="flex min-w-0 flex-col gap-4">
+            <Box title="Huésped" action={<Pill w="72px" className="h-8" />}>
+              <div className="flex items-center gap-3">
+                <Dot size="size-11" />
+                <Line w="16ch" className="text-[18px] font-semibold" />
+              </div>
+              <Facts rows={["Celular", "Correo", "Documento", "Ciudad"]} />
+            </Box>
+            <Box title="Notas internas" subtitle={null}>
+              <Block className="h-[120px] rounded-[16px]" />
+            </Box>
+          </div>
         </div>
       </div>
     </>
@@ -1132,37 +1214,55 @@ export function ClientDetailSkeleton() {
           <Block className="h-9 w-[96px] rounded-full" />
         </div>
       </header>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <AccentStat accent="pink" label="Reservas" icon={<ListIcon size={15} />} w="2ch" />
-        <AccentStat accent="green" label="Noches" icon={<MoonIcon size={15} />} w="2ch" />
-        <AccentStat accent="yellow" label="Valor generado" icon={<TrendIcon size={15} />} w="6ch" />
-        <AccentStat accent="blue" label="Próxima llegada" icon={<CalendarIcon size={15} />} w="7ch" />
+      {/* Franja de resumen con divisores (como en la ficha de la reserva). */}
+      <div className="@container">
+        <div className="overflow-hidden rounded-[22px] bg-panel ring-1 ring-line ring-inset">
+          <div className="-mr-px -mb-px grid grid-cols-2 @3xl:grid-cols-4">
+            {(
+              [
+                ["Reservas", <ListIcon key="i" size={16} />, "2ch"],
+                ["Noches", <MoonIcon key="i" size={16} />, "2ch"],
+                ["Valor generado", <TrendIcon key="i" size={16} />, "7ch"],
+                ["Próxima llegada", <CalendarIcon key="i" size={16} />, "8ch"],
+              ] as const
+            ).map(([label, icon, w]) => (
+              <div key={label} className="flex min-w-0 items-start gap-3 border-r border-b border-line px-4 py-4 @md:px-5">
+                <span className="hidden size-9 flex-none place-items-center rounded-full bg-paper text-ink ring-1 ring-line @md:grid">{icon}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12px] font-medium text-ink-muted">{label}</p>
+                  <Line w={w} className="mt-1 text-[17px] leading-tight font-semibold" />
+                  <Line w="9ch" className="mt-1 text-[11.5px]" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex min-w-0 flex-col gap-4">
-          <CardSk title="Datos del cliente" subtitle={null} icon={<UserIcon size={17} />}>
+          <Box title="Datos del cliente" subtitle={null}>
             <Facts rows={["Documento", "Celular", "Correo", "Ciudad", "Cliente desde"]} />
-          </CardSk>
-          <CardSk title="Historial de reservas" subtitle={null} icon={<ListIcon size={17} />} className="flex flex-col gap-3 p-4 sm:p-5">
+          </Box>
+          <Box title="Historial de reservas" subtitle={null}>
             <ul className="-mx-2 flex flex-col">
               {[0, 1, 2].map((i) => (
                 <ListRow key={i} lead={<Dot size="size-8" />} w={["40%", "34%", "46%"][i]} className="py-2.5" />
               ))}
             </ul>
-          </CardSk>
+          </Box>
         </div>
         <div className="flex min-w-0 flex-col gap-4">
-          <CardSk title="Valoración interna" subtitle={null} icon={<ShieldIcon size={17} />} actions={<Pill w="72px" />}>
+          <Box title="Valoración interna" subtitle={null} action={<Pill w="72px" />}>
             <Block className="h-[48px] rounded-[16px]" />
             <Block className="h-[120px] rounded-[16px]" />
-          </CardSk>
-          <CardSk title="Etiquetas" subtitle="Para reconocer al cliente de un vistazo." icon={<TagIcon size={17} />} accent="bg-yellow">
+          </Box>
+          <Box title="Etiquetas" subtitle="Para reconocer al cliente de un vistazo.">
             <span className="flex flex-wrap gap-1.5">
               {[80, 64, 96].map((w, i) => (
                 <Pill key={i} w={`${w}px`} />
               ))}
             </span>
-          </CardSk>
+          </Box>
         </div>
       </div>
     </>

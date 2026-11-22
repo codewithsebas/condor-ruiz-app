@@ -1,8 +1,9 @@
 "use client";
 
-// Datos de un pago recibido por el equipo: cuánto (completo, abono u otro valor), cómo y una nota. Los usan el registro de
-// pagos de una reserva y la nueva reserva.
+// Datos de un pago recibido por el equipo: cuánto (completo, abono u otro valor), cómo (efectivo, transferencia o las dos)
+// y una nota. Los usan el registro de pagos de una reserva y la nueva reserva.
 import { CheckIcon } from "@/components/ui/icons";
+import { cop } from "@/lib/format";
 import { PAY_METHODS } from "@/lib/payments";
 import type { PayMethod } from "@/lib/types";
 import { adminInput } from "@/components/admin/shared";
@@ -10,6 +11,14 @@ import { Field, FieldError, MoneyInput } from "@/components/admin/ui";
 
 export type PayChoice = "full" | "deposit" | "custom";
 export type PayOption = { value: PayChoice; label: string; hint: string };
+
+// Error de la parte en efectivo de un pago dividido (`amount`: el valor recibido).
+export function cashSplitError(method: PayMethod | null, cash: number, amount: number) {
+  if (method !== "both" || amount <= 0) return "";
+  if (cash <= 0) return "Escribe cuánto recibiste en efectivo.";
+  if (cash >= amount) return `Debe ser menos de ${cop(amount)}: el resto es la transferencia.`;
+  return "";
+}
 
 export function PaymentFields({
   options,
@@ -20,6 +29,9 @@ export function PaymentFields({
   amountError,
   method,
   onMethod,
+  amount,
+  cash,
+  onCash,
   note,
   onNote,
   tried,
@@ -32,6 +44,9 @@ export function PaymentFields({
   amountError: string;
   method: PayMethod | null;
   onMethod: (m: PayMethod) => void;
+  amount: number; // valor recibido (para el reparto entre efectivo y transferencia)
+  cash: number;
+  onCash: (n: number) => void;
   note: string;
   onNote: (s: string) => void;
   tried: boolean;
@@ -40,13 +55,15 @@ export function PaymentFields({
     <>
       <fieldset className="flex min-w-0 flex-col gap-2">
         <legend className="mb-1.5 text-[13px] font-semibold text-ink">¿Cuánto pagó?</legend>
-        <div className={`grid grid-cols-1 gap-2 ${options.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+        {/* Pago completo y abono lado a lado; «Otro valor», debajo y a lo ancho cuando quedan tres. */}
+        <div className="grid grid-cols-2 gap-2">
           {options.map((o) => {
             const on = choice === o.value;
+            const wide = o.value === "custom" && options.length % 2 === 1;
             return (
               <label
                 key={o.value}
-                className={`flex cursor-pointer items-start gap-2.5 rounded-[18px] border p-3.5 transition-colors ${on ? "border-ink bg-panel/60" : "border-line-strong hover:bg-panel/40"}`}
+                className={`flex cursor-pointer items-start gap-2.5 rounded-[18px] border p-3.5 transition-colors ${wide ? "col-span-2" : ""} ${on ? "border-ink bg-panel/60" : "border-line-strong hover:bg-panel/40"}`}
               >
                 <input
                   type="radio"
@@ -88,7 +105,17 @@ export function PaymentFields({
             );
           })}
         </div>
-        {tried && !method && <FieldError>Elige si pagó en efectivo o por transferencia.</FieldError>}
+        {tried && !method && <FieldError>Elige si pagó en efectivo, por transferencia o con las dos.</FieldError>}
+        {method === "both" && (
+          <Field
+            label="En efectivo"
+            hint={cash > 0 && cash < amount ? `Por transferencia: ${cop(amount - cash)}` : "Lo demás queda como transferencia."}
+            error={tried ? cashSplitError(method, cash, amount) || undefined : undefined}
+            className="mt-1"
+          >
+            {(p) => <MoneyInput id={p.id} describedBy={p["aria-describedby"]} invalid={!!p["aria-invalid"]} value={cash} onChange={onCash} />}
+          </Field>
+        )}
       </fieldset>
 
       <Field label="Nota (opcional)" hint="Queda en el historial de pagos de la reserva.">
@@ -98,7 +125,13 @@ export function PaymentFields({
             rows={2}
             maxLength={200}
             value={note}
-            placeholder={method === "cash" ? "Quién lo recibió, en qué momento…" : "Banco y referencia: Bancolombia, ref. 4521…"}
+            placeholder={
+              method === "cash"
+                ? "Quién lo recibió, en qué momento…"
+                : method === "both"
+                  ? "Quién recibió el efectivo; banco y referencia de la transferencia…"
+                  : "Banco y referencia: Bancolombia, ref. 4521…"
+            }
             onChange={(e) => onNote(e.target.value)}
             className={`${adminInput} resize-y leading-relaxed`}
           />

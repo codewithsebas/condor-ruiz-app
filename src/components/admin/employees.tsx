@@ -8,6 +8,7 @@ import {
   BanIcon,
   CheckIcon,
   ClockIcon,
+  CloseIcon,
   EyeIcon,
   EyeOffIcon,
   IdCardIcon,
@@ -74,6 +75,7 @@ export function EmployeesView() {
   const [editing, setEditing] = useState<Draft | null>(null);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("todos");
+  const [showRoles, setShowRoles] = useState(false);
 
   const load = useCallback(
     () =>
@@ -157,6 +159,8 @@ export function EmployeesView() {
   const week = active.filter((e) => e.lastSignInAt && now - Date.parse(e.lastSignInAt) < 7 * 864e5).length;
   const never = active.filter((e) => !e.lastSignInAt).length;
   const recent = [...all].filter((e) => e.lastSignInAt).sort((a, b) => (a.lastSignInAt! < b.lastSignInAt! ? 1 : -1));
+  // Roles que se explican en «Roles y permisos»: el de superadministrador solo si existe o quien mira lo es.
+  const shownRoles = [...ROLES].reverse().filter((role) => role !== "superadmin" || me === "superadmin" || supers > 0);
 
   return (
     <>
@@ -168,13 +172,18 @@ export function EmployeesView() {
           <p className="text-[13px] font-medium text-ink-muted">Cada persona entra con su propio correo; el rol decide qué puede ver y hacer</p>
           <h1 className="mt-1 text-[clamp(1.5rem,2.4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-ink">{MODULES.empleados.label}</h1>
         </div>
-        <Button
-          variant="primary"
-          icon={<UserPlusIcon size={15} />}
-          onClick={() => setEditing({ name: "", email: "", role: "recepcion", password: newPassword(), active: true })}
-        >
-          Nuevo empleado
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button icon={<ShieldIcon size={15} />} onClick={() => setShowRoles(true)}>
+            Roles y permisos
+          </Button>
+          <Button
+            variant="primary"
+            icon={<UserPlusIcon size={15} />}
+            onClick={() => setEditing({ name: "", email: "", role: "recepcion", password: newPassword(), active: true })}
+          >
+            Nuevo empleado
+          </Button>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
@@ -297,27 +306,10 @@ export function EmployeesView() {
               <p className="text-[13px] text-ink-muted">Nadie ha entrado al panel todavía.</p>
             )}
           </Panel>
-          {[...ROLES]
-            .reverse()
-            .filter((role) => role !== "superadmin" || me === "superadmin" || supers > 0)
-            .map((role) => (
-              <Panel
-                key={role}
-                id={`em-role-${role}`}
-                title={ROLE_LABEL[role]}
-                subtitle={ROLE_HINT[role]}
-                action={
-                  <span aria-hidden="true" className="grid size-8 place-items-center rounded-full bg-panel text-ink ring-1 ring-line">
-                    {isAdminRole(role) ? <ShieldIcon size={15} /> : <IdCardIcon size={15} />}
-                  </span>
-                }
-              >
-                <RoleCapabilities role={role} />
-              </Panel>
-            ))}
         </div>
       </div>
 
+      <ModalPresence>{showRoles && <RolesDialog roles={shownRoles} onClose={() => setShowRoles(false)} />}</ModalPresence>
       <ModalPresence>
         {editing && canManageRole(me, editing.role) && (
           <EmployeeEditor
@@ -364,16 +356,18 @@ function TeamHero({
     { key: "recepcion", label: ROLE_LABEL.recepcion, value: reception, color: "var(--color-chart-b)" },
   ];
   return (
-    <section aria-labelledby="em-hero" className="flex h-full flex-col gap-5 rounded-[22px] bg-ink p-6 text-paper">
-      <div className="flex items-start justify-between gap-3">
-        <h2 id="em-hero" className="text-[13px] font-medium text-paper/70">
-          Cuentas activas
-        </h2>
-        <span aria-hidden="true" className="grid size-9 place-items-center rounded-full bg-paper/10">
-          <UsersIcon size={16} />
+    <section aria-labelledby="em-hero" className="flex h-full flex-col gap-3 rounded-[22px] bg-ink p-5 text-paper">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-baseline gap-3">
+          <p className="text-[36px] leading-none font-semibold tracking-[-0.04em]">{loading ? "—" : active}</p>
+          <h2 id="em-hero" className="text-[13px] font-medium text-paper/70">
+            Cuentas activas
+          </h2>
+        </div>
+        <span aria-hidden="true" className="grid size-8 place-items-center rounded-full bg-paper/10">
+          <UsersIcon size={15} />
         </span>
       </div>
-      <p className="text-[56px] leading-none font-semibold tracking-[-0.04em]">{loading ? "—" : active}</p>
       <div className="mt-auto flex flex-col gap-3">
         {active > 0 && (
           <div role="img" aria-label={parts.map((p) => `${p.label}: ${p.value}`).join(", ")} className="flex h-2.5 gap-[2px]">
@@ -391,7 +385,7 @@ function TeamHero({
                 {x.dot && <span aria-hidden="true" className="size-2 flex-none rounded-full" style={{ background: x.dot }} />}
                 {x.k}
               </dt>
-              <dd className="mt-1 text-[18px] font-semibold">{loading ? "—" : x.v}</dd>
+              <dd className="mt-0.5 text-[16px] font-semibold">{loading ? "—" : x.v}</dd>
             </div>
           ))}
         </dl>
@@ -416,16 +410,51 @@ function Tile({
   small?: boolean;
 }) {
   return (
-    <section {...enter(order)} aria-label={label} className="flex min-w-0 flex-col gap-3 rounded-[22px] bg-paper p-5 ring-1 ring-line ring-inset">
+    <section {...enter(order)} aria-label={label} className="flex min-w-0 flex-col gap-2 rounded-[22px] bg-paper p-4 ring-1 ring-line ring-inset">
       <span className="flex items-center gap-2 text-[12.5px] font-medium text-ink-muted">
         <span aria-hidden="true" className="grid size-7 flex-none place-items-center rounded-full bg-panel text-ink ring-1 ring-line">
           {icon}
         </span>
-        {label}
+        <span className="truncate">{label}</span>
       </span>
-      <p className={`truncate leading-tight font-semibold tracking-[-0.03em] text-ink ${small ? "text-[18px]" : "text-[28px]"}`}>{value}</p>
-      <p className="mt-auto truncate text-[12px] text-ink-subtle">{hint}</p>
+      <p className={`truncate leading-tight font-semibold tracking-[-0.03em] text-ink ${small ? "text-[17px]" : "text-[24px]"}`}>{value}</p>
+      <p className="truncate text-[12px] text-ink-subtle">{hint}</p>
     </section>
+  );
+}
+
+/* ───────────── Roles y permisos ───────────── */
+
+// Lo que incluye cada rol, una pestaña por rol (antes ocupaba la columna derecha de la página).
+function RolesDialog({ roles, onClose }: { roles: PanelRole[]; onClose: () => void }) {
+  const [role, setRole] = useState<PanelRole>(roles[roles.length - 1] ?? "recepcion");
+  return (
+    <Modal onClose={onClose} labelledBy="em-roles" className="m-auto w-[calc(100%-32px)] max-w-[560px] rounded-[26px] p-0">
+      <div className="flex flex-col gap-4 p-5 sm:p-6">
+        <div className="flex items-start gap-3.5">
+          <span aria-hidden="true" className="grid size-10 flex-none place-items-center rounded-full bg-panel text-ink ring-1 ring-line">
+            <ShieldIcon size={18} />
+          </span>
+          <div className="min-w-0 flex-1 pt-1">
+            <h2 id="em-roles" className="text-[18px] font-bold tracking-[-0.02em] text-ink">
+              Roles y permisos
+            </h2>
+            <p className="text-[13.5px] text-ink-muted">Lo que cada rol puede ver y hacer en el panel.</p>
+          </div>
+          <IconButton label="Cerrar" onClick={onClose} className="flex-none">
+            <CloseIcon size={18} />
+          </IconButton>
+        </div>
+        <Segmented label="Rol" value={role} onChange={setRole} options={roles.map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
+        <div className="flex items-start gap-3 rounded-[18px] bg-panel px-4 py-3 ring-1 ring-line ring-inset">
+          <span aria-hidden="true" className="mt-0.5 flex-none text-ink">
+            {isAdminRole(role) ? <ShieldIcon size={15} /> : <IdCardIcon size={15} />}
+          </span>
+          <p className="text-[13px] leading-snug text-ink-muted">{ROLE_HINT[role]}</p>
+        </div>
+        <RoleCapabilities role={role} />
+      </div>
+    </Modal>
   );
 }
 

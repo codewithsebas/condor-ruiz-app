@@ -1,4 +1,5 @@
 import type { CabinTypeId } from "@/lib/config";
+import type { EmailTemplateKind } from "@/lib/email-templates";
 import type { SiteContent, SitePolicy, SiteSettings, SiteTexts } from "@/lib/site";
 import type { SiteTheme } from "@/lib/theme";
 
@@ -23,6 +24,7 @@ export type CabinType = {
   maxPersonas: number;
   units: number;
   unitLabels?: string[]; // número propio de cada unidad, por posición: ["9", "2"]. En blanco: la posición.
+  unitNames?: string[]; // nombre propio de cada unidad, por posición: ["El Mirador", ""]. Con nombre, reemplaza a «Cabaña N».
   dayRates?: SeasonDayRate[]; // tarifa base por día de la semana (solo `weekdays`); vacío: la misma todos los días
   badge: string;
   descripcion: string;
@@ -64,7 +66,15 @@ export type Quote = {
   seasonNights?: number; // noches con tarifa de temporada
   // Precio especial acordado por el equipo (reservas del panel): total = base + extraAmount + adjustment (negativo = descuento).
   adjustment?: number;
+  // Decoraciones con costo: ya sumadas en total; el abono no las incluye (se pagan con el saldo).
+  addons?: number;
 };
+
+// Decoración elegida para una reserva: copia del catálogo al momento de agregarla (nombre y precio acordados).
+export type ReservationAddon = { id: string; name: string; price: number };
+// Lo que envía el panel al elegir decoraciones: el id de una del catálogo (o de una que la reserva ya tiene) o una
+// escrita por el equipo con lo que pidió el huésped y su precio.
+export type AddonChoice = string | { name: string; price: number };
 
 export type AvailabilityOption = {
   cabinTypeId: CabinTypeId;
@@ -87,6 +97,19 @@ export type Guest = {
   city: string;
 };
 
+// Documento de un acompañante: además de los del titular, los de menores (tarjeta de identidad y registro civil).
+export type CompanionDocType = "CC" | "CE" | "Pasaporte" | "PPT" | "TI" | "RC";
+
+// Otra persona que se hospeda con el titular. Nombre y documento obligatorios; lo demás, opcional ("" si no se dio).
+export type Companion = {
+  fullName: string;
+  docType: CompanionDocType;
+  docNumber: string;
+  phone: string;
+  email: string;
+  city: string;
+};
+
 // Otra cabaña de la misma reserva (mismas fechas y huésped). unit: solo el panel la elige; null = la primera libre.
 export type ExtraCabin = { cabinTypeId: CabinTypeId; adults: number; children: number; unit?: number | null };
 
@@ -99,6 +122,7 @@ export type ReservationInput = {
   children: number;
   pet: { hasPet: boolean; smallBreedConfirmed: boolean };
   decoration: { requested: boolean; occasion: string; notes: string };
+  addons?: string[]; // decoraciones del catálogo (ids); el precio lo pone el servidor
   estimatedArrival: string;
   guest: Guest;
   specialRequests: string;
@@ -135,7 +159,8 @@ export type PublicPayment = {
 export type PaymentRecord = PublicPayment & { id: string; reservationCode: string };
 
 // Correos transaccionales (bandeja de salida).
-export type EmailKind = "reservation_confirmed" | "team_message";
+// Los automáticos (EmailTemplateKind), el mensaje del equipo y el antiguo aviso al negocio (solo historial).
+export type EmailKind = EmailTemplateKind | "team_message" | "new_reservation";
 export type EmailStatus = "pending" | "sending" | "sent" | "failed";
 export type EmailRecord = {
   id: string;
@@ -167,14 +192,15 @@ export type PaymentProof = {
   createdAt: string;
 };
 
-export type Reservation = ReservationInput & {
+export type Reservation = Omit<ReservationInput, "addons"> & {
   version?: number;
   code: string;
   unit: number;
   status: ReservationStatus;
   quote: Quote;
   depositDueAt: string;
-  createdAt: string;
+  createdAt: string; // hora real de creación (también la de una hecha sin conexión)
+  createdByName?: string | null; // empleado que la creó; vacío: sitio web, Booking o el sistema
   notes: Note[];
   depositPaidAt: string | null;
   balancePaidAt: string | null;
@@ -187,6 +213,8 @@ export type Reservation = ReservationInput & {
   commission?: number; // comisión del canal
   demo?: boolean;
   groupCode?: string | null; // reserva con varias cabañas: código de la principal (la principal tiene el suyo)
+  companions?: Companion[]; // los demás huéspedes; en un grupo, los mismos en todas las cabañas
+  addons?: ReservationAddon[]; // decoraciones con costo; en un grupo, solo en la principal
 };
 
 // Cuerpo de POST /admin/reservations: reserva tomada por el equipo. Queda sin confirmar (y sin apartar fechas) hasta que
@@ -203,9 +231,11 @@ export type ManualReservationInput = {
   children: number;
   pet: { hasPet: boolean; smallBreedConfirmed: boolean };
   guest: Guest;
+  companions?: Companion[]; // los demás huéspedes (hasta el total de personas menos el titular)
   estimatedArrival: string; // "HH:MM" o "" (inicio del check-in)
   specialRequests: string;
-  total: number | null; // precio especial; null = tarifa vigente
+  total: number | null; // precio especial del alojamiento (sin decoraciones); null = tarifa vigente
+  addons?: AddonChoice[]; // decoraciones (del catálogo o escritas por el equipo), en la cabaña principal
 };
 
 export type ManualReservationResult = { reservation: Reservation; group?: Reservation[] }; // group: todas las cabañas, la principal primero
@@ -272,6 +302,7 @@ export type NotificationKind =
   | "proof_approved"
   | "proof_rejected"
   | "balance_paid"
+  | "payment_refund" // pago en línea aprobado que no se pudo aplicar a la reserva: hay que resolverlo a mano
   | "checkout_pending"
   | "email_failed"
   | "booking_pending"
@@ -455,7 +486,7 @@ export type BookingInboxAction = { action: "assign"; ref: string; cabinTypeId: C
 export type SiteInput = { settings: SiteSettings; policies: SitePolicy[]; content: SiteTexts; theme?: SiteTheme }; // sin theme: se conservan los colores guardados
 
 // Condiciones de pago (solo administradores): el abono para confirmar (% del total) y los datos para pagar que ve el huésped.
-export type PaymentTerms = { depositPct: number; instructions: string };
+export type PaymentTerms = { depositPct: number; instructions: string; key?: string }; // key: llave Bre-B (sin el campo, se conserva)
 
 export type CabinInput = {
   id?: string; // solo al crear; si falta se genera a partir del nombre
@@ -466,6 +497,7 @@ export type CabinInput = {
   maxPersonas: number;
   units: number;
   unitLabels?: string[];
+  unitNames?: string[];
   precioPareja: number;
   personaAdicional: number;
   activa: boolean;
@@ -473,8 +505,8 @@ export type CabinInput = {
 
 export type SeasonInput = Omit<RateSeason, "id" | "version"> & { id?: string };
 
-// Cómo pagó el huésped un pago que registra el equipo.
-export type PayMethod = "cash" | "transfer";
+// Cómo pagó el huésped un pago que registra el equipo. both: dividido entre efectivo y transferencia.
+export type PayMethod = "cash" | "transfer" | "both";
 
 export type AdminAction =
   | { code: string; action: "checkin" | "checkout" }
@@ -482,7 +514,7 @@ export type AdminAction =
   | { code: string; action: "cancel"; group?: boolean }
   // Pago recibido en persona: "confirm" = de una reserva pendiente (la confirma), "balance" = de una ya confirmada.
   // Valor: `full` = todo lo que falta, `amount` = un valor a elección; sin ninguno, el abono (o el saldo). `method` y
-  // `note` quedan como detalle del pago.
+  // `note` quedan como detalle del pago; con `method: "both"`, `cash` es la parte en efectivo y el resto fue transferencia.
   // `basePaid`: lo pagado que veía quien registró el pago sin conexión; si cambió, el servidor lo advierte (a menos que venga `force`).
   // `group` (en confirm, balance y extend_hold): la reserva es de varias cabañas; el panel la envía con conexión.
   | {
@@ -492,6 +524,7 @@ export type AdminAction =
       full?: boolean;
       amount?: number;
       method?: PayMethod;
+      cash?: number;
       basePaid?: number;
       force?: boolean;
       group?: boolean;
@@ -505,7 +538,34 @@ export type AdminAction =
   | { code: string; action: "extend_hold"; group?: boolean } // reactiva una vencida, sin plazo
   | { code: string; action: "note"; text: string }
   // Corregir o completar los datos del huésped (p. ej. el documento de una reserva importada).
-  | { code: string; action: "guest"; guest: Guest };
+  | { code: string; action: "guest"; guest: Guest; companions?: Companion[] }
+  // Decoraciones de la reserva (ids del catálogo): reemplaza la lista y ajusta el total.
+  | { code: string; action: "addons"; addons: AddonChoice[] };
+
+// Pagos en línea (Wompi). Lo que el huésped puede pagar ahora y el resumen que ve antes de pagar.
+export type OnlinePayOption = { kind: PaymentKind; amount: number };
+export type OnlinePayInfo = {
+  code: string;
+  guestFirstName: string;
+  status: ReservationStatus;
+  checkIn: string;
+  checkOut: string;
+  cabins: CabinTypeId[];
+  total: number;
+  paid: number;
+  options: OnlinePayOption[]; // vacío: no hay nada que pagar en línea
+  provider: "wompi" | "simulado" | null; // null: los pagos en línea no están activos
+  sandbox: boolean; // llaves de pruebas de Wompi
+  // Formulario de tarjeta (Wompi): llave pública para tokenizar en Wompi y los términos que el huésped acepta al pagar.
+  card: { publicKey: string; tokensUrl: string; termsUrl: string; privacyUrl: string } | null;
+};
+export type OnlinePayStatus = {
+  code: string;
+  status: "initiated" | "pending" | "approved" | "declined" | "error" | "unapplied";
+  amount: number;
+  kind: PaymentKind;
+  detail: string;
+};
 
 export type ProofReview = { id: string; decision: "approve" | "reject"; note: string; confirmReservation: boolean };
 

@@ -43,6 +43,9 @@ export const config = {
   unidades: { estandar: 2, premium: 1 } as Record<CabinTypeId, number>,
   // Para pagar por transferencia o en recepción (se edita en el panel: Contenido → Pagos).
   datosPagoAbono: "{DATOS_DE_PAGO}",
+  // Llave Bre-B y URL del QR para pagar (Condiciones de pago, en el panel). Vacíos: no se muestran.
+  llavePago: "",
+  qrPago: "",
   // Titular legal del negocio (derechos de autor, política de privacidad). Pendientes: los da el cliente.
   razonSocial: "{RAZON_SOCIAL}",
   nit: "{NIT}",

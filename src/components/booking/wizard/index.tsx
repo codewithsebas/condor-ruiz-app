@@ -1,6 +1,6 @@
 "use client";
 
-import { personRatesText, personSteps } from "@/lib/booking";
+import { personRatesText, personSteps, withAddons } from "@/lib/booking";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -62,7 +62,9 @@ const nextBtn = "btn btn-card min-h-14 px-[30px] disabled:opacity-50";
 
 export function ReservationWizard() {
   const router = useRouter();
-  const { c, cabins, cabinName } = useSite();
+  const { c, cabins, cabinName, decorations } = useSite();
+  // Decoraciones con costo que se pueden elegir (catálogo del panel).
+  const decoOptions = decorations.filter((d) => d.visible);
   const cabinIds = cabins.map((x) => x.id).join(",");
   const arrivals = arrivalOptions(c.checkInStart, c.checkInEnd);
   const params = useSearchParams();
@@ -303,7 +305,14 @@ export function ReservationWizard() {
   // El reparto elegido o, si el grupo no cabe en una cabaña, el sugerido mientras no lo cambie.
   const rows = rowsState ?? (needGroup && avail ? suggestRows(avail, typeList, adults, children) : null);
   const groupQuotes = rows ? rows.map((r) => rowQuote(avail, r)) : null;
-  const q = groupQuotes ? (groupQuotes.every(Boolean) ? sumQuotes(groupQuotes as NonNullable<(typeof groupQuotes)[number]>[]) : null) : option?.quote;
+  const lodgingQuote = groupQuotes
+    ? groupQuotes.every(Boolean)
+      ? sumQuotes(groupQuotes as NonNullable<(typeof groupQuotes)[number]>[])
+      : null
+    : option?.quote;
+  // Decoraciones elegidas: se suman al total; el abono no cambia (se pagan con el saldo).
+  const picked = f.decoRequested ? decoOptions.filter((d) => f.decoItems.includes(d.id)) : [];
+  const q = lodgingQuote && picked.length ? withAddons(lodgingQuote, picked) : lodgingQuote;
   const nTxt = (n: number) => plural(n, "noche", "noches");
   const guestsTxt = `${total} huésped${total > 1 ? "es" : ""}`;
 
@@ -366,6 +375,7 @@ export function ReservationWizard() {
     ...(rows && { more: rows.slice(1).map((r) => ({ cabinTypeId: r.type, adults: r.adults, children: r.children })) }),
     pet: { hasPet: f.hasPet === "si", smallBreedConfirmed: f.hasPet === "si" && f.smallBreed },
     decoration: { requested: f.decoRequested, occasion: f.decoRequested ? f.occasion : "", notes: f.decoRequested ? f.decoNotes.trim() : "" },
+    ...(picked.length && { addons: picked.map((d) => d.id) }),
     estimatedArrival: f.arrival,
     guest: {
       fullName: f.fullName.trim(),
@@ -396,7 +406,7 @@ export function ReservationWizard() {
       `Ciudad: ${f.city}`,
       `Llegada estimada: ${arrivalLabel}`,
       `Mascota: ${f.hasPet === "si" ? "sí" : "no"}`,
-      `Decoración: ${f.decoRequested ? (OCCASIONS[f.occasion] || "sí") + (f.decoNotes ? " – " + f.decoNotes : "") : "no"}`,
+      `Decoración: ${f.decoRequested ? (OCCASIONS[f.occasion] || "sí") + (picked.length ? ` (${picked.map((d) => d.name).join(", ")})` : "") + (f.decoNotes ? " – " + f.decoNotes : "") : "no"}`,
       f.specialRequests ? `Solicitudes: ${f.specialRequests}` : "",
       q ? `Total: ${cop(q.total)} (abono ${cop(q.deposit)})` : "",
     ]
@@ -1090,10 +1100,31 @@ export function ReservationWizard() {
                     id="f-deco"
                     icon={<GiftIcon size={20} />}
                     title="Decoración para una ocasión especial"
-                    description="Valor adicional · te contactamos para cotizarla"
+                    description={decoOptions.length ? "Elige la decoración: su valor se suma al total" : "Valor adicional · te contactamos para cotizarla"}
                     checked={f.decoRequested}
                     onChange={(v) => setField("decoRequested", v)}
                   >
+                    {decoOptions.length > 0 && (
+                      <fieldset className="mb-3 flex flex-col gap-2">
+                        <legend className="field-label mb-1.5">Decoraciones</legend>
+                        {decoOptions.map((d) => (
+                          <CheckOption
+                            key={d.id}
+                            id={`f-deco-${d.id}`}
+                            card
+                            checked={f.decoItems.includes(d.id)}
+                            onChange={(v) => setField("decoItems", v ? [...f.decoItems, d.id] : f.decoItems.filter((x) => x !== d.id))}
+                            note={d.description || undefined}
+                          >
+                            <span className="flex flex-wrap items-baseline justify-between gap-x-3">
+                              <span className="font-bold">{d.name}</span>
+                              <span className="font-extrabold">{cop(d.price)}</span>
+                            </span>
+                          </CheckOption>
+                        ))}
+                        <p className="text-[.82rem] font-semibold opacity-80">Se paga con el saldo: el abono para confirmar no cambia.</p>
+                      </fieldset>
+                    )}
                     <div className="grid grid-cols-1 gap-x-3.5 gap-y-3 sm:grid-cols-2">
                       <Field id="f-occasion" label="Ocasión" errId="e-occasion" error={errors.occasion}>
                         <Combobox
@@ -1219,6 +1250,12 @@ export function ReservationWizard() {
                       <dd className="text-right font-bold">{cop(q.extraAmount)}</dd>
                     </>
                   )}
+                  {picked.map((d) => (
+                    <div key={d.id} className="contents">
+                      <dt>{`Decoración · ${d.name}`}</dt>
+                      <dd className="text-right font-bold">{cop(d.price)}</dd>
+                    </div>
+                  ))}
                   <dt className="dotted-top pt-2.5 font-extrabold">Total</dt>
                   <dd className="dotted-top display pt-2.5 text-right text-[2rem] leading-none">{cop(q?.total)}</dd>
                 </dl>
@@ -1233,7 +1270,12 @@ export function ReservationWizard() {
                     { k: "Celular", v: `+57 ${f.phone}` },
                     { k: "Llegada estimada", v: arrivalLabel || "—" },
                     { k: "Mascota", v: f.hasPet === "si" ? "Sí" : "No" },
-                    { k: "Decoración", v: f.decoRequested ? `${OCCASIONS[f.occasion] || "Sí"} · valor adicional` : "No" },
+                    {
+                      k: "Decoración",
+                      v: f.decoRequested
+                        ? `${OCCASIONS[f.occasion] || "Sí"} · ${picked.length ? picked.map((d) => d.name).join(", ") : "te contactamos para cotizarla"}`
+                        : "No",
+                    },
                     { k: "Solicitudes", v: f.specialRequests || "Ninguna" },
                   ].map((r) => (
                     <div key={r.k}>

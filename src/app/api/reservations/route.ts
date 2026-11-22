@@ -1,7 +1,7 @@
 import { after, type NextRequest } from "next/server";
-import { computeQuote, depositDueAt, validateExtraCabins, validateReservation } from "@/lib/booking";
+import { computeQuote, depositDueAt, pickAddons, validateExtraCabins, validateReservation, withAddons } from "@/lib/booking";
 import { todayISO } from "@/lib/format";
-import { loadGroupRows, loadPricing, runDeadlines, toPublic, toPublicGroup } from "@/lib/server/db";
+import { loadDecorations, loadGroupRows, loadPricing, runDeadlines, toPublic, toPublicGroup } from "@/lib/server/db";
 import { fail, json, readJson, route } from "@/lib/server/http";
 import { processOutbox } from "@/lib/server/mailer";
 import { holdGroup, holdReservation } from "@/lib/server/reservations";
@@ -33,9 +33,12 @@ export const POST = route(async (req: NextRequest) => {
   }
 
   await runDeadlines();
-  const { types, units, seasons, depositPct } = await loadPricing(sb);
+  const [{ types, units, seasons, depositPct }, decorations] = await Promise.all([loadPricing(sb), loadDecorations(sb)]);
   const fields = { ...validateReservation(b, types, todayISO()), ...validateExtraCabins(b.more, types) };
-  if (Object.keys(fields).length) return validation(fields);
+  // Decoraciones con costo: solo las visibles del catálogo, con su precio de ahora (el navegador solo manda los ids).
+  const addons = pickAddons(b.addons, decorations);
+  if (!addons) fields.addons = "Alguna decoración ya no está disponible. Vuelve a elegirlas.";
+  if (Object.keys(fields).length || !addons) return validation(fields);
 
   const type = types.find((t) => t.id === b.cabinTypeId)!;
   const guests = Number(b.adults) + Number(b.children);
@@ -58,7 +61,9 @@ export const POST = route(async (req: NextRequest) => {
     guest_city: b.guest.city.trim(),
     special_requests: (b.specialRequests ?? "").trim(),
     consents: { policies: true, dataProcessing: true, marketing: !!b.consents.marketing },
-    quote: computeQuote(type, b.checkIn, b.checkOut, guests, seasons, depositPct),
+    // En una reserva con varias cabañas, las decoraciones van en la principal (esta).
+    quote: withAddons(computeQuote(type, b.checkIn, b.checkOut, guests, seasons, depositPct), addons),
+    addons,
     idempotency_key: idemKey,
     deposit_due_at: depositDueAt(b.checkIn),
   };
@@ -78,6 +83,7 @@ export const POST = route(async (req: NextRequest) => {
             adults: Number(m.adults),
             children: Number(m.children ?? 0),
             quote: computeQuote(t, b.checkIn, b.checkOut, people, seasons, depositPct),
+            addons: [],
             unit: null,
           };
         }),

@@ -41,6 +41,7 @@ export const ENTITY_LABEL: Record<string, string> = {
   site_photos: "Foto del sitio",
   site_services: "Servicio del sitio",
   decorations: "Decoración",
+  email_templates: "Plantilla de correo",
   channel_calendars: "Calendario de Booking",
   channel_stays: "Estadía de Booking",
   booking_inbox: "Reserva de Booking por correo",

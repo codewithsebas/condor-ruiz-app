@@ -12,6 +12,7 @@ import {
   HomeIcon,
   IdCardIcon,
   ListIcon,
+  MailIcon,
   ReceiptIcon,
   RefreshIcon,
   ShieldIcon,
@@ -41,6 +42,7 @@ export type ModuleId =
   | "decoraciones"
   | "finanzas"
   | "condiciones"
+  | "correos"
   | "contenido"
   | "empleados"
   | "actividad"
@@ -160,6 +162,14 @@ export const MODULES: Record<ModuleId, Module> = {
     group: "Negocio",
     description: "El abono para confirmar las reservas y los datos de pago que ve el huésped.",
     perm: "rates",
+  },
+  correos: {
+    label: "Correos",
+    href: "/admin/correos",
+    icon: MailIcon,
+    group: "Negocio",
+    description: "Los correos automáticos que reciben los huéspedes: cuándo salen, sus textos y cuáles están activos.",
+    perm: "content",
   },
   contenido: {
     label: "Contenido del sitio",
@@ -317,6 +327,7 @@ export const paths = {
   bloqueos: (q?: Query) => withQuery("/admin/bloqueos", q),
   finanzas: (q?: Query) => withQuery("/admin/finanzas", q),
   condiciones: "/admin/condiciones",
+  correos: "/admin/correos",
   cabanas: "/admin/cabanas",
   nuevaCabana: "/admin/cabanas/nueva",
   cabana: (id: string) => `/admin/cabanas/${encodeURIComponent(id)}`,

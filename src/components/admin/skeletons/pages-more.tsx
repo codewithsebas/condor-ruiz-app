@@ -1065,6 +1065,35 @@ export function ProfileSkeleton() {
   );
 }
 
+/* ───────────── Correos (plantillas) ───────────── */
+
+export function EmailsSkeleton() {
+  return (
+    <>
+      <ModHead eyebrow="Los correos automáticos que reciben los huéspedes" title={MODULES.correos.label} />
+      <Block className="h-[68px] rounded-[18px]" />
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <Box title="Correos al huésped" subtitle={null}>
+          <ul className="flex flex-col gap-3">
+            {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+              <li key={i} className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <Line w={`${14 + (i % 3) * 4}ch`} className="text-[14px] font-semibold" />
+                  <Line w="34ch" className="mt-1 text-[12.5px]" />
+                </div>
+                <Pill w="40px" className="h-6" />
+              </li>
+            ))}
+          </ul>
+        </Box>
+        <Box title={null} subtitle={null}>
+          <Block className="h-[420px] rounded-[16px]" />
+        </Box>
+      </div>
+    </>
+  );
+}
+
 /* ───────────── Ficha de una reserva ───────────── */
 
 export function ReservationDetailSkeleton() {

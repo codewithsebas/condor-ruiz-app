@@ -48,6 +48,7 @@ import {
   ProfileSkeleton,
   RatesSkeleton,
   ReservationDetailSkeleton,
+  EmailsSkeleton,
   SettingsSkeleton,
   SyncSkeleton,
   TermsSkeleton,
@@ -106,6 +107,8 @@ export function ModuleSkeleton() {
       return <RatesSkeleton />;
     case "decoraciones":
       return <DecorationsSkeleton />;
+    case "correos":
+      return <EmailsSkeleton />;
     case "finanzas":
       return <FinanceSkeleton />;
     case "condiciones":

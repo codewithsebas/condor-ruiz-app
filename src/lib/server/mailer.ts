@@ -9,6 +9,7 @@ import {
   teamMessageEmail,
   type RenderedEmail,
 } from "@/lib/emails";
+import { isTemplateKind, overridesOf, type EmailOverrides } from "@/lib/email-templates";
 import { dirHref, ics, wa } from "@/lib/format";
 import { mergeSite, type SiteConfig } from "@/lib/site";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -62,12 +63,18 @@ async function sendWithResend(m: { to: string; subject: string; html: string; te
   return body.id;
 }
 
-type Ctx = { sb: Db; base: string; site?: SiteConfig };
+type Ctx = { sb: Db; base: string; site?: SiteConfig & { emailTexts: EmailOverrides } };
 
+// El sitio y los textos de los correos que el equipo cambió (Correos → plantillas), una vez por tanda de envíos.
 async function siteOf(ctx: Ctx) {
   if (!ctx.site) {
-    const content = await loadSiteContent(ctx.sb);
-    ctx.site = mergeSite(content.settings, content.policies, content.texts, content.photos);
+    // Si las plantillas no se pueden leer (p. ej. la migración aún no está), el correo sale con sus textos originales.
+    const [content, { data: templates, error }] = await Promise.all([loadSiteContent(ctx.sb), ctx.sb.from("email_templates").select("*")]);
+    if (error) console.error("[correos] No se pudieron leer las plantillas; se usan los textos originales:", error.message);
+    ctx.site = {
+      ...mergeSite(content.settings, content.policies, content.texts, content.photos),
+      emailTexts: overridesOf((templates ?? []).filter((t) => isTemplateKind(t.kind)) as Parameters<typeof overridesOf>[0]),
+    };
   }
   return ctx.site;
 }
@@ -97,7 +104,7 @@ function cabinList(names: string[]) {
 }
 
 // Correos de la reserva: se leen la reserva y su cabaña al enviar (siempre con los datos vigentes).
-async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig, logoUrl: string): Promise<Rendered> {
+async function renderReservation(ctx: Ctx, row: Row, c: SiteConfig & { emailTexts: EmailOverrides }, logoUrl: string): Promise<Rendered> {
   if (!row.reservation_code) throw new Error("La reserva del correo ya no existe.");
   const { data: lead } = await ctx.sb.from("reservations").select("*").eq("code", row.reservation_code).single().throwOnError();
   // Reserva con varias cabañas: el correo de la principal habla por todo el grupo (cabañas, personas, valores y pagos).

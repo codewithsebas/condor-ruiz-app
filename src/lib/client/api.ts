@@ -51,6 +51,7 @@ import type {
 } from "@/lib/types";
 import type { NotificationGroup } from "@/lib/notification-groups";
 import type { Decoration, SiteContent, SiteService } from "@/lib/site";
+import type { EmailTemplate } from "@/lib/email-templates";
 
 // Clave de idempotencia por intento de reserva (sobrevive a reintentos y recargas de la pestaña).
 function idemKey() {
@@ -147,6 +148,11 @@ export const api = {
       mutate("sitePhoto.set", { slot, file, name }, () => upload<Record<string, string>>("/admin/photos", formOf({ slot, file }, name))),
     deletePhoto: (slot: string) => mutate("sitePhoto.delete", { slot }, () => request<Record<string, string>>("DELETE", "/admin/photos", { query: { slot } })),
     // Servicios del sitio: cada operación responde con la lista completa en orden.
+    // Plantillas de los correos automáticos (Correos): se leen y se guardan con conexión.
+    emailTemplates: {
+      list: () => request<EmailTemplate[]>("GET", "/admin/email-templates"),
+      save: (b: Omit<EmailTemplate, "updatedAt">) => onlineOnly(() => request<EmailTemplate[] | ValidationError>("PUT", "/admin/email-templates", { body: b })),
+    },
     decorations: {
       create: (b: Omit<Decoration, "id">) =>
         mutate("decoration.create", b, () => request<Decoration[] | ValidationError>("POST", "/admin/decorations", { body: b })),

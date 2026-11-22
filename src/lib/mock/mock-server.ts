@@ -38,6 +38,7 @@ import { MOCK_DB_KEY } from "@/lib/mock/keys";
 import { groupMoney, groupOf } from "@/lib/groups";
 import { addDays, sleep, todayISO } from "@/lib/format";
 import { manualPaymentNote, paymentParts, splitByMethod, unpaidUntil, type PaymentPart } from "@/lib/payments";
+import { invalidTemplate, isTemplateKind, type EmailTemplate } from "@/lib/email-templates";
 import { defaultContent, defaultTexts, mergeTexts, type Decoration, type SiteContent, type SiteService } from "@/lib/site";
 import { mergeTheme } from "@/lib/theme";
 import type {
@@ -103,6 +104,7 @@ type Db = {
   bathroomBlocks?: BathroomBlock[];
   employees?: Employee[];
   booking?: BookingInboxItem[];
+  emailTemplates?: EmailTemplate[];
 };
 
 // Escenarios de prueba para el envío: localStorage.setItem('vf-mock-settings', '{"post":"409"}')
@@ -853,6 +855,23 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
       bathroomBlocks: bathroomsOf(db).blocks,
       channelStays: [],
     });
+  // Plantillas de correo (Correos): en el modo simulado solo se guardan; no se envía nada.
+  if (method === "GET" && path === "/admin/email-templates") return ok(db.emailTemplates ?? []);
+  if (method === "PUT" && path === "/admin/email-templates") {
+    const no = deny("content");
+    if (no) return no;
+    const b = opts.body as EmailTemplate;
+    if (!isTemplateKind(b.kind) || typeof b.enabled !== "boolean") return { status: 400, data: { error: "INVALID_BODY" } };
+    const texts = { subject: b.subject ?? "", preheader: b.preheader ?? "", title: b.title ?? "", intro: b.intro ?? "", closing: b.closing ?? "" };
+    const fields = invalidTemplate(b.kind, texts);
+    if (Object.keys(fields).length) return invalid(fields);
+    db.emailTemplates = [
+      ...(db.emailTemplates ?? []).filter((t) => t.kind !== b.kind),
+      { kind: b.kind, enabled: b.enabled, ...texts, updatedAt: new Date().toISOString() },
+    ];
+    save(db);
+    return ok(db.emailTemplates);
+  }
   // En modo simulado el contenido se guarda solo en este navegador y no cambia las páginas públicas.
   if (method === "PUT" && path === "/admin/payment-terms") {
     const no = deny("rates");

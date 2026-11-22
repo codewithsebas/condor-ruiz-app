@@ -742,6 +742,42 @@ export type Database = {
           },
         ]
       }
+      email_templates: {
+        Row: {
+          closing: string
+          enabled: boolean
+          intro: string
+          kind: string
+          preheader: string
+          subject: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          closing?: string
+          enabled?: boolean
+          intro?: string
+          kind: string
+          preheader?: string
+          subject?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          closing?: string
+          enabled?: boolean
+          intro?: string
+          kind?: string
+          preheader?: string
+          subject?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       online_payments: {
         Row: {
           amount: number

@@ -8,6 +8,7 @@ import { pendingOf } from "@/lib/admin-metrics";
 import type { Block, CabinType, Reservation } from "@/lib/types";
 import { useAdmin } from "@/components/admin/context";
 import { paths } from "@/components/admin/routes";
+import { createdShort } from "@/components/admin/shared";
 
 // finde: viernes a domingo (las noches que más se venden). 2semanas: de lunes a domingo de la semana siguiente.
 export type CalView = "dia" | "finde" | "semana" | "2semanas" | "mes";
@@ -179,6 +180,7 @@ export const blocks = (b: Block, u: Unit) => b.cabinTypeId === u.cabin.id && b.u
 /* ───────────── Contenido de los tooltips ───────────── */
 
 export function ReservationTip({ r, cabin }: { r: Reservation; cabin: string }) {
+  const { now } = useAdmin();
   const p = pendingOf(r);
   return (
     <div className="flex flex-col gap-1.5">
@@ -199,7 +201,7 @@ export function ReservationTip({ r, cabin }: { r: Reservation; cabin: string }) 
         {p.total > 0 && <span className="text-yellow">Pendiente {cop(p.total)}</span>}
       </span>
       {r.status === "pending_deposit" && <span className="text-yellow">Sin confirmar · no aparta las fechas hasta el abono</span>}
-      {r.source === "panel" && <span className="text-paper/70">Creada por el equipo</span>}
+      <span className="text-paper/70">{createdShort(r, now)}</span>
       {isFromBooking(r) && (
         <span
           className="flex w-fit items-center gap-1.5 rounded-full px-2 py-0.5 text-[11.5px] font-semibold text-white"

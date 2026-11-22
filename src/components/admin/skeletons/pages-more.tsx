@@ -1170,7 +1170,7 @@ export function ReservationDetailSkeleton() {
             <Box title="Estadía" subtitle={null}>
               <Block className="h-[64px] rounded-[16px]" />
               <Block className="h-[64px] rounded-[16px]" />
-              <Facts rows={["Huéspedes", "Mascota", "Canal", "Creada"]} />
+              <Facts rows={["Huéspedes", "Mascota", "Canal", "Creación"]} />
             </Box>
             <Box title="Pago" subtitle={null} action={<Line w="8ch" className="text-[22px] font-semibold" />}>
               <Block className="h-2.5 rounded-full" />

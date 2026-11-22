@@ -199,7 +199,8 @@ export type Reservation = Omit<ReservationInput, "addons"> & {
   status: ReservationStatus;
   quote: Quote;
   depositDueAt: string;
-  createdAt: string;
+  createdAt: string; // hora real de creación (también la de una hecha sin conexión)
+  createdByName?: string | null; // empleado que la creó; vacío: sitio web, Booking o el sistema
   notes: Note[];
   depositPaidAt: string | null;
   balancePaidAt: string | null;

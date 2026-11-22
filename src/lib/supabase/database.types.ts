@@ -1096,6 +1096,8 @@ export type Database = {
           addons: Json
           companions: Json
           created_at: string
+          created_by: string | null
+          created_by_name: string | null
           decoration: Json
           deposit_due_at: string
           deposit_paid_at: string | null
@@ -1136,6 +1138,8 @@ export type Database = {
           addons?: Json
           companions?: Json
           created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
           decoration?: Json
           deposit_due_at: string
           deposit_paid_at?: string | null
@@ -1176,6 +1180,8 @@ export type Database = {
           addons?: Json
           companions?: Json
           created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
           decoration?: Json
           deposit_due_at?: string
           deposit_paid_at?: string | null

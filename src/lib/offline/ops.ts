@@ -315,6 +315,8 @@ const reservationOps = {
         quote: p.localQuote,
         depositDueAt: unpaidUntil(p.checkIn),
         createdAt: op.occurredAt,
+        // Lo mismo que guarda la base: el nombre del empleado (o su correo) y la hora en que la hizo.
+        createdByName: d.me.name || d.me.email,
         notes: [],
         depositPaidAt: null,
         balancePaidAt: null,

@@ -339,6 +339,7 @@ export function toReservation(r: ReservationRow & { reservation_notes?: { text: 
     specialRequests: r.special_requests,
     consents: r.consents as Reservation["consents"],
     createdAt: r.created_at,
+    createdByName: r.created_by_name,
     source: r.source as ReservationSource,
     externalRef: r.external_ref,
     channel: r.channel,

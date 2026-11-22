@@ -55,7 +55,7 @@ import { ProofCard } from "@/components/admin/proofs";
 import { paths } from "@/components/admin/routes";
 import { SyncMark } from "@/components/admin/sync";
 import { useRouteParam } from "@/components/admin/route-param";
-import { EMAIL_KIND, EMAIL_STATUS, TRUST, type ConfirmCfg, adminInput } from "@/components/admin/shared";
+import { EMAIL_KIND, EMAIL_STATUS, TRUST, type ConfirmCfg, adminInput, createdFull, createdShort } from "@/components/admin/shared";
 import { hasEmail, newRequestId } from "@/components/admin/email-composer";
 import { stateEmailKind, type EmailTemplateKind } from "@/lib/email-templates";
 import {
@@ -180,7 +180,7 @@ function PayLinkButton({ code }: { code: string }) {
 /* ───────────── Vista ───────────── */
 
 function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean }) {
-  const { data, cabinLabel, today } = useAdmin();
+  const { data, cabinLabel, today, now } = useAdmin();
   const [editing, setEditing] = useState(false);
   const cabin = cabinLabel(r.cabinTypeId, r.unit);
   // Reserva con varias cabañas: pagos, comprobantes y correos son del grupo; los valores se suman.
@@ -234,7 +234,7 @@ function ReservationView({ r, modal = false }: { r: Reservation; modal?: boolean
       <StatusPill status={r.status} size="sm" />
       <SyncMark entity={`reservations:${r.code}`} />
       {inGroup && <Badge tone="info">{`Grupo ${r.groupCode} · ${plural(group.length, "cabaña", "cabañas")}`}</Badge>}
-      {r.source === "panel" && <Badge tone="neutral">Creada por el equipo</Badge>}
+      <Badge tone="neutral">{createdShort(r, now)}</Badge>
       {isFromBooking(r) ? (
         <Badge tone="neutral" icon={<BookingIcon size={12} />}>
           {CHANNEL_NAME}
@@ -476,9 +476,9 @@ function StayCard({ r, cabin }: { r: Reservation; cabin: string }) {
             k: "Decoración",
             v: r.decoration?.requested ? `${OCC[r.decoration.occasion] || "Sí"}${r.decoration.notes ? ` · ${r.decoration.notes}` : ""}` : "No",
           },
-          { k: "Canal", v: r.source === "import" ? r.channel || "Importada" : r.source === "panel" ? "Creada por el equipo" : "Sitio web" },
+          { k: "Canal", v: r.source === "import" ? r.channel || "Importada" : r.source === "panel" ? "Panel" : "Sitio web" },
           { k: "Solicitudes", v: r.specialRequests || "—" },
-          { k: "Creada", v: fmtDateTime(r.createdAt) },
+          { k: "Creación", v: createdFull(r) },
         ]}
       />
     </Panel>

@@ -466,6 +466,7 @@ function TicketSk({ i }: { i: number }) {
           <Line w="8ch" className="text-[12px] font-semibold" />
           <Line w={["62%", "50%", "70%"][i % 3]} className="mt-0.5 text-[15px] font-semibold" />
           <Line w="40%" className="text-[12px]" />
+          <Line w="52%" className="mt-0.5 text-[11.5px]" />
         </span>
         <Pill w="84px" className="h-[23px]" />
       </span>

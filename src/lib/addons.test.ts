@@ -35,6 +35,13 @@ describe("decoraciones con costo", () => {
     expect(pickAddons(["c"], catalog)).toBeNull();
     expect(pickAddons(["zz"], catalog)).toBeNull();
     expect(pickAddons("a", catalog)).toBeNull();
+    // Escritas por el equipo (solo el panel): texto y precio, con un id propio.
+    const custom = pickAddons(["a", { name: " Globos dorados ", price: 45_000 }], catalog, [], true)!;
+    expect(custom[1]).toMatchObject({ name: "Globos dorados", price: 45_000 });
+    expect(custom[1].id).toMatch(/^otra-/);
+    expect(pickAddons([{ name: "Globos", price: 45_000 }], catalog)).toBeNull();
+    expect(pickAddons([{ name: "", price: 45_000 }], catalog, [], true)).toBeNull();
+    expect(pickAddons([{ name: "Globos", price: -1 }], catalog, [], true)).toBeNull();
     const kept = [{ id: "c", name: "Torta", price: 55_000 }];
     expect(pickAddons(["c", "a"], catalog, kept)).toEqual([kept[0], { id: "a", name: "Pétalos y velas", price: 80_000 }]);
   });

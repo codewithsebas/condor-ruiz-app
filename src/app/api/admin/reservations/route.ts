@@ -36,9 +36,9 @@ export const POST = syncRoute(async (req: NextRequest) => {
   const [{ types, units, seasons, depositPct }, decorations] = await Promise.all([loadPricing(sb), loadDecorations(sb)]);
   const input: ManualReservationInput = { ...b, unit: b.unit ?? null, total: b.total ?? null, guest: { ...b.guest, phone: normalizePhone(b.guest.phone) } };
   const fields = { ...validateManualReservation(input, types, units, operationDay(req)), ...validateExtraCabins(input.more, types, units) };
-  // Decoraciones con costo (en la cabaña principal), con el precio del catálogo.
-  const addons = pickAddons(input.addons, decorations);
-  if (!addons) fields.addons = "Alguna decoración ya no está disponible. Vuelve a elegirlas.";
+  // Decoraciones con costo (en la cabaña principal): las del catálogo con su precio y las que escribe el equipo.
+  const addons = pickAddons(input.addons, decorations, [], true);
+  if (!addons) fields.addons = "Alguna decoración ya no está disponible o le falta el texto o el precio. Vuelve a elegirlas.";
   if (Object.keys(fields).length || !addons) return validation(fields);
 
   const type = types.find((t) => t.id === input.cabinTypeId)!;

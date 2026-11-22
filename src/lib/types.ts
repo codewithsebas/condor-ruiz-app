@@ -71,6 +71,9 @@ export type Quote = {
 
 // Decoración elegida para una reserva: copia del catálogo al momento de agregarla (nombre y precio acordados).
 export type ReservationAddon = { id: string; name: string; price: number };
+// Lo que envía el panel al elegir decoraciones: el id de una del catálogo (o de una que la reserva ya tiene) o una
+// escrita por el equipo con lo que pidió el huésped y su precio.
+export type AddonChoice = string | { name: string; price: number };
 
 export type AvailabilityOption = {
   cabinTypeId: CabinTypeId;
@@ -229,7 +232,7 @@ export type ManualReservationInput = {
   estimatedArrival: string; // "HH:MM" o "" (inicio del check-in)
   specialRequests: string;
   total: number | null; // precio especial del alojamiento (sin decoraciones); null = tarifa vigente
-  addons?: string[]; // decoraciones del catálogo (ids), en la cabaña principal
+  addons?: AddonChoice[]; // decoraciones (del catálogo o escritas por el equipo), en la cabaña principal
 };
 
 export type ManualReservationResult = { reservation: Reservation; group?: Reservation[] }; // group: todas las cabañas, la principal primero
@@ -534,7 +537,7 @@ export type AdminAction =
   // Corregir o completar los datos del huésped (p. ej. el documento de una reserva importada).
   | { code: string; action: "guest"; guest: Guest; companions?: Companion[] }
   // Decoraciones de la reserva (ids del catálogo): reemplaza la lista y ajusta el total.
-  | { code: string; action: "addons"; addons: string[] };
+  | { code: string; action: "addons"; addons: AddonChoice[] };
 
 // Pagos en línea (Wompi). Lo que el huésped puede pagar ahora y el resumen que ve antes de pagar.
 export type OnlinePayOption = { kind: PaymentKind; amount: number };

@@ -264,8 +264,8 @@ const reservationOps = {
         guest: { ...input.guest, phone: normalizePhone(input.guest.phone) },
       };
       const fields = validateManualReservation(b, types, units, today);
-      const addons = pickAddons(b.addons, d.site.decorations);
-      if (!addons) fields.addons = "Alguna decoración ya no está disponible. Vuelve a elegirlas.";
+      const addons = pickAddons(b.addons, d.site.decorations, [], true);
+      if (!addons) fields.addons = "Alguna decoración ya no está disponible o le falta el texto o el precio. Vuelve a elegirlas.";
       if (Object.keys(fields).length || !addons) return fieldErr(fields);
       const type = types.find((t) => t.id === b.cabinTypeId)!;
       const occ = occupancy(d);
@@ -415,8 +415,8 @@ const reservationOps = {
       }
       if (p.action === "addons") {
         if (r.groupCode && r.groupCode !== r.code) return err(400, "INVALID_BODY");
-        const addons = pickAddons(p.addons, d.site.decorations, r.addons);
-        if (!addons) return fieldErr({ addons: "Alguna decoración ya no está disponible. Actualiza la página." });
+        const addons = pickAddons(p.addons, d.site.decorations, r.addons, true);
+        if (!addons) return fieldErr({ addons: "Alguna decoración ya no está disponible o le falta el texto o el precio. Actualiza la página." });
         if (withAddons(r.quote, addons).total < r.paid) return fieldErr({ addons: "Ya se pagó más que el nuevo total: no se puede quitar esa decoración." });
       }
       return p;
@@ -451,7 +451,7 @@ const reservationOps = {
         }));
       }
       if (p.action === "addons") {
-        const addons = pickAddons(p.addons, d.site.decorations, r.addons) ?? r.addons ?? [];
+        const addons = pickAddons(p.addons, d.site.decorations, r.addons, true) ?? r.addons ?? [];
         const quote = withAddons(r.quote, addons);
         if (r.depositPaidAt) quote.balance = Math.max(0, quote.total - r.paid);
         return updateReservation(d, p.code, (x) => ({

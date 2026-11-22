@@ -370,17 +370,42 @@ export function invalidDecoration(d: { name: string; description: string; price:
   return f;
 }
 
-// Decoraciones elegidas (ids) → copia del catálogo { id, name, price }. null si la lista no es válida: ids repetidos,
-// desconocidos u ocultos (salvo `keep`: las que la reserva ya tenía, que se conservan con su precio acordado).
+// Prefijo de las decoraciones que escribe el equipo (fuera del catálogo): lo que pidió el huésped, con su precio.
+export const CUSTOM_ADDON = "otra-";
+export const isCustomAddon = (id: string) => id.startsWith(CUSTOM_ADDON);
+
+// Una decoración escrita por el equipo: texto y precio. Mensaje de error o "" si está bien.
+export function invalidCustomAddon(a: { name: string; price: number }) {
+  const name = String(a.name ?? "").trim();
+  if (!name || name.length > 80) return "Escribe lo que desea el huésped (máximo 80 caracteres).";
+  if (!Number.isInteger(a.price) || a.price < 0 || a.price > 20_000_000) return "Escribe el precio en pesos, sin decimales.";
+  return "";
+}
+
+// Decoraciones elegidas → { id, name, price }. Cada elemento es el id de una del catálogo (con su precio) o, si
+// `custom` (solo el panel), una escrita por el equipo { name, price }. null si la lista no es válida: ids repetidos,
+// desconocidos u ocultos (salvo `keep`: las que la reserva ya tenía, que se conservan con su precio acordado) o una
+// escrita sin texto o con un precio inválido.
 export function pickAddons(
   ids: unknown,
   catalog: readonly { id: string; name: string; price: number; visible: boolean }[],
   keep: readonly ReservationAddon[] = [],
+  custom = false,
 ): ReservationAddon[] | null {
   if (ids === undefined || ids === null) return [];
-  if (!Array.isArray(ids) || ids.length > 30 || new Set(ids).size !== ids.length) return null;
+  if (!Array.isArray(ids) || ids.length > 30) return null;
+  const strings = ids.filter((x) => typeof x === "string");
+  if (new Set(strings).size !== strings.length) return null;
   const out: ReservationAddon[] = [];
   for (const id of ids) {
+    if (custom && id && typeof id === "object") {
+      const a = id as { name?: unknown; price?: unknown };
+      const item = { name: String(a.name ?? "").trim(), price: Number(a.price) };
+      if (invalidCustomAddon(item)) return null;
+      out.push({ id: `${CUSTOM_ADDON}${crypto.randomUUID().slice(0, 8)}`, ...item });
+      continue;
+    }
+    if (typeof id !== "string") return null;
     const had = keep.find((a) => a.id === id);
     if (had) {
       out.push({ id: had.id, name: had.name, price: had.price });

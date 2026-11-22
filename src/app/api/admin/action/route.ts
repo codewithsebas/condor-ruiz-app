@@ -212,7 +212,7 @@ export const POST = syncRoute(async (req: NextRequest) => {
       // En una reserva con varias cabañas van en la principal.
       if (groupCode && current.code !== groupCode) return fail(400, "INVALID_BODY");
       const had = (current.addons as ReservationAddon[]) ?? [];
-      const addons = pickAddons(b.addons, await loadDecorations(sb), had);
+      const addons = pickAddons(b.addons, await loadDecorations(sb), had, true);
       if (!addons) return fail(422, "VALIDATION_ERROR", { fields: { addons: "Alguna decoración ya no está disponible. Actualiza la página." } });
       const q = current.quote as Quote;
       const quote = withAddons(q, addons);

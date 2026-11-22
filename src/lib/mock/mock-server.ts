@@ -945,8 +945,8 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
       guest: { ...raw.guest, phone: normalizePhone(raw.guest?.phone ?? "") },
     };
     const f = { ...validateManualReservation(b, activeTypes(db), unitsOf(db), todayISO()), ...validateExtraCabins(b.more, activeTypes(db), unitsOf(db)) };
-    const addons = pickAddons(b.addons, siteOf(db).decorations);
-    if (!addons) f.addons = "Alguna decoración ya no está disponible. Vuelve a elegirlas.";
+    const addons = pickAddons(b.addons, siteOf(db).decorations, [], true);
+    if (!addons) f.addons = "Alguna decoración ya no está disponible o le falta el texto o el precio. Vuelve a elegirlas.";
     if (Object.keys(f).length || !addons) return invalid(f);
     const cabins = [{ cabinTypeId: b.cabinTypeId, unit: b.unit, adults: b.adults, children: b.children }, ...(b.more ?? [])];
     const units = allocateUnits(db, cabins, b.checkIn, b.checkOut);
@@ -1083,7 +1083,7 @@ async function handle(method: string, path: string, opts: MockRequest): Promise<
       });
     } else if (body.action === "addons") {
       if (r.groupCode && r.groupCode !== r.code) return { status: 400, data: { error: "INVALID_BODY" } };
-      const addons = pickAddons((opts.body as { addons?: unknown }).addons, siteOf(db).decorations, r.addons);
+      const addons = pickAddons((opts.body as { addons?: unknown }).addons, siteOf(db).decorations, r.addons, true);
       if (!addons) return invalid({ addons: "Alguna decoración ya no está disponible. Actualiza la página." });
       const quote = withAddons(r.quote, addons);
       if (quote.total < r.paid) return invalid({ addons: "Ya se pagó más que el nuevo total: no se puede quitar esa decoración." });

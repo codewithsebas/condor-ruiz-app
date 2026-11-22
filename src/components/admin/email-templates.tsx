@@ -1,9 +1,10 @@
 "use client";
 
-// Correos (panel): la lista de los correos automáticos que recibe el huésped (cuándo sale cada uno, en qué estado queda la
-// reserva y si está activo) y el editor de sus textos con variables y la vista previa en vivo. Vacío = el texto original.
+// Correos (panel), en dos pestañas. Enviados: el historial de la bandeja de salida (email-history.tsx). Plantillas: la
+// lista de los correos automáticos que recibe el huésped (cuándo sale cada uno, en qué estado queda la reserva y si está
+// activo) y el editor de sus textos con variables y la vista previa en vivo. Vacío = el texto original.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckIcon, MailIcon, RefreshIcon } from "@/components/ui/icons";
+import { CheckIcon, ClockIcon, MailIcon, PencilIcon, PauseIcon, RefreshIcon, SendIcon } from "@/components/ui/icons";
 import { useSite } from "@/components/site/site-provider";
 import { api } from "@/lib/client/api";
 import { isMockApi } from "@/lib/config";
@@ -21,12 +22,13 @@ import {
   type EmailTexts,
 } from "@/lib/email-templates";
 import { previewEmailTheme, sampleEmail } from "@/lib/emails";
-import { timeAgo } from "@/lib/format";
+import { plural, timeAgo } from "@/lib/format";
 import { useAdmin } from "@/components/admin/context";
-import { Panel } from "@/components/admin/board";
+import { Panel, SummaryStrip } from "@/components/admin/board";
+import { EmailHistory } from "@/components/admin/email-history";
 import { MODULES } from "@/components/admin/routes";
 import { adminInput } from "@/components/admin/shared";
-import { Badge, Button, Callout, EmptyState, Field, FieldError, Segmented, enter } from "@/components/admin/ui";
+import { Badge, Button, Callout, EmptyState, Field, FieldError, Segmented, Tabs, enter } from "@/components/admin/ui";
 
 const KEYS = Object.keys(TEXT_LIMITS) as EmailTextKey[];
 const textsOf = (t?: EmailTemplate): EmailTexts =>
@@ -34,7 +36,8 @@ const textsOf = (t?: EmailTemplate): EmailTexts =>
 const changed = (t?: EmailTemplate) => !!t && KEYS.some((k) => t[k].trim());
 
 export function EmailTemplatesView() {
-  const { ask, toast, onAuthError, now } = useAdmin();
+  const { ask, toast, onAuthError, now, data } = useAdmin();
+  const [tab, setTab] = useState<"enviados" | "plantillas">("enviados");
   const [rows, setRows] = useState<EmailTemplate[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [kind, setKind] = useState<EmailTemplateKind>(EMAIL_CATALOG[0].kind);
@@ -99,98 +102,163 @@ export function EmailTemplatesView() {
     });
   };
 
+  const failed = data.emails.filter((e) => e.status === "failed").length;
+  const off = EMAIL_CATALOG.filter((e) => rowOf(e.kind)?.enabled === false).length;
+  const edited = EMAIL_CATALOG.filter((e) => changed(rowOf(e.kind))).length;
+  const lastEdit = rows
+    ?.map((r) => r.updatedAt)
+    .filter((x): x is string => !!x)
+    .sort()
+    .at(-1);
+
   return (
     <>
       <header {...enter(0)} className="min-w-0">
-        <p className="text-[13px] font-medium text-ink-muted">Los correos automáticos que reciben los huéspedes</p>
+        <p className="text-[13px] font-medium text-ink-muted">Los correos que reciben los huéspedes</p>
         <h1 className="mt-1 text-[clamp(1.5rem,2.4vw,2rem)] leading-tight font-semibold tracking-[-0.025em] text-ink">{MODULES.correos.label}</h1>
       </header>
 
-      <div {...enter(1)}>
-        <Callout>
-          Cada correo sale solo cuando la reserva cambia de estado. Puedes cambiar sus textos (con variables como <code>{"{nombre}"}</code> o{" "}
-          <code>{"{codigo}"}</code>) o apagarlo; las tablas de la estadía, los valores, los botones y el mapa se mantienen. Un campo vacío usa el texto
-          original.
-          {isMockApi && <strong> En modo simulado se guardan solo en este navegador y no se envía nada.</strong>}
-        </Callout>
+      <div {...enter(0.6)}>
+        <Tabs
+          label="Secciones de Correos"
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            { value: "enviados", label: "Enviados", icon: <SendIcon size={15} />, count: failed },
+            { value: "plantillas", label: "Plantillas", icon: <PencilIcon size={15} /> },
+          ]}
+        />
       </div>
 
-      {loadError ? (
-        <div {...enter(1.6)}>
-          <EmptyState
-            icon={<MailIcon size={18} />}
-            title="No se pudieron cargar las plantillas"
-            text="Revisa la conexión e inténtalo de nuevo."
-            action={
-              <Button
-                icon={<RefreshIcon size={14} />}
-                onClick={() => {
-                  setLoadError(false);
-                  load();
-                }}
-              >
-                Reintentar
-              </Button>
-            }
-          />
+      {tab === "enviados" ? (
+        <div {...enter(1)}>
+          <EmailHistory />
         </div>
       ) : (
-        <div {...enter(1.6)} className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-          <Panel
-            id="et-list"
-            title="Correos al huésped"
-            subtitle={`${EMAIL_CATALOG.length} automáticos · el mensaje del equipo se escribe desde la ficha del cliente`}
-          >
-            <ul className="-mx-2 flex flex-col">
-              {EMAIL_CATALOG.map((e) => {
-                const row = rowOf(e.kind);
-                const on = row?.enabled ?? true;
-                const sel = kind === e.kind;
-                return (
-                  <li key={e.kind} className={`flex items-start gap-3 rounded-[16px] px-2 py-2.5 ${sel ? "bg-panel ring-1 ring-line-strong ring-inset" : ""}`}>
-                    <button type="button" aria-current={sel} onClick={() => setKind(e.kind)} className="min-w-0 flex-1 text-left">
-                      <span className="flex flex-wrap items-center gap-1.5 text-[14px] font-semibold text-ink">
-                        {e.name}
-                        {!on && <Badge tone="warning">Apagado</Badge>}
-                        {changed(row) && <Badge tone="info">Texto cambiado</Badge>}
-                      </span>
-                      <span className="mt-0.5 block text-[12.5px] text-ink-muted">{e.when}</span>
-                      <span className="mt-0.5 block text-[12px] text-ink-subtle">{`Al huésped · reserva: ${e.state}`}</span>
-                    </button>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={on}
-                      aria-label={`${on ? "Apagar" : "Activar"} «${e.name}»`}
-                      disabled={rows === null || !!busy}
-                      onClick={() => toggle(e.kind)}
-                      className={`relative mt-0.5 h-6 w-10 flex-none rounded-full transition-colors disabled:opacity-50 ${on ? "bg-ink" : "bg-ink/20"}`}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className={`absolute top-0.5 left-0.5 size-5 rounded-full bg-paper transition-transform ${on ? "translate-x-4" : ""}`}
-                      />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </Panel>
-          {rows === null ? (
-            <Panel id="et-edit" title="Cargando…">
-              <p className="text-[13px] text-ink-muted">Trayendo las plantillas guardadas.</p>
-            </Panel>
-          ) : (
-            <TemplateEditor
-              key={`${kind}-${rowOf(kind)?.updatedAt ?? ""}`}
-              kind={kind}
-              row={rowOf(kind)}
-              busy={busy === kind}
-              updated={rowOf(kind)?.updatedAt ? timeAgo(rowOf(kind)!.updatedAt!, now) : null}
-              onSave={(t) => save(kind, t, rowOf(kind)?.enabled ?? true, "Plantilla guardada")}
+        <>
+          <div {...enter(1)} className="@container">
+            <SummaryStrip
+              label="Resumen de las plantillas"
+              cells={[
+                {
+                  label: "Activos",
+                  value: rows ? `${EMAIL_CATALOG.length - off} de ${EMAIL_CATALOG.length}` : "—",
+                  hint: off ? `${plural(off, "apagado", "apagados")}` : "Todos salen",
+                  icon: <MailIcon size={16} />,
+                  meter: rows ? Math.round(((EMAIL_CATALOG.length - off) / EMAIL_CATALOG.length) * 100) : undefined,
+                },
+                {
+                  label: "Apagados",
+                  value: rows ? off : "—",
+                  hint: off ? "No se envían a ningún huésped" : "Ninguno apagado",
+                  icon: <PauseIcon size={16} />,
+                },
+                {
+                  label: "Con texto cambiado",
+                  value: rows ? edited : "—",
+                  hint: edited ? "Los demás usan su texto original" : "Todos con su texto original",
+                  icon: <PencilIcon size={16} />,
+                },
+                {
+                  label: "Último cambio",
+                  value: lastEdit ? timeAgo(lastEdit, now) : "—",
+                  hint: lastEdit ? "En los textos o si está activo" : "Sin cambios todavía",
+                  icon: <ClockIcon size={16} />,
+                },
+              ]}
             />
+          </div>
+
+          <div {...enter(1.3)}>
+            <Callout>
+              Cada correo sale solo cuando la reserva cambia de estado. Puedes cambiar sus textos (con variables como <code>{"{nombre}"}</code> o{" "}
+              <code>{"{codigo}"}</code>) o apagarlo; las tablas de la estadía, los valores, los botones y el mapa se mantienen. Un campo vacío usa el texto
+              original.
+              {isMockApi && <strong> En modo simulado se guardan solo en este navegador y no se envía nada.</strong>}
+            </Callout>
+          </div>
+
+          {loadError ? (
+            <div {...enter(1.6)}>
+              <EmptyState
+                icon={<MailIcon size={18} />}
+                title="No se pudieron cargar las plantillas"
+                text="Revisa la conexión e inténtalo de nuevo."
+                action={
+                  <Button
+                    icon={<RefreshIcon size={14} />}
+                    onClick={() => {
+                      setLoadError(false);
+                      load();
+                    }}
+                  >
+                    Reintentar
+                  </Button>
+                }
+              />
+            </div>
+          ) : (
+            <div {...enter(1.6)} className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+              <Panel
+                id="et-list"
+                title="Correos al huésped"
+                subtitle={`${EMAIL_CATALOG.length} automáticos · el mensaje del equipo se escribe desde la ficha del cliente`}
+              >
+                <ul className="-mx-2 flex flex-col">
+                  {EMAIL_CATALOG.map((e) => {
+                    const row = rowOf(e.kind);
+                    const on = row?.enabled ?? true;
+                    const sel = kind === e.kind;
+                    return (
+                      <li
+                        key={e.kind}
+                        className={`flex items-start gap-3 rounded-[16px] px-2 py-2.5 ${sel ? "bg-panel ring-1 ring-line-strong ring-inset" : ""}`}
+                      >
+                        <button type="button" aria-current={sel} onClick={() => setKind(e.kind)} className="min-w-0 flex-1 text-left">
+                          <span className="flex flex-wrap items-center gap-1.5 text-[14px] font-semibold text-ink">
+                            {e.name}
+                            {!on && <Badge tone="warning">Apagado</Badge>}
+                            {changed(row) && <Badge tone="info">Texto cambiado</Badge>}
+                          </span>
+                          <span className="mt-0.5 block text-[12.5px] text-ink-muted">{e.when}</span>
+                          <span className="mt-0.5 block text-[12px] text-ink-subtle">{`Al huésped · reserva: ${e.state}`}</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={on}
+                          aria-label={`${on ? "Apagar" : "Activar"} «${e.name}»`}
+                          disabled={rows === null || !!busy}
+                          onClick={() => toggle(e.kind)}
+                          className={`relative mt-0.5 h-6 w-10 flex-none rounded-full transition-colors disabled:opacity-50 ${on ? "bg-ink" : "bg-ink/20"}`}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={`absolute top-0.5 left-0.5 size-5 rounded-full bg-paper transition-transform ${on ? "translate-x-4" : ""}`}
+                          />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Panel>
+              {rows === null ? (
+                <Panel id="et-edit" title="Cargando…">
+                  <p className="text-[13px] text-ink-muted">Trayendo las plantillas guardadas.</p>
+                </Panel>
+              ) : (
+                <TemplateEditor
+                  key={`${kind}-${rowOf(kind)?.updatedAt ?? ""}`}
+                  kind={kind}
+                  row={rowOf(kind)}
+                  busy={busy === kind}
+                  updated={rowOf(kind)?.updatedAt ? timeAgo(rowOf(kind)!.updatedAt!, now) : null}
+                  onSave={(t) => save(kind, t, rowOf(kind)?.enabled ?? true, "Plantilla guardada")}
+                />
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
     </>
   );

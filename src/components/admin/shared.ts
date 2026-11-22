@@ -1,5 +1,5 @@
 import { cop, dateOf, fmtClock, fmtDate, mask, nightsBetween, plural } from "@/lib/format";
-import type { ApiResult, Reservation } from "@/lib/types";
+import type { ApiResult, EmailStatus, Reservation } from "@/lib/types";
 import type { DayMark } from "@/components/admin/date-picker";
 import type { Tone } from "@/components/admin/ui";
 
@@ -60,6 +60,14 @@ export const EMAIL_KIND: Record<string, string> = {
   reservation_cancelled: "Reserva cancelada",
   reservation_expired: "Reserva vencida",
   arrival_reminder: "Recordatorio de llegada",
+};
+
+// Estado de un correo en la bandeja de salida, con su color.
+export const EMAIL_STATUS: Record<EmailStatus, { label: string; tone: "success" | "danger" | "info" }> = {
+  pending: { label: "En cola", tone: "info" },
+  sending: { label: "Enviando", tone: "info" },
+  sent: { label: "Enviado", tone: "success" },
+  failed: { label: "No enviado", tone: "danger" },
 };
 
 // Reservas que activan acciones operativas (llegan hoy, salen hoy, etc.).

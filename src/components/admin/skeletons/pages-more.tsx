@@ -3,6 +3,7 @@
 // Esqueletos del resto de páginas del panel (alojamiento, negocio, equipo y fichas de detalle). Mismo criterio que
 // pages.tsx: la estructura y los textos fijos de cada vista, con los datos en gris.
 import {
+  AlertIcon,
   ArrowLeftIcon,
   BanIcon,
   BathIcon,
@@ -13,11 +14,13 @@ import {
   ListIcon,
   LockIcon,
   LoginIcon,
+  MailIcon,
   MoonIcon,
   PencilIcon,
   PlusIcon,
   ReceiptIcon,
   RefreshIcon,
+  SendIcon,
   ShieldIcon,
   TagIcon,
   TrendIcon,
@@ -1049,29 +1052,66 @@ export function ProfileSkeleton() {
   );
 }
 
-/* ───────────── Correos (plantillas) ───────────── */
+/* ───────────── Correos (pestaña Enviados, la que abre) ───────────── */
 
 export function EmailsSkeleton() {
   return (
     <>
-      <ModHead eyebrow="Los correos automáticos que reciben los huéspedes" title={MODULES.correos.label} />
-      <Block className="h-[68px] rounded-[18px]" />
-      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-        <Box title="Correos al huésped" subtitle={null}>
-          <ul className="flex flex-col gap-3">
-            {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-              <li key={i} className="flex items-start gap-3">
+      <ModHead eyebrow="Los correos que reciben los huéspedes" title={MODULES.correos.label} />
+      <Seg
+        counts={false}
+        options={[
+          { label: "Enviados", icon: <SendIcon size={15} /> },
+          { label: "Plantillas", icon: <PencilIcon size={15} /> },
+        ]}
+      />
+      <div className="@container flex flex-col gap-4">
+        {/* Franja de resumen con divisores (SummaryStrip). */}
+        <div className="overflow-hidden rounded-[22px] bg-panel ring-1 ring-line ring-inset">
+          <div className="-mr-px -mb-px grid grid-cols-2 @3xl:grid-cols-4">
+            {(
+              [
+                ["Enviados", <SendIcon key="i" size={16} />, "3ch"],
+                ["En cola", <ClockIcon key="i" size={16} />, "2ch"],
+                ["No enviados", <AlertIcon key="i" size={16} />, "2ch"],
+                ["Último envío", <MailIcon key="i" size={16} />, "9ch"],
+              ] as const
+            ).map(([label, icon, w]) => (
+              <div key={label} className="flex min-w-0 items-start gap-3 border-r border-b border-line px-4 py-4 @md:px-5">
+                <span className="hidden size-9 flex-none place-items-center rounded-full bg-paper text-ink ring-1 ring-line @md:grid">{icon}</span>
                 <div className="min-w-0 flex-1">
-                  <Line w={`${14 + (i % 3) * 4}ch`} className="text-[14px] font-semibold" />
-                  <Line w="34ch" className="mt-1 text-[12.5px]" />
+                  <p className="truncate text-[12px] font-medium text-ink-muted">{label}</p>
+                  <Line w={w} className="mt-1 text-[17px] leading-tight font-semibold" />
+                  <Line w="14ch" className="mt-1 text-[11.5px]" />
                 </div>
-                <Pill w="40px" className="h-6" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <Box
+          title="Correos enviados"
+          subtitle="Los automáticos y los mensajes del equipo, del más reciente al más antiguo."
+          action={<Line w="9ch" className="text-[12.5px]" />}
+        >
+          <div className="flex flex-col gap-2.5 @xl:flex-row @xl:flex-wrap @xl:items-center">
+            <Search placeholder="Correo, código o huésped" className="@xl:min-w-[240px] @xl:flex-1 @6xl:max-w-[320px]" />
+            <Combo w="14ch" className="@xl:w-[220px]" />
+            <Seg size="sm" counts={false} options={["Todos", "Enviados", "En cola", "No enviados"]} className="@6xl:ml-auto" />
+          </div>
+          <ul className="-mx-1 flex flex-col divide-y divide-line">
+            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+              <li key={i} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 py-3">
+                <div className="min-w-0 flex-1 basis-60">
+                  <div className="flex items-center gap-1.5">
+                    <Line w={`${14 + (i % 3) * 4}ch`} className="text-[13.5px] font-semibold" />
+                    <Pill w="62px" />
+                  </div>
+                  <Line w="30ch" className="mt-0.5 text-[12px]" />
+                </div>
+                <Line w="12ch" className="flex-none text-[12px]" />
               </li>
             ))}
           </ul>
-        </Box>
-        <Box title={null} subtitle={null}>
-          <Block className="h-[420px] rounded-[16px]" />
         </Box>
       </div>
     </>

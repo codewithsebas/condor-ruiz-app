@@ -55,7 +55,7 @@ import { ProofCard } from "@/components/admin/proofs";
 import { paths } from "@/components/admin/routes";
 import { SyncMark } from "@/components/admin/sync";
 import { useRouteParam } from "@/components/admin/route-param";
-import { EMAIL_KIND, TRUST, type ConfirmCfg, adminInput } from "@/components/admin/shared";
+import { EMAIL_KIND, EMAIL_STATUS, TRUST, type ConfirmCfg, adminInput } from "@/components/admin/shared";
 import { hasEmail, newRequestId } from "@/components/admin/email-composer";
 import { stateEmailKind, type EmailTemplateKind } from "@/lib/email-templates";
 import {
@@ -1357,14 +1357,6 @@ function PaymentHistory({ payments }: { payments: PaymentRecord[] }) {
   );
 }
 
-const EMAIL_STATUS: Record<EmailRecord["status"], { label: string; tone: "success" | "warning" | "danger" | "info" }> = {
-  pending: { label: "En cola", tone: "info" },
-  sending: { label: "Enviando", tone: "info" },
-  sent: { label: "Enviado", tone: "success" },
-  failed: { label: "No enviado", tone: "danger" },
-};
-
-// Correos de la reserva: si la confirmación no salió, se ve el motivo y se puede reintentar (sin duplicarla).
 // Correos apagados en el módulo Correos (sin conexión se suponen activos: el servidor igual se niega a reenviarlos).
 function useEmailsOff() {
   const [off, setOff] = useState<ReadonlySet<EmailTemplateKind>>(() => new Set());
@@ -1401,7 +1393,8 @@ const resendDialog = (kind: EmailTemplateKind, r: Reservation, title = `Reenviar
   run: () => resendStateEmail(r.code),
 });
 
-// `r`: la reserva con los pagos del grupo (groupMoney), para elegir el correo de su estado.
+// Correos de la reserva: si uno no salió, se ve el motivo y se puede reintentar (sin duplicarlo); «Reenviar» manda otra
+// vez el de su estado. `r`: la reserva con los pagos del grupo (groupMoney), para elegir el correo de su estado.
 function EmailsCard({ r, emails, off }: { r: Reservation; emails: EmailRecord[]; off: ReadonlySet<EmailTemplateKind> }) {
   const { reload, toast, onAuthError, now, ask } = useAdmin();
   const [busy, setBusy] = useState<string | null>(null);
